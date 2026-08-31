@@ -10,6 +10,13 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
     const filialId = sessionFilialId(session)
+    const foydalanuvchiId = (session.user as any).id
+
+    const yashirilganmi = await prisma.tovarYashirish.findUnique({
+      where: { tovarId_foydalanuvchiId: { tovarId: id, foydalanuvchiId } },
+      select: { id: true },
+    })
+    if (yashirilganmi) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
     const tovar = await prisma.tovar.findFirst({
       where: { id, ...(filialId ? { filialId } : {}) },

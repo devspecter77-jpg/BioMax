@@ -20,9 +20,18 @@ export async function GET(req: NextRequest) {
     const limit = limitParam ? parseInt(limitParam) : 0
 
     const filialId = sessionFilialId(session)
+    const foydalanuvchiId = (session.user as any).id
     const where: any = {}
     if (filialId) where.filialId = filialId
     if (holati !== 'BARCHASI') where.holati = holati
+    // Ega tomonidan ushbu (bog'langan) hisobdan maxsus yashirilgan mahsulotlar
+    const yashirilganlar = await prisma.tovarYashirish.findMany({
+      where: { foydalanuvchiId },
+      select: { tovarId: true },
+    })
+    if (yashirilganlar.length > 0) {
+      where.id = { notIn: yashirilganlar.map(y => y.tovarId) }
+    }
     if (kategoriyaId) where.kategoriyaId = kategoriyaId
     if (qidiruv) {
       const normalized = normalizeUzbek(qidiruv)

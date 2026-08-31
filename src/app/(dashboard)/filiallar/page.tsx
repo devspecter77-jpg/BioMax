@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { formatPhone } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Phone, MapPin, Building, X, Users, Check, UserPlus, Eye, EyeOff, Pencil, Trash2, Loader2, ToggleLeft, ToggleRight, Save } from 'lucide-react'
+import { Phone, MapPin, Building, X, Users, Check, UserPlus, Eye, EyeOff, Pencil, Trash2, Loader2, ToggleLeft, ToggleRight, Save, Link2, ShieldCheck } from 'lucide-react'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
+import Combobox from '@/components/ui/combobox'
 import { useConfirm } from '@/components/ConfirmProvider'
 import TelegramUlash from '@/components/TelegramUlash'
 
@@ -26,18 +28,26 @@ interface Filial {
   _count: { xodimlar: number }
   xodimlar: FilialEga[]
 }
+interface BogliqAdmin {
+  id: string; ism: string; login: string; telefon: string | null; faol: boolean; filialId: string | null
+}
 
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary transition'
 
 export default function FiliallarPage() {
   const confirm = useConfirm()
+  const { data: session } = useSession()
   const [filiallar, setFiliallar] = useState<Filial[]>([])
+  const [bogliqAdminlar, setBogliqAdminlar] = useState<BogliqAdmin[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [modal, setModal] = useState(false)
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
   const [parolKorinsin, setParolKorinsin] = useState(false)
   const emptyForm = { nomi: '', manzil: '', telefon: '', egaIsm: '', egaLogin: '', egaParol: '' }
   const [form, setForm] = useState(emptyForm)
+  const [egaTuri, setEgaTuri] = useState<'FILIALCHI' | 'ADMIN'>('FILIALCHI')
+  const [boglashOchiq, setBoglashOchiq] = useState(false)
+  const [boglanganFilialId, setBoglanganFilialId] = useState('')
   const [qidiruv, setQidiruv] = useState('')
   const [ochirilayotganId, setOchirilayotganId] = useState<string | null>(null)
 
@@ -51,52 +61,102 @@ export default function FiliallarPage() {
 
   async function yuklash() {
     setYuklanmoqda(true)
-    const data = await fetch('/api/filiallar').then(r => r.json())
+    const [data, hammaFoydalanuvchi] = await Promise.all([
+      fetch('/api/filiallar').then(r => r.json()),
+      fetch('/api/foydalanuvchilar').then(r => r.json()).catch(() => []),
+    ])
     setFiliallar(Array.isArray(data) ? data : [])
+    const meId = (session?.user as any)?.id
+    setBogliqAdminlar(
+      Array.isArray(hammaFoydalanuvchi)
+        ? hammaFoydalanuvchi.filter((u: any) => u.rol === 'ADMIN' && !u.filialId && u.id !== meId)
+        : []
+    )
     setYuklanmoqda(false)
   }
 
-  useEffect(() => { yuklash() }, [])
+  useEffect(() => { yuklash() }, [session])
+
+  function modalniOchish() {
+    setForm(emptyForm)
+    setEgaTuri('FILIALCHI')
+    setBoglashOchiq(false)
+    setBoglanganFilialId('')
+    setModal(true)
+  }
 
   async function saqlash(e: React.FormEvent) {
     e.preventDefault()
     setSaqlanmoqda(true)
     try {
-      const filialRes = await fetch('/api/filiallar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nomi: form.nomi, manzil: form.manzil, telefon: form.telefon }),
-      })
-      if (!filialRes.ok) {
-        const err = await filialRes.json()
-        toast.error(err.xato || 'Filial yaratilmadi')
-        return
-      }
-      const filial = await filialRes.json()
+      if (egaTuri === 'FILIALCHI') {
+        // Yangi filial + uning egasi
+        const filialRes = await fetch('/api/filiallar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nomi: form.nomi, manzil: form.manzil, telefon: form.telefon }),
+        })
+        if (!filialRes.ok) {
+          const err = await filialRes.json()
+          toast.error(err.xato || 'Filial yaratilmadi')
+          return
+        }
+        const filial = await filialRes.json()
 
-      const egaRes = await fetch('/api/foydalanuvchilar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ism: form.egaIsm, login: form.egaLogin, parol: form.egaParol,
-          rol: 'ADMIN', filialId: filial.id,
-        }),
-      })
-      if (!egaRes.ok) {
-        const err = await egaRes.json()
-        toast.error("Filial yaratildi, lekin ega qo'shilmadi: " + (err.xato || 'Xatolik'))
-        setModal(false)
-        setForm(emptyForm)
-        yuklash()
-        return
+        const egaRes = await fetch('/api/foydalanuvchilar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ism: form.egaIsm, login: form.egaLogin, parol: form.egaParol,
+            rol: 'ADMIN', filialId: filial.id,
+          }),
+        })
+        if (!egaRes.ok) {
+          const err = await egaRes.json()
+          toast.error("Filial yaratildi, lekin ega qo'shilmadi: " + (err.xato || 'Xatolik'))
+          setModal(false)
+          setForm(emptyForm)
+          yuklash()
+          return
+        }
+        toast.success('Filial va uning egasi qo\'shildi')
+      } else {
+        // Admin — yangi filial yaratilmaydi, ixtiyoriy ravishda mavjud filialga bog'lanadi
+        const egaRes = await fetch('/api/foydalanuvchilar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ism: form.egaIsm, login: form.egaLogin, parol: form.egaParol,
+            rol: 'ADMIN', filialId: boglashOchiq && boglanganFilialId ? boglanganFilialId : null,
+          }),
+        })
+        if (!egaRes.ok) {
+          const err = await egaRes.json()
+          toast.error(err.xato || 'Admin qo\'shilmadi')
+          return
+        }
+        toast.success('Admin qo\'shildi')
       }
-
-      toast.success('Filial va uning egasi qo\'shildi')
       setModal(false)
       setForm(emptyForm)
       yuklash()
     } finally {
       setSaqlanmoqda(false)
+    }
+  }
+
+  async function bogliqAdminOchirish(u: BogliqAdmin) {
+    if (!(await confirm(`"${u.ism}" hisobini o'chirasizmi?`))) return
+    setOchirilayotganId(u.id)
+    try {
+      const res = await fetch(`/api/foydalanuvchilar/${u.id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success("Hisob o'chirildi"); yuklash() }
+      else {
+        const err = await res.json()
+        toast.error(err.xato || "O'chirishda xatolik")
+      }
+    } finally {
+      setOchirilayotganId(null)
     }
   }
 
@@ -180,7 +240,7 @@ export default function FiliallarPage() {
       <SearchBar value={qidiruv} onChange={setQidiruv} placeholder="Filial nomi yoki manzil bo'yicha qidirish..." debounceMs={0} />
 
       <div className="flex justify-end">
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl font-medium transition">
+        <button onClick={modalniOchish} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl font-medium transition">
           <UserPlus size={16} />
           Filial egasini qo&apos;shish
         </button>
@@ -239,17 +299,24 @@ export default function FiliallarPage() {
                 </button>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800">
-              {f.xodimlar[0] ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-primary-light dark:bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
-                    {f.xodimlar[0].ism[0]?.toUpperCase()}
+            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 space-y-2">
+              {f.xodimlar.length > 0 ? (
+                f.xodimlar.map((x, i) => (
+                  <div key={x.id} className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary-light dark:bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                      {x.ism[0]?.toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{x.ism}</p>
+                      <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(x.login)}</p>
+                    </div>
+                    {i > 0 && (
+                      <span className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg font-medium shrink-0" title="Ma'lumotlarga bog'langan qo'shimcha admin">
+                        Bog'langan
+                      </span>
+                    )}
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{f.xodimlar[0].ism}</p>
-                    <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(f.xodimlar[0].login)}</p>
-                  </div>
-                </div>
+                ))
               ) : (
                 <div className="flex items-center gap-1.5 text-gray-400 dark:text-gray-600 text-sm">
                   <Users size={13} />
@@ -261,34 +328,123 @@ export default function FiliallarPage() {
         ))}
       </div>
 
+      {bogliqAdminlar.length > 0 && (
+        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
+          <p className="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide flex items-center gap-2 mb-3">
+            <ShieldCheck size={13} /> Filialga bog&apos;lanmagan adminlar
+          </p>
+          <div className="space-y-2">
+            {bogliqAdminlar.map(u => (
+              <div key={u.id} className="flex items-center gap-2 py-1.5">
+                <div className="w-8 h-8 rounded-full bg-primary-light dark:bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                  {u.ism[0]?.toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{u.ism}</p>
+                  <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(u.login)}</p>
+                </div>
+                <button
+                  onClick={() => bogliqAdminOchirish(u)}
+                  disabled={ochirilayotganId === u.id}
+                  className="p-2 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50 shrink-0"
+                  title="O'chirish"
+                >
+                  {ochirilayotganId === u.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Filial va uning egasi</h3>
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi hisob qo&apos;shish</h3>
               <button onClick={() => setModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={saqlash} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide">
-                <Building size={13} /> Filial ma&apos;lumotlari
-              </div>
               <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Filial nomi *</label>
-                <input required value={form.nomi} onChange={e => setForm(p => ({ ...p, nomi: e.target.value }))} placeholder="Masalan: Chilonzor filiali" className={inputCls} />
-              </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Manzil</label>
-                <input value={form.manzil} onChange={e => setForm(p => ({ ...p, manzil: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Filial telefoni</label>
-                <PhoneInput value={form.telefon} onChange={v => setForm(p => ({ ...p, telefon: v }))} />
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1.5 block font-medium">Hisob turi</label>
+                <div className="flex items-center bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEgaTuri('FILIALCHI')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${egaTuri === 'FILIALCHI' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                  >
+                    Filialchi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEgaTuri('ADMIN')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${egaTuri === 'ADMIN' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                  >
+                    Admin
+                  </button>
+                </div>
+                <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5">
+                  {egaTuri === 'FILIALCHI'
+                    ? "Filialchi — yangi filial yaratiladi, u shu filialning egasi bo'ladi."
+                    : "Admin — yangi filial yaratilmaydi. Alohida login yaratiladi, ixtiyoriy ravishda mavjud filial ma'lumotlariga ulanishi mumkin."}
+                </p>
               </div>
 
+              {egaTuri === 'FILIALCHI' ? (
+                <>
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
+                    <Building size={13} /> Filial ma&apos;lumotlari
+                  </div>
+                  <div>
+                    <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Filial nomi *</label>
+                    <input required value={form.nomi} onChange={e => setForm(p => ({ ...p, nomi: e.target.value }))} placeholder="Masalan: Chilonzor filiali" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Manzil</label>
+                    <input value={form.manzil} onChange={e => setForm(p => ({ ...p, manzil: e.target.value }))} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Filial telefoni</label>
+                    <PhoneInput value={form.telefon} onChange={v => setForm(p => ({ ...p, telefon: v }))} />
+                  </div>
+                </>
+              ) : (
+                <div className="pt-2 border-t border-gray-100 dark:border-neutral-800">
+                  {!boglashOchiq ? (
+                    <button
+                      type="button"
+                      onClick={() => setBoglashOchiq(true)}
+                      className="flex items-center gap-2 text-sm text-primary hover:underline font-medium"
+                    >
+                      <Link2 size={14} />
+                      Ma&apos;lumot o&apos;tkazish (ixtiyoriy)
+                    </button>
+                  ) : (
+                    <div>
+                      <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 flex items-center justify-between font-medium">
+                        <span>Qaysi filial ma&apos;lumotlariga ulansin?</span>
+                        <button type="button" onClick={() => { setBoglashOchiq(false); setBoglanganFilialId('') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs font-normal">
+                          Bekor qilish
+                        </button>
+                      </label>
+                      <Combobox
+                        options={filiallar.map(f => ({ value: f.id, label: f.nomi }))}
+                        value={boglanganFilialId}
+                        onChange={setBoglanganFilialId}
+                        placeholder="Filial tanlang"
+                      />
+                      <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5">
+                        Bu admin tanlangan filialning barcha ma&apos;lumotlarini (tovarlar, sotuvlar va h.k.) o&apos;z login-paroli bilan ko&apos;radi.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
-                <UserPlus size={13} /> Filial egasi
+                <UserPlus size={13} /> {egaTuri === 'FILIALCHI' ? 'Filial egasi' : 'Admin hisobi'}
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ega ismi *</label>

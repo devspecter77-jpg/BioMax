@@ -21,7 +21,6 @@ export async function GET() {
         _count: { select: { xodimlar: true } },
         xodimlar: {
           where: { rol: 'ADMIN' },
-          take: 1,
           orderBy: { yaratilgan: 'asc' },
           select: { id: true, ism: true, login: true, telefon: true, faol: true },
         },
