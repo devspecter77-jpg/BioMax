@@ -53,7 +53,7 @@ model Foydalanuvchi {
   qaytarishlar Qaytarish[]
   buyurtmalar  Buyurtma[]
   ruxsatlar    Ruxsat[]
-  yashirilganTovarlar TovarYashirish[]
+  yashirilganMaydonlar MaydonYashirish[]
 
   @@index([filialId])
   @@map("foydalanuvchilar")
@@ -128,7 +128,6 @@ model Tovar {
   sherikdanOlishlar SherikdanOlish[]
   buyurtmaTarkibi  BuyurtmaTarkibi[]
   xaridTarkibi     XaridTarkibi[]
-  yashirilganlar   TovarYashirish[]
 
   @@unique([shtrixKod, filialId])
   @@index([holati])
@@ -137,20 +136,20 @@ model Tovar {
   @@map("tovarlar")
 }
 
-// Bitta mahsulotni bitta (bog'langan) admin hisobidan yashirish —
-// Ega tovarlar sahifasida galichka orqali belgilaydi.
-model TovarYashirish {
+// Bog'langan admin hisobidan mahsulotlarning ayrim maydonlarini
+// (masalan kelish narxi) yashirish — Ega tovarlar sahifasida
+// galichka orqali belgilaydi, barcha mahsulotlarga bir xilda tegishli.
+model MaydonYashirish {
   id              String   @id @default(cuid())
-  tovarId         String
   foydalanuvchiId String
+  maydon          String
   yaratilgan      DateTime @default(now())
 
-  tovar           Tovar         @relation(fields: [tovarId], references: [id], onDelete: Cascade)
   foydalanuvchi   Foydalanuvchi @relation(fields: [foydalanuvchiId], references: [id], onDelete: Cascade)
 
-  @@unique([tovarId, foydalanuvchiId])
+  @@unique([foydalanuvchiId, maydon])
   @@index([foydalanuvchiId])
-  @@map("tovar_yashirish")
+  @@map("maydon_yashirish")
 }
 
 enum Birlik {

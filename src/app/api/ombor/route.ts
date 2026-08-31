@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
 import { sessionFilialId } from '@/lib/filial-scope'
+import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,13 +14,16 @@ export async function GET(req: NextRequest) {
     const kamQolgan = searchParams.get('kamQolgan') === 'true'
     const muddatiYaqin = searchParams.get('muddatiYaqin') === 'true'
     const qidiruv = searchParams.get('q') || ''
-    const filialId = sessionFilialId(session)
+    const ownFilialId = sessionFilialId(session)
+    const foydalanuvchiId = (session.user as any).id
+    // Ega (filialsiz) — standart holatda faqat OZINING mahsulotlarini ko'radi.
+    const filialId = ownFilialId || searchParams.get('filialId') || null
 
     // 1. Faqat tovar ma'lumotlarini olish (omborHarakati YUKLANMAYDI)
     const tovarlar = await prisma.tovar.findMany({
       where: {
         holati: 'FAOL',
-        ...(filialId ? { filialId } : {}),
+        filialId,
         ...(qidiruv ? { nomi: { contains: qidiruv, mode: 'insensitive' } } : {}),
       },
       include: { kategoriya: true },
@@ -28,6 +32,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Qoldiqni SQL aggregatsiya bilan hisoblash (bitta query)
     const stockMap = await getStockMap()
+    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari(foydalanuvchiId)
 
     // 3. Natijani birlashtirish
     const besh_kun_ms = 5 * 24 * 60 * 60 * 1000
@@ -36,7 +41,8 @@ export async function GET(req: NextRequest) {
       const stock = stockMap.get(t.id) || { omborQoldiq: 0, dokonQoldiq: 0 }
       const jami = stock.omborQoldiq + stock.dokonQoldiq
       const kunQoldi = t.yaroqlilikMuddati ? Math.ceil((t.yaroqlilikMuddati.getTime() - hozir) / (24 * 60 * 60 * 1000)) : null
-      return {
+      const qoldiqYashirilgan = yashirilganMaydonlar.has('qoldiq')
+      return maydonlarniYashir({
         id: t.id,
         nomi: t.nomi,
         kategoriya: t.kategoriya,
@@ -48,14 +54,14 @@ export async function GET(req: NextRequest) {
         kelishNarxi: t.kelishNarxi,
         valyuta: t.valyuta,
         minimalQoldiq: t.minimalQoldiq,
-        omborQoldiq: stock.omborQoldiq,
-        dokonQoldiq: stock.dokonQoldiq,
+        omborQoldiq: qoldiqYashirilgan ? null : stock.omborQoldiq,
+        dokonQoldiq: qoldiqYashirilgan ? null : stock.dokonQoldiq,
         qoldiq: Math.max(0, jami),
         kamQolgan: jami <= t.minimalQoldiq,
         yaroqlilikMuddati: t.yaroqlilikMuddati,
         kunQoldi,
         muddatiYaqin: t.yaroqlilikMuddati ? t.yaroqlilikMuddati.getTime() - hozir <= besh_kun_ms : false,
-      }
+      }, yashirilganMaydonlar)
     })
 
     const natija = qoldiqlar

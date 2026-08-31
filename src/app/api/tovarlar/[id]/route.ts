@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId } from '@/lib/filial-scope'
 import { rasmlarniSiqish } from '@/lib/rasm'
+import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,12 +12,6 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
     const filialId = sessionFilialId(session)
     const foydalanuvchiId = (session.user as any).id
-
-    const yashirilganmi = await prisma.tovarYashirish.findUnique({
-      where: { tovarId_foydalanuvchiId: { tovarId: id, foydalanuvchiId } },
-      select: { id: true },
-    })
-    if (yashirilganmi) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
     const tovar = await prisma.tovar.findFirst({
       where: { id, ...(filialId ? { filialId } : {}) },
@@ -30,7 +25,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       },
     })
     if (!tovar) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
-    return NextResponse.json(tovar)
+
+    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari(foydalanuvchiId)
+    return NextResponse.json(maydonlarniYashir(tovar, yashirilganMaydonlar))
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
@@ -48,20 +45,27 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const data = await req.json()
     const rasmlar = await rasmlarniSiqish(data.rasmlar)
+
+    // Yashirilgan maydonlarni (masalan kelish narxi) shu hisob ko'rmaydi —
+    // shuning uchun ularni saqlashda o'zgartirmaymiz, aks holda ko'rinmas
+    // qiymat bo'sh/0 deb noto'g'ri ustidan yozilib qolishi mumkin edi.
+    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari((session.user as any).id)
+    const updateData: any = {
+      nomi: data.nomi,
+      kategoriyaId: data.kategoriyaId,
+      shtrixKod: data.shtrixKod || null,
+      valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
+      birlik: data.birlik,
+      minimalQoldiq: parseInt(data.minimalQoldiq),
+      rasmlar,
+      yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
+    }
+    if (!yashirilganMaydonlar.has('kelishNarxi')) updateData.kelishNarxi = parseFloat(data.kelishNarxi)
+    if (!yashirilganMaydonlar.has('sotishNarxi')) updateData.sotishNarxi = parseFloat(data.sotishNarxi)
+
     const tovar = await prisma.tovar.update({
       where: { id },
-      data: {
-        nomi: data.nomi,
-        kategoriyaId: data.kategoriyaId,
-        shtrixKod: data.shtrixKod || null,
-        kelishNarxi: parseFloat(data.kelishNarxi),
-        sotishNarxi: parseFloat(data.sotishNarxi),
-        valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
-        birlik: data.birlik,
-        minimalQoldiq: parseInt(data.minimalQoldiq),
-        rasmlar,
-        yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
-      },
+      data: updateData,
       include: { kategoriya: true },
     })
 
@@ -74,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           turi: 'KIRIM',
           joy: 'DOKON',
           miqdor: qoshiladigan,
-          narx: parseFloat(data.kelishNarxi),
+          narx: Number(tovar.kelishNarxi),
           izoh: "Tahrirlashda qoldiq oshirildi",
           foydalanuvchiId: (session.user as any).id,
         },

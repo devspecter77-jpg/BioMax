@@ -5,6 +5,7 @@ import { normalizeUzbek, toKirill, toLotin } from '@/lib/utils'
 import { getStockMap } from '@/lib/stock'
 import { sessionFilialId } from '@/lib/filial-scope'
 import { rasmlarniSiqish } from '@/lib/rasm'
+import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,19 +20,14 @@ export async function GET(req: NextRequest) {
     const limitParam = searchParams.get('limit')
     const limit = limitParam ? parseInt(limitParam) : 0
 
-    const filialId = sessionFilialId(session)
+    const ownFilialId = sessionFilialId(session)
     const foydalanuvchiId = (session.user as any).id
-    const where: any = {}
-    if (filialId) where.filialId = filialId
+    // Ega (filialsiz) — standart holatda faqat OZINING mahsulotlarini ko'radi.
+    // ?filialId= bilan ixtiyoriy ravishda boshqa bitta filialni tanlab ko'rishi mumkin.
+    // Filialga bog'langan foydalanuvchi esa har doim faqat o'z filialiga qulflangan.
+    const filialId = ownFilialId || searchParams.get('filialId') || null
+    const where: any = { filialId }
     if (holati !== 'BARCHASI') where.holati = holati
-    // Ega tomonidan ushbu (bog'langan) hisobdan maxsus yashirilgan mahsulotlar
-    const yashirilganlar = await prisma.tovarYashirish.findMany({
-      where: { foydalanuvchiId },
-      select: { tovarId: true },
-    })
-    if (yashirilganlar.length > 0) {
-      where.id = { notIn: yashirilganlar.map(y => y.tovarId) }
-    }
     if (kategoriyaId) where.kategoriyaId = kategoriyaId
     if (qidiruv) {
       const normalized = normalizeUzbek(qidiruv)
@@ -62,9 +58,13 @@ export async function GET(req: NextRequest) {
     // SQL aggregatsiya — omborHarakati yuklanmaydi
     const stockMap = await getStockMap(tovarlar.map(t => t.id))
 
+    // Ega tomonidan ushbu (bog'langan) hisobdan maxsus yashirilgan maydonlar
+    // (masalan kelish narxi) — bor bo'lsa, javobdan olib tashlanadi.
+    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari(foydalanuvchiId)
+
     const tovarlarQoldiq = tovarlar.map((t) => {
       const stock = stockMap.get(t.id)
-      return { ...t, qoldiq: stock?.dokonQoldiq ?? 0 }
+      return maydonlarniYashir({ ...t, qoldiq: stock?.dokonQoldiq ?? 0 }, yashirilganMaydonlar)
     })
 
     return NextResponse.json({ tovarlar: tovarlarQoldiq, jami, page, limit })

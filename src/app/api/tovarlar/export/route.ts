@@ -4,19 +4,29 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId } from '@/lib/filial-scope'
 import { getStockMap } from '@/lib/stock'
+import { foydalanuvchiYashirilganMaydonlari } from '@/lib/maydon-yashirish'
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
+    const ownFilialId = sessionFilialId(session)
+    const foydalanuvchiId = (session.user as any).id
+    const { searchParams } = new URL(req.url)
+    const filialId = ownFilialId || searchParams.get('filialId') || null
 
-    const tovarlar = await prisma.tovar.findMany({
-      where: filialId ? { filialId } : {},
-      include: { kategoriya: true },
-      orderBy: { nomi: 'asc' },
-    })
+    const [tovarlar, yashirilganMaydonlar] = await Promise.all([
+      prisma.tovar.findMany({
+        where: { filialId },
+        include: { kategoriya: true },
+        orderBy: { nomi: 'asc' },
+      }),
+      foydalanuvchiYashirilganMaydonlari(foydalanuvchiId),
+    ])
     const stockMap = await getStockMap(tovarlar.map(t => t.id))
+    const kelishYashirin = yashirilganMaydonlar.has('kelishNarxi')
+    const sotishYashirin = yashirilganMaydonlar.has('sotishNarxi')
+    const qoldiqYashirin = yashirilganMaydonlar.has('qoldiq')
 
     const rows = tovarlar.map(t => {
       const stock = stockMap.get(t.id)
@@ -25,10 +35,10 @@ export async function GET(_req: NextRequest) {
         'Kategoriya': t.kategoriya.nomi,
         'Shtrix-kod': t.shtrixKod || '',
         'Valyuta': t.valyuta,
-        'Kelish narxi': Number(t.kelishNarxi),
-        'Sotish narxi': Number(t.sotishNarxi),
+        'Kelish narxi': kelishYashirin ? '' : Number(t.kelishNarxi),
+        'Sotish narxi': sotishYashirin ? '' : Number(t.sotishNarxi),
         'Birlik': t.birlik,
-        'Miqdori': stock?.dokonQoldiq ?? 0,
+        'Miqdori': qoldiqYashirin ? '' : (stock?.dokonQoldiq ?? 0),
         'Yaroqlilik muddati': t.yaroqlilikMuddati ? t.yaroqlilikMuddati.toISOString().slice(0, 10) : '',
         'Holati': t.holati,
       }

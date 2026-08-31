@@ -11,11 +11,14 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
+    const ownFilialId = sessionFilialId(session)
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     if (!file) return NextResponse.json({ xato: 'Fayl topilmadi' }, { status: 400 })
+    // Faqat Ega (filialsiz) ixtiyoriy ravishda muayyan filialga import qila oladi —
+    // filialga bog'langan foydalanuvchi har doim faqat o'z filialiga qulflangan.
+    const filialId = ownFilialId || (formData.get('filialId') as string | null) || null
 
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
@@ -65,7 +68,7 @@ export async function POST(req: NextRequest) {
         }
 
         const mavjud = await prisma.tovar.findFirst({
-          where: { nomi: { equals: nomi, mode: 'insensitive' }, ...(filialId ? { filialId } : {}) },
+          where: { nomi: { equals: nomi, mode: 'insensitive' }, filialId },
         })
 
         if (mavjud) {
