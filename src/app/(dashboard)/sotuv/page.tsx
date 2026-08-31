@@ -900,7 +900,7 @@ export default function SotuvPage() {
               <p className="text-xs mt-1 text-gray-500 dark:text-gray-400">&laquo;{qidiruv}&raquo; bo&apos;yicha tovar yo&apos;q</p>
             </div>
           ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4">
             {korsatiladiganTovarlar.map(t => {
               const savatdagi = savat.find(s => s.tovarId === t.id)?.miqdor || 0
               const tugagan = t.qoldiq <= 0
@@ -917,12 +917,12 @@ export default function SotuvPage() {
                       {savatdagi}
                     </span>
                   )}
-                  <div className="h-32 bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
+                  <div className="h-48 bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
                     {t.rasmlar?.[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={t.rasmlar[0]} alt={t.nomi} className="w-full h-full object-cover" />
                     ) : (
-                      <Package size={40} className="text-pos/60 group-hover:text-pos group-hover:scale-110 transition-all" />
+                      <Package size={56} className="text-pos/60 group-hover:text-pos group-hover:scale-110 transition-all" />
                     )}
                     <span className={`absolute top-2 right-2 text-xs px-2 py-1 rounded-lg font-semibold shadow-sm ${
                       tugagan ? 'bg-red-500 text-white' : kamQoldi ? 'bg-amber-500 text-white' : 'bg-white/90 dark:bg-neutral-900/80 text-gray-600 dark:text-gray-300'
@@ -930,9 +930,9 @@ export default function SotuvPage() {
                       {tugagan ? 'Tugagan' : `${t.qoldiq} ${t.birlik.toLowerCase()}`}
                     </span>
                   </div>
-                  <div className="p-3.5">
-                    <p className="text-gray-900 dark:text-gray-100 text-base font-semibold leading-tight line-clamp-2 min-h-[2.6em]">{t.nomi}</p>
-                    <p className="text-pos text-lg font-bold font-mono tabular-nums mt-2">{formatSum(t.sotishNarxi)}</p>
+                  <div className="p-4">
+                    <p className="text-gray-900 dark:text-gray-100 text-lg font-semibold leading-tight line-clamp-2 min-h-[2.6em]">{t.nomi}</p>
+                    <p className="text-pos text-xl font-bold font-mono tabular-nums mt-2">{formatSum(t.sotishNarxi)}</p>
                   </div>
                 </button>
               )
