@@ -51,9 +51,8 @@ export default function TovarlarPage() {
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [kursi, setKursi] = useState<number | null>(null)
-  const [kursModal, setKursModal] = useState(false)
-  const [kursForm, setKursForm] = useState('')
-  const [kursSaqlanmoqda, setKursSaqlanmoqda] = useState(false)
+  const [kursSana, setKursSana] = useState<string | null>(null)
+  const [kursYangilanmoqda, setKursYangilanmoqda] = useState(false)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
     sotishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
@@ -112,33 +111,25 @@ export default function TovarlarPage() {
   useEffect(() => { yuklash() }, [qidiruv, aktifKategoriya])
 
   useEffect(() => {
-    fetch('/api/kurs').then(r => r.json()).then(d => { if (d.kursi) setKursi(d.kursi) })
+    fetch('/api/kurs').then(r => r.json()).then(d => { if (d.kursi) { setKursi(d.kursi); setKursSana(d.sana) } })
   }, [])
 
-  function kursModalniOchish() {
-    setKursForm(kursi ? String(kursi) : '')
-    setKursModal(true)
-  }
-
-  async function kursSaqlash(e: React.FormEvent) {
-    e.preventDefault()
-    setKursSaqlanmoqda(true)
+  // Markaziy bankdan majburiy qayta yuklash — qo'lda kiritish yo'q,
+  // faqat rasmiy kursni qayta so'rash mumkin.
+  async function kursniYangilash() {
+    setKursYangilanmoqda(true)
     try {
-      const res = await fetch('/api/kurs', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kursi: kursForm }),
-      })
+      const res = await fetch('/api/kurs', { method: 'PUT' })
       const data = await res.json()
       if (res.ok) {
         setKursi(data.kursi)
-        toast.success("Dollar kursi yangilandi")
-        setKursModal(false)
+        setKursSana(data.sana)
+        toast.success("Dollar kursi Markaziy bankdan yangilandi")
       } else {
         toast.error(data.xato || 'Xatolik')
       }
     } finally {
-      setKursSaqlanmoqda(false)
+      setKursYangilanmoqda(false)
     }
   }
 
@@ -264,11 +255,12 @@ export default function TovarlarPage() {
         />
         <BarcodeScanner onScan={setQidiruv} title="Mahsulotni qidirish uchun skanerlang" />
         <button
-          onClick={kursModalniOchish}
-          title="Dollar kursini o'zgartirish"
-          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+          onClick={kursniYangilash}
+          disabled={kursYangilanmoqda}
+          title={`Markaziy bank kursi${kursSana ? ` (${kursSana})` : ''} — bosilsa qayta yuklanadi`}
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-60"
         >
-          <DollarSign size={16} />
+          {kursYangilanmoqda ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
           {kursi ? formatSum(kursi) : '...'}
         </button>
         <ViewToggle view={view} onChange={changeView} />
@@ -464,42 +456,6 @@ export default function TovarlarPage() {
       )}
 
       </>)})()}
-
-      {/* Dollar kursi modali */}
-      {kursModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                <DollarSign size={18} className="text-primary" />
-                Dollar kursi
-              </h3>
-              <button onClick={() => setKursModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={kursSaqlash} className="p-5 space-y-4">
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">1 dollar necha so&apos;m?</label>
-                <MoneyInput value={kursForm} onChange={setKursForm} required placeholder="12700" />
-                <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5">
-                  Dollarda narxlangan mahsulotlar sotuvda shu kurs bo&apos;yicha so&apos;mga o&apos;giriladi.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setKursModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor qilish
-                </button>
-                <button type="submit" disabled={kursSaqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {kursSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
-                  {kursSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Kategoriya qo'shish modali — tovar modali ustida chiqishi uchun yuqoriroq z-index */}
       {katModal && (

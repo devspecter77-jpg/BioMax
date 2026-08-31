@@ -287,14 +287,13 @@ export default function SotuvPage() {
         ])
         setMijozlar(Array.isArray(mj) ? mj : [])
         setDokonInfo(sz && typeof sz === 'object' ? sz : {})
-        const kursQiymat = sz && typeof sz === 'object' ? parseFloat(sz.usd_kursi) : NaN
-        if (Number.isFinite(kursQiymat) && kursQiymat > 0) setKursi(kursQiymat)
       } catch {
         // qo'shimcha ma'lumotlar muhim emas — sotuv ishlay beradi
       }
     }
     tovarlarniYuklash()
     yuklashQoshimcha()
+    fetch('/api/kurs').then(r => r.json()).then(d => { if (d.kursi) setKursi(d.kursi) }).catch(() => {})
     const blobToBase64 = (url: string) =>
       fetch(url).then(r => r.blob()).then(blob => new Promise<string>(resolve => {
         const reader = new FileReader()
