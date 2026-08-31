@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionIsRealEga } from '@/lib/filial-scope'
 
-// Faqat bosh egasi (Ega, filialId yo'q) filiallarni boshqara oladi —
-// filial egasi o'z filialidan tashqarida hech narsani ko'rmasligi/o'zgartirmasligi kerak.
+// Faqat haqiqiy bosh egasi (Ega, filialId yo'q VA ulashilgan admin ham
+// emas) filiallarni boshqara oladi — filial egasi o'z filialidan
+// tashqarida, ulashilgan admin esa umuman hech narsani ko'ra/o'zgartira
+// olmasligi kerak.
 function faqatEga(session: any) {
   const rol = session?.user?.rol
-  return !!session && rol === 'ADMIN' && !sessionFilialId(session)
+  return !!session && rol === 'ADMIN' && sessionIsRealEga(session)
 }
 
 export async function GET() {

@@ -49,13 +49,14 @@ export const mobilePriorityOrder = [
  * faqat `ruxsat-katalogi.ts` ichidagi bo'limlarga tegishli nav elementlari filtrlanadi
  * (Sozlamalar/Filiallar/Ruxsatlar kabi katalogda yo'q bo'limlar faqat `roles` bilan boshqariladi).
  */
-export function visibleNavItems(rol: string | undefined, ruxsatlar?: string[] | null, filialId?: string | null): NavItem[] {
+export function visibleNavItems(rol: string | undefined, ruxsatlar?: string[] | null, filialId?: string | null, ulashilganEgaId?: string | null): NavItem[] {
   if (!rol) return navItems
   return navItems.filter((item) => {
     if (!item.roles.includes(rol)) return false
-    // Filiallar — faqat bosh egasi (Ega, filialId yo'q) ko'radi. Filial egasi
-    // o'z filialidan tashqarida hech narsani boshqara olmasligi kerak.
-    if (item.href === '/filiallar' && filialId) return false
+    // Filiallar — faqat haqiqiy bosh ega (Ega, filialId yo'q VA ulashilgan
+    // admin ham emas) ko'radi. Filial egasi o'z filialidan tashqarida,
+    // ulashilgan admin esa Ega/filiallarni umuman boshqara olmasligi kerak.
+    if (item.href === '/filiallar' && (filialId || ulashilganEgaId)) return false
     if (rol === 'ADMIN' || ruxsatlar === undefined) return true
     const bolimKalit = item.href.slice(1)
     if (!barchaRuxsatKalitlari.includes(bolimKalit)) return true

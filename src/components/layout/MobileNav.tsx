@@ -20,6 +20,7 @@ export default function MobileNav() {
   const rol = (session?.user as any)?.rol
   const ruxsatlar = (session?.user as any)?.ruxsatlar
   const filialId = (session?.user as any)?.filialId
+  const ulashilganEgaId = (session?.user as any)?.ulashilganEgaId
   const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export default function MobileNav() {
     }
   }, [moreOpen])
 
-  const items = visibleNavItems(rol, ruxsatlar, filialId)
+  const items = visibleNavItems(rol, ruxsatlar, filialId, ulashilganEgaId)
   const sorted = [...items].sort((a, b) => {
     const ai = mobilePriorityOrder.indexOf(a.href)
     const bi = mobilePriorityOrder.indexOf(b.href)

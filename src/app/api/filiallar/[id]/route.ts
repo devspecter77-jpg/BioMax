@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionIsRealEga } from '@/lib/filial-scope'
 
 function faqatEga(session: any) {
   const rol = session?.user?.rol
-  return !!session && rol === 'ADMIN' && !sessionFilialId(session)
+  return !!session && rol === 'ADMIN' && sessionIsRealEga(session)
 }
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {

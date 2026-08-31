@@ -18,8 +18,9 @@ export default function Sidebar() {
   const rol = (session?.user as any)?.rol
   const ruxsatlar = (session?.user as any)?.ruxsatlar
   const filialId = (session?.user as any)?.filialId
+  const ulashilganEgaId = (session?.user as any)?.ulashilganEgaId
 
-  const visibleItems = visibleNavItems(rol, ruxsatlar, filialId)
+  const visibleItems = visibleNavItems(rol, ruxsatlar, filialId, ulashilganEgaId)
 
   useEffect(() => {
     fetch('/api/sozlamalar')
