@@ -1,30 +1,21 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Bebas_Neue, IBM_Plex_Mono } from 'next/font/google'
+// Google Fonts'ni build vaqtida internetdan yuklab olish (next/font/google)
+// ba'zi tarmoqlarda IPv6 orqali osilib qolib, dev serverni sekinlashtirar edi —
+// shuning uchun fontlar lokal paket (@fontsource) orqali, internetga
+// bog'liqsiz self-hosted qilib ulangan.
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
+import '@fontsource/bebas-neue/400.css'
+import '@fontsource/ibm-plex-mono/400.css'
+import '@fontsource/ibm-plex-mono/500.css'
+import '@fontsource/ibm-plex-mono/600.css'
 import './globals.css'
 import { Toaster } from 'sonner'
 import SessionProvider from '@/components/SessionProvider'
 import { ThemeProvider } from '@/components/ThemeContext'
 import ConfirmProvider from '@/components/ConfirmProvider'
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-})
-
-const bebasNeue = Bebas_Neue({
-  weight: '400',
-  subsets: ['latin'],
-  variable: '--font-bebas',
-  display: 'swap',
-})
-
-const plexMono = IBM_Plex_Mono({
-  weight: ['400', '500', '600'],
-  subsets: ['latin'],
-  variable: '--font-plex-mono',
-  display: 'swap',
-})
 
 export const metadata: Metadata = {
   title: 'BioMax',
@@ -61,7 +52,7 @@ const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');if(
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="uz" className={`${inter.variable} ${bebasNeue.variable} ${plexMono.variable}`} suppressHydrationWarning>
+    <html lang="uz" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
