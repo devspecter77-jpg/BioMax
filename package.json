@@ -13,13 +13,7 @@
     "bot": "ts-node -P tsconfig.scripts.json src/bot/index.ts",
     "scheduler": "ts-node -P tsconfig.scripts.json src/bot/scheduler.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run bot\" \"npm run scheduler\"",
-    "db:clean": "ts-node -P tsconfig.scripts.json prisma/clean.ts",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "db:clean": "ts-node -P tsconfig.scripts.json prisma/clean.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

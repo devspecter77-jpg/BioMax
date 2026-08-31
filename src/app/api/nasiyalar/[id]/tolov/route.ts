@@ -1,17 +1,24 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 import { tolovQilindiXabar } from '@/lib/telegram'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
+    const filialId = sessionFilialId(session)
 
     const data = await req.json()
     const foydalanuvchiId = (session.user as any).id
+
+    if (filialId) {
+      const egalik = await prisma.nasiya.findFirst({ where: { id, mijoz: { filialId } }, select: { id: true } })
+      if (!egalik) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
+    }
 
     // tolovUsuli validatsiya
     const USULLAR = ['NAQD', 'KARTA'] as const
@@ -57,9 +64,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     // Telegram — xatolik loglash
-    tolovQilindiXabar(id, natija.nasiya.mijozId, natija.haqiqiyTolov.toNumber(), natija.yangiQoldiq)
-      .then(r => { if (r && !r.ok) console.error('[Telegram] Tolov xabar xatosi:', r.xato) })
-      .catch(e => console.error('[Telegram] Tolov xabar xatosi:', e))
+    after(async () => {
+      await tolovQilindiXabar(id, natija.nasiya.mijozId, natija.haqiqiyTolov.toNumber(), natija.yangiQoldiq)
+        .then(r => { if (r && !r.ok) console.error('[Telegram] Tolov xabar xatosi:', r.xato) })
+        .catch(e => console.error('[Telegram] Tolov xabar xatosi:', e))
+    })
 
     return NextResponse.json({ tolov: natija.tolov, nasiya: natija.nasiya }, { status: 201 })
   } catch (e: any) {

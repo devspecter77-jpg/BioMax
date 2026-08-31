@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { agingBucket, type AgingBucket } from '@/lib/hisobotlar'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 const BUCKET_LABEL: Record<AgingBucket, string> = {
   kechikmagan: 'Kechikmagan',
@@ -33,6 +34,7 @@ export async function GET(_req: NextRequest) {
 
     const bugun = new Date()
     bugun.setHours(0, 0, 0, 0)
+    const filialId = sessionFilialId(session)
 
     // Ochiq va muddati o'tgan nasiyalar, qoldiq > 0
     const nasiyalar = await prisma.nasiya.findMany({
@@ -40,6 +42,7 @@ export async function GET(_req: NextRequest) {
         holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] },
         qoldiq: { gt: 0 },
         ochirilgan: false,
+        ...(filialId ? { mijoz: { filialId } } : {}),
       },
       select: {
         id: true,

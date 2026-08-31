@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { generateChekRaqami } from '@/lib/utils'
-import { nasiyaYaratildiXabarToliq } from '@/lib/telegram'
+import { nasiyaYaratildiXabarToliq, sotuvChekiXabar } from '@/lib/telegram'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,11 +22,12 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get('q')
     const sort = searchParams.get('sort')
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
+    const filialId = sessionFilialId(session)
 
     // Chek raqami bo'yicha qidirish (qaytarish uchun)
     if (chekRaqami) {
-      const sotuv = await prisma.sotuv.findUnique({
-        where: { chekRaqami },
+      const sotuv = await prisma.sotuv.findFirst({
+        where: { chekRaqami, ...(filialId ? { filialId } : {}) },
         include: {
           mijoz: { select: { ism: true, telefon: true } },
           kassir: { select: { ism: true } },
@@ -37,6 +39,7 @@ export async function GET(req: NextRequest) {
     }
 
     const where: any = {}
+    if (filialId) where.filialId = filialId
     if (dan || gacha) {
       where.sana = {}
       if (dan) where.sana.gte = new Date(dan)
@@ -101,6 +104,7 @@ export async function POST(req: NextRequest) {
 
     const data = await req.json()
     const kassirId = (session.user as any).id
+    const filialId = sessionFilialId(session)
 
     // Tranzaksiya: sotuv + ombor harakati + nasiya
     const sotuv = await prisma.$transaction(async (tx) => {
@@ -117,6 +121,7 @@ export async function POST(req: NextRequest) {
           naqdTolangan: parseFloat(data.naqdTolangan || 0),
           kartaTolangan: parseFloat(data.kartaTolangan || 0),
           kassirId,
+          filialId,
         },
       })
 
@@ -202,19 +207,39 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Telegram bildirishnoma — nasiya yaratilganda mijozga xabar
-    if (toliSotuv?.nasiya && toliSotuv.mijoz) {
-      nasiyaYaratildiXabarToliq(
-        toliSotuv.nasiya.id,
-        toliSotuv.mijoz.id,
-        {
-          chekRaqami: toliSotuv.chekRaqami,
-          summasi: Number(toliSotuv.yakuniySumma),
-          qoldiqQarz: Number(toliSotuv.nasiya.qoldiq),
-          muddat: toliSotuv.nasiya.muddat,
-          sotuvId: toliSotuv.id,
+    // Telegram bildirishnoma — mijozga xabar (nasiya bo'lsa qarz tafsiloti bilan,
+    // aks holda oddiy xarid cheki bilan — ikkalasi ham mahsulotlar+summasini o'z ichiga oladi).
+    // `after()` — javob darhol qaytadi, xabar esa fon vazifasi sifatida yuboriladi
+    // (Vercel kabi serverless muhitda ham to'liq bajarilishini kafolatlaydi).
+    if (toliSotuv?.mijoz) {
+      const mijoz = toliSotuv.mijoz
+      const nasiya = toliSotuv.nasiya
+      after(async () => {
+        if (nasiya) {
+          await nasiyaYaratildiXabarToliq(
+            nasiya.id,
+            mijoz.id,
+            {
+              chekRaqami: toliSotuv.chekRaqami,
+              summasi: Number(toliSotuv.yakuniySumma),
+              qoldiqQarz: Number(nasiya.qoldiq),
+              muddat: nasiya.muddat,
+              sotuvId: toliSotuv.id,
+            }
+          ).catch(e => console.error('[Telegram] Nasiya xabar xatosi:', e))
+        } else {
+          await sotuvChekiXabar(
+            toliSotuv.id,
+            mijoz.id,
+            {
+              chekRaqami: toliSotuv.chekRaqami,
+              summasi: Number(toliSotuv.yakuniySumma),
+              tolovUsuli: toliSotuv.tolovUsuli,
+              mijozIsm: mijoz.ism,
+            }
+          ).catch(e => console.error('[Telegram] Sotuv cheki xabar xatosi:', e))
         }
-      ).catch(e => console.error('[Telegram] Nasiya xabar xatosi:', e))
+      })
     }
 
     return NextResponse.json(toliSotuv, { status: 201 })

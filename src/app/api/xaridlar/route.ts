@@ -98,27 +98,50 @@ export async function POST(req: NextRequest) {
     const tolanganSumma = Number(tolangan) || 0
     const qoldiqQarz = jamiSumma - tolanganSumma
 
-    const xarid = await prisma.xarid.create({
-      data: {
-        taminotchiId: taminotchiId || null,
-        jamiSumma,
-        tolangan: tolanganSumma,
-        qoldiqQarz,
-        izoh: izoh || null,
-        foydalanuvchiId,
-        tarkiblar: {
-          create: tarkiblar.map((t: { tovarNomi: string; miqdor: number; birlikNarxi: number }) => ({
-            tovarNomi: t.tovarNomi,
-            miqdor: Number(t.miqdor),
-            birlikNarxi: Number(t.birlikNarxi),
-            jami: Number(t.miqdor) * Number(t.birlikNarxi),
-          })),
+    const xarid = await prisma.$transaction(async (tx) => {
+      const yangi = await tx.xarid.create({
+        data: {
+          taminotchiId: taminotchiId || null,
+          jamiSumma,
+          tolangan: tolanganSumma,
+          qoldiqQarz,
+          izoh: izoh || null,
+          foydalanuvchiId,
+          tarkiblar: {
+            create: tarkiblar.map((t: { tovarId?: string; tovarNomi: string; miqdor: number; birlikNarxi: number }) => ({
+              tovarId: t.tovarId || null,
+              tovarNomi: t.tovarNomi,
+              miqdor: Number(t.miqdor),
+              birlikNarxi: Number(t.birlikNarxi),
+              jami: Number(t.miqdor) * Number(t.birlikNarxi),
+            })),
+          },
         },
-      },
-      include: {
-        taminotchi: { select: { nomi: true } },
-        tarkiblar: true,
-      },
+        include: {
+          taminotchi: { select: { nomi: true } },
+          tarkiblar: true,
+        },
+      })
+
+      // Tovarga bog'langan har bir tarkib uchun — avtomatik omborga kirim
+      for (const t of tarkiblar) {
+        if (t.tovarId) {
+          await tx.omborHarakati.create({
+            data: {
+              tovarId: t.tovarId,
+              turi: 'KIRIM',
+              joy: 'OMBOR',
+              miqdor: Number(t.miqdor),
+              narx: Number(t.birlikNarxi),
+              taminotchiId: taminotchiId || null,
+              foydalanuvchiId,
+              izoh: 'Xarid orqali avtomatik kirim',
+            },
+          })
+        }
+      }
+
+      return yangi
     })
 
     return NextResponse.json(xarid, { status: 201 })

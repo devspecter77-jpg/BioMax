@@ -55,12 +55,14 @@ export function baseSotuvFilter(
   danSana: Date,
   gachaSana: Date,
   kassirId?: string,
+  filialId?: string | null,
 ) {
   return {
     holati: 'YAKUNLANGAN' as const,
     sana: { gte: danSana, lt: gachaSana },
     tolovUsuli: { not: 'SHERIK' as const },
     ...(kassirId ? { kassirId } : {}),
+    ...(filialId ? { filialId } : {}),
   }
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,11 +20,12 @@ export async function GET(req: NextRequest) {
     const gacha = searchParams.get('gacha') || undefined
 
     const { dan: d, gacha: g } = getReportDateRange(tur, dan, gacha)
+    const filialId = sessionFilialId(session)
 
     // Sotuv grouped by mijozId (davrda)
     const sotuvlar = await prisma.sotuv.findMany({
       where: {
-        ...baseSotuvFilter(d, g),
+        ...baseSotuvFilter(d, g, undefined, filialId),
         mijozId: { not: null },
       },
       select: {
@@ -63,7 +65,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Jami mijozlar soni (tizimda)
-    const jamiMijozlar = await prisma.mijoz.count()
+    const jamiMijozlar = await prisma.mijoz.count({ where: filialId ? { filialId } : {} })
 
     // Aktiv mijozlar: davrda sotuvi borlar
     const aktivMijozlar = mijozMap.size

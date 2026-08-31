@@ -1,47 +1,25 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { useSidebar } from '@/components/SidebarContext'
-import {
-  LayoutDashboard, ShoppingCart, Package, Warehouse,
-  Users, CreditCard, Truck, Receipt, BarChart3, Settings,
-  X, Store, ChevronLeft, ChevronRight, ShoppingBag, Users2, Building2, Handshake, ClipboardList, MessageSquare,
-} from 'lucide-react'
-
-const navItems = [
-  { href: '/', label: 'Bosh sahifa', icon: LayoutDashboard, roles: ['ADMIN', 'KASSIR', 'OMBORCHI'] },
-  { href: '/sotuv', label: 'Sotuv (POS)', icon: ShoppingCart, roles: ['ADMIN', 'KASSIR'] },
-  { href: '/buyurtmalar', label: 'Buyurtmalar', icon: ClipboardList, roles: ['ADMIN', 'KASSIR'] },
-  { href: '/sotuvchi', label: 'Sotuvchi paneli', icon: ShoppingCart, roles: ['SOTUVCHI'] },
-  { href: '/tovarlar', label: 'Tovarlar', icon: Package, roles: ['ADMIN', 'KASSIR', 'OMBORCHI'] },
-  { href: '/ombor', label: 'Ombor', icon: Warehouse, roles: ['ADMIN', 'KASSIR', 'OMBORCHI'] },
-  { href: '/mijozlar', label: 'Mijozlar', icon: Users, roles: ['ADMIN', 'KASSIR'] },
-  { href: '/nasiyalar', label: 'Nasiyalar', icon: CreditCard, roles: ['ADMIN', 'KASSIR'] },
-  { href: '/taminotchilar', label: "Ta'minotchilar", icon: Truck, roles: ['ADMIN'] },
-  { href: '/xaridlar', label: 'Xaridlar', icon: ShoppingBag, roles: ['ADMIN', 'KASSIR'] },
-  { href: '/xarajatlar', label: 'Xarajatlar', icon: Receipt, roles: ['ADMIN'] },
-  { href: '/sheriklar', label: 'Sheriklar', icon: Building2, roles: ['ADMIN'] },
-  { href: '/sherikdan-olish', label: 'Sherikdan olish', icon: Handshake, roles: ['ADMIN', 'KASSIR'] },
-  { href: '/agentlar', label: 'Agentlar', icon: Users2, roles: ['ADMIN'] },
-  { href: '/hisobotlar', label: 'Hisobotlar', icon: BarChart3, roles: ['ADMIN', 'KASSIR'] },
-  { href: '/xabarlar', label: 'Xabarlar', icon: MessageSquare, roles: ['ADMIN'] },
-  { href: '/sozlamalar', label: 'Sozlamalar', icon: Settings, roles: ['ADMIN'] },
-]
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { visibleNavItems, navSections } from './nav-items'
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { open, setOpen, collapsed, toggleCollapsed } = useSidebar()
-  const [dokonNomi, setDokonNomi] = useState('Optimum')
+  const [dokonNomi, setDokonNomi] = useState('BioMax')
   const { data: session } = useSession()
   const rol = (session?.user as any)?.rol
+  const ruxsatlar = (session?.user as any)?.ruxsatlar
+  const filialId = (session?.user as any)?.filialId
 
-  const visibleItems = rol
-    ? navItems.filter(item => item.roles.includes(rol))
-    : navItems
+  const visibleItems = visibleNavItems(rol, ruxsatlar, filialId)
 
   useEffect(() => {
     fetch('/api/sozlamalar')
@@ -73,27 +51,33 @@ export default function Sidebar() {
             'flex items-center px-3 flex-1 min-w-0 gap-2.5',
             collapsed && 'lg:justify-center lg:px-0 lg:gap-0'
           )}>
-            {/* Kengaytirilgan holat: qizil icon + Bebas Neue nomi */}
+            {/* Kengaytirilgan holat: urg'u belgisi + Bebas Neue nomi */}
             <div className={cn('flex items-center gap-2.5 min-w-0 flex-1', collapsed && 'lg:hidden')}>
-              <div className="w-9 h-9 bg-red-600 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-red-600/30">
-                <Store size={19} className="text-white" />
+              <div className="w-9 h-9 bg-white border border-gray-200 dark:border-neutral-800 rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden p-1">
+                <Image src="/maxbio-icon.png" alt="BioMax" width={36} height={36} className="w-full h-full object-contain" />
               </div>
               <div className="min-w-0 flex-1">
                 <span
-                  className="block text-gray-900 dark:text-gray-100 truncate leading-none"
+                  className="block truncate leading-none"
                   style={{ fontFamily: 'var(--font-bebas)', fontSize: 20, letterSpacing: '0.04em' }}
                 >
-                  {dokonNomi.toUpperCase()}
+                  {dokonNomi.trim().toLowerCase() === 'biomax' ? (
+                    <>
+                      <span className="text-gray-900 dark:text-white">BIO</span>
+                      <span className="text-primary">MAX</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-900 dark:text-gray-100">{dokonNomi.toUpperCase()}</span>
+                  )}
                 </span>
-                <span className="text-gray-400 dark:text-gray-600 text-[10px] leading-none">Boshqaruv tizimi</span>
               </div>
             </div>
             {/* Yig'ilgan holat (faqat desktop): Store ikonkasi */}
             <div className={cn(
-              'w-9 h-9 bg-red-600 rounded-xl items-center justify-center shrink-0 shadow-md shadow-red-600/30',
+              'w-9 h-9 bg-white border border-gray-200 dark:border-neutral-800 rounded-xl items-center justify-center shrink-0 shadow-sm overflow-hidden p-1',
               collapsed ? 'lg:flex hidden' : 'hidden'
             )}>
-              <Store size={19} className="text-white" />
+              <Image src="/maxbio-icon.png" alt="BioMax" width={36} height={36} className="w-full h-full object-contain" />
             </div>
           </div>
           {/* Mobil: yopish tugmasi */}
@@ -107,42 +91,72 @@ export default function Sidebar() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden space-y-0.5">
-          {visibleItems.map((item) => {
-            const Icon = item.icon
-            const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                title={item.label}
-                className={cn(
-                  'flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150',
-                  collapsed ? 'lg:justify-center lg:gap-0 lg:px-0 lg:py-2.5 px-3 py-2.5' : 'px-3 py-2.5',
-                  active
-                    ? cn(
-                        'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400',
-                        collapsed
-                          ? 'border-l-[3px] border-red-600 dark:border-red-500 pl-[9px] lg:border-0 lg:pl-0'
-                          : 'border-l-[3px] border-red-600 dark:border-red-500 pl-[9px]'
-                      )
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-neutral-800'
-                )}
-              >
-                <Icon
-                  size={18}
+        <nav className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden">
+          {(() => {
+            const renderItem = (item: typeof visibleItems[number]) => {
+              const Icon = item.icon
+              const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  title={item.label}
                   className={cn(
-                    'shrink-0',
-                    active ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-600'
+                    'flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150',
+                    collapsed ? 'lg:justify-center lg:gap-0 lg:px-0 lg:py-2.5 px-3 py-2.5' : 'px-3 py-2.5',
+                    active
+                      ? cn(
+                          'bg-primary-light dark:bg-[#132B20] text-primary dark:text-[#2E9B6B]',
+                          collapsed
+                            ? 'border-l-[3px] border-primary dark:border-[#2E9B6B] pl-[9px] lg:border-0 lg:pl-0'
+                            : 'border-l-[3px] border-primary dark:border-[#2E9B6B] pl-[9px]'
+                        )
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-neutral-800'
                   )}
-                />
-                <span className={cn('truncate', collapsed && 'lg:hidden')}>
-                  {item.label}
-                </span>
-              </Link>
+                >
+                  <Icon
+                    size={18}
+                    className={cn(
+                      'shrink-0',
+                      active ? 'text-primary dark:text-[#2E9B6B]' : 'text-gray-400 dark:text-gray-600'
+                    )}
+                  />
+                  <span className={cn('truncate', collapsed && 'lg:hidden')}>
+                    {item.label}
+                  </span>
+                </Link>
+              )
+            }
+
+            const top = visibleItems.filter(i => !i.section)
+            const groups = navSections
+              .map(section => ({ section, items: visibleItems.filter(i => i.section === section) }))
+              .filter(g => g.items.length > 0)
+
+            return (
+              <>
+                {top.length > 0 && <div className="space-y-0.5">{top.map(renderItem)}</div>}
+                {groups.map(({ section, items }) => (
+                  <div
+                    key={section}
+                    className={cn(
+                      'mt-4',
+                      collapsed && 'lg:mt-2 lg:pt-2 lg:border-t lg:border-gray-200 lg:dark:border-neutral-800'
+                    )}
+                  >
+                    <p className={cn(
+                      'px-3 mb-1 text-[10px] font-bold tracking-widest text-gray-400 dark:text-gray-600 select-none',
+                      collapsed && 'lg:hidden'
+                    )}>
+                      {section}
+                    </p>
+                    <div className="space-y-0.5">{items.map(renderItem)}</div>
+                  </div>
+                ))}
+              </>
             )
-          })}
+          })()}
         </nav>
 
         {/* Footer */}

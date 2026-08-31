@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET() {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
+    const filialId = sessionFilialId(session)
 
     const taminotchilar = await prisma.taminotchi.findMany({
+      where: filialId ? { filialId } : {},
       include: {
         _count: { select: { xaridlar: true } },
         xaridlar: { select: { qoldiqQarz: true } },
@@ -30,6 +33,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
+    const filialId = sessionFilialId(session)
 
     const data = await req.json()
     const tam = await prisma.taminotchi.create({
@@ -39,6 +43,7 @@ export async function POST(req: NextRequest) {
         telefon: data.telefon,
         manzil: data.manzil,
         izoh: data.izoh,
+        filialId,
       },
     })
     return NextResponse.json(tam, { status: 201 })

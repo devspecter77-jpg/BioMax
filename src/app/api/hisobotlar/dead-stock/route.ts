@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(_req: NextRequest) {
   try {
@@ -11,6 +12,7 @@ export async function GET(_req: NextRequest) {
     if (rol === 'KASSIR') {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
+    const filialId = sessionFilialId(session)
 
     // Dead stock: date filter params are accepted but not used for filtering
     // (we look at all-time last sale date, regardless of report period)
@@ -20,7 +22,7 @@ export async function GET(_req: NextRequest) {
 
     // Barcha faol tovarlar + oxirgi sotuv sanasi + hozirgi qoldiq
     const tovarlar = await prisma.tovar.findMany({
-      where: { holati: 'FAOL' },
+      where: { holati: 'FAOL', ...(filialId ? { filialId } : {}) },
       select: {
         id: true,
         nomi: true,

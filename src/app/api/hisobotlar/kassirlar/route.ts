@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,10 +20,11 @@ export async function GET(req: NextRequest) {
     const gacha = searchParams.get('gacha') || undefined
 
     const { dan: d, gacha: g } = getReportDateRange(tur, dan, gacha)
+    const filialId = sessionFilialId(session)
 
     // Sotuvlar + tarkiblar (foyda hisoblash uchun)
     const sotuvlar = await prisma.sotuv.findMany({
-      where: baseSotuvFilter(d, g),
+      where: baseSotuvFilter(d, g, undefined, filialId),
       select: {
         kassirId: true,
         yakuniySumma: true,

@@ -8,6 +8,27 @@ datasource db {
 }
 
 // ========================
+// FILIALLAR
+// ========================
+model Filial {
+  id         String   @id @default(cuid())
+  nomi       String
+  manzil     String?
+  telefon    String?
+  faol       Boolean  @default(true)
+  yaratilgan DateTime @default(now())
+
+  xodimlar   Foydalanuvchi[]
+  kategoriyalar Kategoriya[]
+  tovarlar      Tovar[]
+  mijozlar      Mijoz[]
+  taminotchilar Taminotchi[]
+  sotuvlar      Sotuv[]
+
+  @@map("filiallar")
+}
+
+// ========================
 // FOYDALANUVCHILAR
 // ========================
 model Foydalanuvchi {
@@ -18,9 +39,11 @@ model Foydalanuvchi {
   rol          Rol      @default(KASSIR)
   faol         Boolean  @default(true)
   telefon      String?
+  filialId     String?
   yaratilgan   DateTime @default(now())
   yangilangan  DateTime @updatedAt
 
+  filial       Filial?  @relation(fields: [filialId], references: [id])
   sotuvlar     Sotuv[]
   omborlar     OmborHarakati[]
   xarajatlar   Xarajat[]
@@ -29,7 +52,9 @@ model Foydalanuvchi {
   xaridTolovlar  XaridTolov[] @relation("xaridTolovlar")
   qaytarishlar Qaytarish[]
   buyurtmalar  Buyurtma[]
+  ruxsatlar    Ruxsat[]
 
+  @@index([filialId])
   @@map("foydalanuvchilar")
 }
 
@@ -41,16 +66,36 @@ enum Rol {
 }
 
 // ========================
+// RUXSATLAR
+// ========================
+model Ruxsat {
+  id              String   @id @default(cuid())
+  foydalanuvchiId String
+  bolim           String
+  korinadi        Boolean
+  yangilangan     DateTime @updatedAt
+
+  foydalanuvchi   Foydalanuvchi @relation(fields: [foydalanuvchiId], references: [id], onDelete: Cascade)
+
+  @@unique([foydalanuvchiId, bolim])
+  @@map("ruxsatlar")
+}
+
+// ========================
 // KATEGORIYALAR
 // ========================
 model Kategoriya {
   id          String   @id @default(cuid())
-  nomi        String   @unique
+  nomi        String
   tavsif      String?
+  filialId    String?
   yaratilgan  DateTime @default(now())
 
+  filial      Filial?  @relation(fields: [filialId], references: [id])
   tovarlar    Tovar[]
 
+  @@unique([nomi, filialId])
+  @@index([filialId])
   @@map("kategoriyalar")
 }
 
@@ -61,7 +106,8 @@ model Tovar {
   id            String    @id @default(cuid())
   nomi          String
   kategoriyaId  String
-  shtrixKod     String?   @unique
+  shtrixKod     String?
+  filialId      String?
   kelishNarxi   Decimal   @db.Decimal(12, 2)
   sotishNarxi   Decimal   @db.Decimal(12, 2)
   birlik        Birlik    @default(DONA)
@@ -72,14 +118,18 @@ model Tovar {
   yangilangan   DateTime  @updatedAt
 
   kategoriya       Kategoriya         @relation(fields: [kategoriyaId], references: [id])
+  filial           Filial?            @relation(fields: [filialId], references: [id])
   omborHarakati    OmborHarakati[]
   sotuvTarkibi     SotuvTarkibi[]
   qaytarishTarkibi QaytarishTarkibi[]
   sherikdanOlishlar SherikdanOlish[]
   buyurtmaTarkibi  BuyurtmaTarkibi[]
+  xaridTarkibi     XaridTarkibi[]
 
+  @@unique([shtrixKod, filialId])
   @@index([holati])
   @@index([kategoriyaId])
+  @@index([filialId])
   @@map("tovarlar")
 }
 
@@ -153,13 +203,16 @@ model Mijoz {
   // Birinchi "Telegram yo'q" xato'sida true qilinadi, mijoz ulanmagunicha shu qoladi.
   // Admin qo'lda false qilib qaytarishi mumkin (mijoz Telegram qo'shsa).
   telegramYoq   Boolean  @default(false)
+  filialId      String?
   yaratilgan    DateTime @default(now())
 
+  filial          Filial?  @relation(fields: [filialId], references: [id])
   sotuvlar        Sotuv[]
   nasiyalar       Nasiya[]
   bildirishnomlar BildirishnomLog[]
   buyurtmalar     Buyurtma[]
 
+  @@index([filialId])
   @@map("mijozlar")
 }
 
@@ -181,16 +234,19 @@ model Sotuv {
   sana           DateTime    @default(now())
 
   sherikDokonId  String?
+  filialId       String?
 
   mijoz          Mijoz?          @relation(fields: [mijozId], references: [id])
   kassir         Foydalanuvchi   @relation(fields: [kassirId], references: [id])
   sherikDokon    SherikDokon?    @relation(fields: [sherikDokonId], references: [id])
+  filial         Filial?         @relation(fields: [filialId], references: [id])
   tarkiblar      SotuvTarkibi[]
   nasiya         Nasiya?
   omborHarakati  OmborHarakati[]
   qaytarishlar       Qaytarish[]
   sherikdanOlishlar  SherikdanOlish[]
 
+  @@index([filialId])
   @@map("sotuvlar")
 }
 
@@ -300,13 +356,16 @@ model Taminotchi {
   telefon       String?
   manzil        String?
   izoh          String?
+  filialId      String?
   yaratilgan    DateTime @default(now())
 
+  filial        Filial?  @relation(fields: [filialId], references: [id])
   xaridlar      Xarid[]
   omborHarakati OmborHarakati[]
   sherikdanOlishlar      SherikdanOlish[]
   sherikdanOlishTolovlar SherikdanOlishTolov[]
 
+  @@index([filialId])
   @@map("taminotchilar")
 }
 
@@ -372,12 +431,14 @@ model XaridTolov {
 model XaridTarkibi {
   id          String  @id @default(cuid())
   xaridId     String
+  tovarId     String?
   tovarNomi   String
   miqdor      Decimal @db.Decimal(12, 3)
   birlikNarxi Decimal @db.Decimal(12, 2)
   jami        Decimal @db.Decimal(12, 2)
 
   xarid       Xarid   @relation(fields: [xaridId], references: [id])
+  tovar       Tovar?  @relation(fields: [tovarId], references: [id])
 
   @@map("xarid_tarkibi")
 }

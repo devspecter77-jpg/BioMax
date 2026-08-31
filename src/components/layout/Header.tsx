@@ -13,10 +13,9 @@ const sahifaNomlar: Record<string, string> = {
   '/ombor': 'Ombor',
   '/mijozlar': 'Mijozlar',
   '/nasiyalar': 'Nasiyalar',
-  '/taminotchilar': "Ta'minotchilar",
-  '/xarajatlar': 'Xarajatlar',
+  '/xaridlar': 'Xaridlar',
   '/hisobotlar': 'Hisobotlar',
-  '/sozlamalar': 'Sozlamalar',
+  '/filiallar': 'Filiallar',
 }
 
 export default function Header() {
@@ -28,6 +27,7 @@ export default function Header() {
   const sahifaNomi = sahifaNomlar[pathname] || "ERP Do'kon"
   const rolMap: Record<string, string> = { ADMIN: 'Administrator', KASSIR: 'Kassir', OMBORCHI: 'Omborchi' }
   const rolNomi = rolMap[(session?.user as any)?.rol || 'KASSIR'] || 'Kassir'
+  const filialNomi = (session?.user as any)?.filialNomi as string | null | undefined
   const firstLetter = session?.user?.name?.[0]?.toUpperCase() || 'U'
 
   return (
@@ -50,9 +50,11 @@ export default function Header() {
         </button>
         <div className="text-right hidden sm:block">
           <p className="text-gray-800 dark:text-gray-200 text-sm font-medium leading-tight">{session?.user?.name}</p>
-          <p className="text-gray-400 dark:text-gray-500 text-xs leading-tight">{rolNomi}</p>
+          <p className="text-gray-400 dark:text-gray-500 text-xs leading-tight">
+            {rolNomi}{filialNomi ? ` · ${filialNomi}` : ''}
+          </p>
         </div>
-        <div className="w-9 h-9 bg-red-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0">
+        <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 font-mono">
           {firstLetter}
         </div>
         <button onClick={() => signOut({ callbackUrl: '/login' })} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 rounded-xl transition" title="Chiqish" aria-label="Tizimdan chiqish">

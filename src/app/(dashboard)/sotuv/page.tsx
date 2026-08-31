@@ -4,21 +4,16 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { formatSum, formatSanaVaVaqt, playBeep, uzSearch } from '@/lib/utils'
 import { buildChekHtml, chekChopEtish as printChek } from '@/lib/chek-print'
 import { toast } from 'sonner'
-import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2 } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2, Package } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
+import PhoneInput from '@/components/ui/phone-input'
 
 interface Tovar {
   id: string; nomi: string; sotishNarxi: number; kelishNarxi: number; birlik: string; qoldiq: number; shtrixKod: string | null
 }
 interface Mijoz { id: string; ism: string; telefon: string | null }
-interface SherikDokon { id: string; nomi: string; telefon: string | null }
-interface Sherik { id: string; ism: string; telefon: string | null }
-interface SherikdanOlishItem {
-  tovarId: string; tovarNomi: string; ortiqchaMiqdor: number; narx: number;
-  sherikId: string; yangiSherikIsm: string; yangiSherikTelefon: string;
-}
 interface SavatItem {
   tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number
 }
@@ -26,7 +21,7 @@ interface SaqlanganiSavat {
   id: string; savat: SavatItem[]; sana: string; jami: number
 }
 
-function MiqdorInput({ miqdor, onChange }: { miqdor: number; onChange: (v: number) => void }) {
+function MiqdorInput({ miqdor, max, onChange }: { miqdor: number; max: number; onChange: (v: number) => void }) {
   const [matn, setMatn] = useState(String(miqdor))
 
   useEffect(() => {
@@ -42,8 +37,14 @@ function MiqdorInput({ miqdor, onChange }: { miqdor: number; onChange: (v: numbe
       onChange={e => {
         // Faqat raqam va nuqta
         const v = e.target.value.replace(/[^0-9.]/g, '')
-        setMatn(v)
         const num = parseFloat(v)
+        // Mavjud qoldiqdan oshib yozib bo'lmaydi — darhol maksimalga cheklanadi
+        if (!isNaN(num) && num > max) {
+          setMatn(String(max))
+          onChange(max)
+          return
+        }
+        setMatn(v)
         if (!isNaN(num) && num > 0) onChange(num)
       }}
       onFocus={e => e.target.select()}
@@ -52,7 +53,7 @@ function MiqdorInput({ miqdor, onChange }: { miqdor: number; onChange: (v: numbe
         if (isNaN(num) || num <= 0) setMatn(String(miqdor))
       }}
       onWheel={e => e.currentTarget.blur()}
-      className="w-14 h-7 text-center text-sm font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 shrink-0"
+      className="w-14 h-7 text-center text-sm font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-pos shrink-0"
     />
   )
 }
@@ -62,10 +63,9 @@ const TOLOV_USULLARI = [
   { value: 'KARTA', label: 'Bank kartasi' },
   { value: 'ARALASH', label: 'Aralash' },
   { value: 'NASIYA', label: 'Nasiya' },
-  { value: 'SHERIK', label: 'Sherik uchun' },
 ]
 
-const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition text-sm'
+const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-pos transition text-sm'
 
 // Lotin → Kirill transliteratsiya
 const lotinKirill: Record<string, string> = {
@@ -95,14 +95,12 @@ export default function SotuvPage() {
   const [tovarlarYuklanmoqda, setTovarlarYuklanmoqda] = useState(true)
   const [tovarlarXato, setTovarlarXato] = useState<string | null>(null)
   const [mijozlar, setMijozlar] = useState<Mijoz[]>([])
-  const [sherikDokonlar, setSherikDokonlar] = useState<SherikDokon[]>([])
   const [savat, setSavat] = useState<SavatItem[]>([])
   const [qidiruv, setQidiruv] = useState('')
   const [tolovUsuli, setTolovUsuli] = useState('NAQD')
   const [naqdTolangan, setNaqdTolangan] = useState('')
   const [qolBilanSumma, setQolBilanSumma] = useState('')
   const [mijozId, setMijozId] = useState('')
-  const [sherikDokonId, setSherikDokonId] = useState('')
   const [nasiyaMuddat, setNasiyaMuddat] = useState('')
   const [yuklanmoqda, setYuklanmoqda] = useState(false)
   const [chekModal, setChekModal] = useState(false)
@@ -111,10 +109,12 @@ export default function SotuvPage() {
   const [editNarx, setEditNarx] = useState<{ tovarId: string; val: string } | null>(null)
   const [mobileTab, setMobileTab] = useState<'tovarlar' | 'savat'>('tovarlar')
 
-  // Sherikdan olish modal
-  const [sherikdanOlishModal, setSherikdanOlishModal] = useState(false)
-  const [sheriklar, setSheriklar] = useState<Sherik[]>([])
-  const [sherikdanOlishlar, setSherikdanOlishlar] = useState<SherikdanOlishItem[]>([])
+  // Mijoz ma'lumotlari (har bir sotuvda so'raladi)
+  const [mijozModal, setMijozModal] = useState(false)
+  const [mijozTelefon, setMijozTelefon] = useState('')
+  const [mijozIsmi, setMijozIsmi] = useState('')
+  const [mijozManzil, setMijozManzil] = useState('')
+  const [mijozAniqlanmoqda, setMijozAniqlanmoqda] = useState(false)
 
   // Qaytarish
   const [qaytarishModal, setQaytarishModal] = useState(false)
@@ -129,7 +129,6 @@ export default function SotuvPage() {
   // Til (lotin / kirill)
   const [til, setTil] = useState<'lotin' | 'kirill'>('lotin')
   const [logoBase64, setLogoBase64] = useState<string>('')
-  const [telegramQrBase64, setTelegramQrBase64] = useState<string>('')
 
   // Barcode skaner
   const [skanerOchiq, setSkanerOchiq] = useState(false)
@@ -272,16 +271,12 @@ export default function SotuvPage() {
   useEffect(() => {
     async function yuklashQoshimcha() {
       try {
-        const [mj, sz, sd, sh] = await Promise.all([
+        const [mj, sz] = await Promise.all([
           fetch('/api/mijozlar').then(r => r.json()).catch(() => []),
           fetch('/api/sozlamalar').then(r => r.json()).catch(() => ({})),
-          fetch('/api/sherik-dokonlar').then(r => r.json()).catch(() => []),
-          fetch('/api/sheriklar').then(r => r.json()).catch(() => []),
         ])
         setMijozlar(Array.isArray(mj) ? mj : [])
         setDokonInfo(sz && typeof sz === 'object' ? sz : {})
-        setSherikDokonlar(Array.isArray(sd) ? sd : [])
-        setSheriklar(Array.isArray(sh) ? sh : [])
       } catch {
         // qo'shimcha ma'lumotlar muhim emas — sotuv ishlay beradi
       }
@@ -295,7 +290,6 @@ export default function SotuvPage() {
         reader.readAsDataURL(blob)
       }))
     blobToBase64('/chek.png').then(setLogoBase64).catch(() => {})
-    blobToBase64('/telegramqr.png').then(setTelegramQrBase64).catch(() => {})
     // Oxirgi sotuv localStorage dan yuklash
     const saved = localStorage.getItem('oxirgi-sotuv')
     if (saved) { try { setOxirgiSotuv(JSON.parse(saved)) } catch {} }
@@ -317,7 +311,6 @@ export default function SotuvPage() {
         const p = JSON.parse(aktivPay)
         if (p.tolovUsuli) setTolovUsuli(p.tolovUsuli)
         if (p.mijozId) setMijozId(p.mijozId)
-        if (p.sherikDokonId) setSherikDokonId(p.sherikDokonId)
         if (p.naqdTolangan) setNaqdTolangan(p.naqdTolangan)
         if (p.qolBilanSumma) setQolBilanSumma(p.qolBilanSumma)
         if (p.nasiyaMuddat) setNasiyaMuddat(p.nasiyaMuddat)
@@ -339,12 +332,12 @@ export default function SotuvPage() {
   useEffect(() => {
     if (savat.length > 0) {
       localStorage.setItem('aktiv-tolov', JSON.stringify({
-        tolovUsuli, mijozId, sherikDokonId, naqdTolangan, qolBilanSumma, nasiyaMuddat,
+        tolovUsuli, mijozId, naqdTolangan, qolBilanSumma, nasiyaMuddat,
       }))
     } else {
       localStorage.removeItem('aktiv-tolov')
     }
-  }, [savat.length, tolovUsuli, mijozId, sherikDokonId, naqdTolangan, qolBilanSumma, nasiyaMuddat])
+  }, [savat.length, tolovUsuli, mijozId, naqdTolangan, qolBilanSumma, nasiyaMuddat])
 
   // Tovarlar yuklangach savatdagi mavjud qoldiqni yangilash (stale data oldini olish)
   useEffect(() => {
@@ -355,7 +348,8 @@ export default function SotuvPage() {
         const tovar = tovarlar.find(t => t.id === item.tovarId)
         if (tovar && tovar.qoldiq !== item.mavjudQoldiq) {
           changed = true
-          return { ...item, mavjudQoldiq: tovar.qoldiq }
+          const yangiMiqdor = Math.min(item.miqdor, tovar.qoldiq)
+          return { ...item, mavjudQoldiq: tovar.qoldiq, miqdor: yangiMiqdor, jami: yangiMiqdor * item.birlikNarxi }
         }
         return item
       })
@@ -371,9 +365,17 @@ export default function SotuvPage() {
   const korsatiladiganTovarlar = filteredTovarlar
 
   function savatQosh(tovar: Tovar) {
+    if (tovar.qoldiq <= 0) {
+      toast.error(`${tovar.nomi}: qoldiq yo'q`)
+      return
+    }
     setSavat(prev => {
       const mavjud = prev.find(s => s.tovarId === tovar.id)
       if (mavjud) {
+        if (mavjud.miqdor + 1 > tovar.qoldiq) {
+          toast.error(`${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()}`)
+          return prev
+        }
         const yangilangan = { ...mavjud, miqdor: mavjud.miqdor + 1, jami: (mavjud.miqdor + 1) * mavjud.birlikNarxi }
         return [yangilangan, ...prev.filter(s => s.tovarId !== tovar.id)]
       }
@@ -394,10 +396,11 @@ export default function SotuvPage() {
       setSavat(prev => prev.filter(s => s.tovarId !== tovarId))
       return
     }
-    setSavat(prev => prev.map(s => s.tovarId === tovarId
-      ? { ...s, miqdor: yangiMiqdor, jami: yangiMiqdor * s.birlikNarxi }
-      : s
-    ))
+    setSavat(prev => prev.map(s => {
+      if (s.tovarId !== tovarId) return s
+      const cheklangan = Math.min(yangiMiqdor, s.mavjudQoldiq)
+      return { ...s, miqdor: cheklangan, jami: cheklangan * s.birlikNarxi }
+    }))
   }
 
   function narxiOzgartir(tovarId: string, yangiNarx: number) {
@@ -425,35 +428,52 @@ export default function SotuvPage() {
 
   async function sotuvYakunla() {
     if (savat.length === 0) { toast.error('Savat bo\'sh!'); return }
-    if (tolovUsuli === 'NASIYA' && !mijozId) { toast.error('Nasiya uchun mijoz tanlang!'); return }
-    if (tolovUsuli === 'SHERIK' && !sherikDokonId) { toast.error('Sherik do\'konni tanlang!'); return }
 
-    // Agar stock yetishmasa — sherikdan olish modalni ochish
     if (ortiqchaItemlar.length > 0) {
-      setSherikdanOlishlar(ortiqchaItemlar.map(item => ({
-        tovarId: item.tovarId,
-        tovarNomi: item.nomi,
-        ortiqchaMiqdor: item.miqdor - item.mavjudQoldiq,
-        narx: item.birlikNarxi,
-        sherikId: '',
-        yangiSherikIsm: '',
-        yangiSherikTelefon: '',
-      })))
-      setSherikdanOlishModal(true)
+      toast.error('Zaxira yetarli emas: ' + ortiqchaItemlar.map(i => i.nomi).join(', '))
       return
     }
 
-    await sotuvYuborish([])
+    setMijozTelefon('')
+    setMijozIsmi('')
+    setMijozManzil('')
+    setMijozModal(true)
   }
 
-  async function sotuvYuborish(sherikdanOlishData: SherikdanOlishItem[]) {
+  async function mijozTasdiqlaVaYubor(e: React.FormEvent) {
+    e.preventDefault()
+    if (mijozTelefon.length < 9) { toast.error("To'liq telefon raqam kiriting!"); return }
+    if (!mijozIsmi.trim()) { toast.error('Mijoz ismini kiriting!'); return }
+
+    setMijozAniqlanmoqda(true)
+    try {
+      // Server telefon bo'yicha mavjud mijozni topib qaytaradi — qayta yaratmaydi
+      const res = await fetch('/api/mijozlar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ism: mijozIsmi, telefon: mijozTelefon, manzil: mijozManzil || null }),
+      })
+      if (!res.ok) { toast.error("Mijoz qo'shilmadi"); return }
+      const natija = await res.json()
+      if (!mijozlar.some(m => m.id === natija.id)) {
+        setMijozlar(prev => [...prev, natija])
+      }
+
+      setMijozId(natija.id)
+      setMijozModal(false)
+      await sotuvYuborish(natija.id)
+    } finally {
+      setMijozAniqlanmoqda(false)
+    }
+  }
+
+  async function sotuvYuborish(aniqMijozId?: string) {
     setYuklanmoqda(true)
     const naqdQ = tolovUsuli === 'NAQD' ? yakuniySumma : (tolovUsuli === 'ARALASH' ? parseFloat(naqdTolangan || '0') : 0)
     const kartaQ = tolovUsuli === 'KARTA' ? yakuniySumma : (tolovUsuli === 'ARALASH' ? (yakuniySumma - parseFloat(naqdTolangan || '0')) : 0)
 
     const body: any = {
-      mijozId: mijozId || null,
-      sherikDokonId: tolovUsuli === 'SHERIK' ? sherikDokonId : null,
+      mijozId: aniqMijozId || mijozId || null,
       jamiSumma,
       chegirma,
       yakuniySumma,
@@ -464,17 +484,6 @@ export default function SotuvPage() {
       tarkiblar: savat.map(s => ({
         tovarId: s.tovarId, miqdor: s.miqdor, birlikNarxi: s.birlikNarxi,
         chegirma: 0, jami: s.miqdor * s.birlikNarxi
-      }))
-    }
-
-    if (sherikdanOlishData.length > 0) {
-      body.sherikdanOlishlar = sherikdanOlishData.map(so => ({
-        tovarId: so.tovarId,
-        miqdor: so.ortiqchaMiqdor,
-        narx: so.narx,
-        sherikId: so.sherikId || null,
-        yangiSherikIsm: so.yangiSherikIsm || null,
-        yangiSherikTelefon: so.yangiSherikTelefon || null,
       }))
     }
 
@@ -492,18 +501,12 @@ export default function SotuvPage() {
       setChekModal(true)
       setSavat([])
       setMijozId('')
-      setSherikDokonId('')
       setNaqdTolangan('')
       setQolBilanSumma('')
       setTolovUsuli('NAQD')
-      setSherikdanOlishModal(false)
       toast.success(`Sotuv yakunlandi! Chek: ${sotuv.chekRaqami}`)
-      const [tv, sh] = await Promise.all([
-        fetch('/api/tovarlar').then(r => r.json()),
-        fetch('/api/sheriklar').then(r => r.json()),
-      ])
+      const tv = await fetch('/api/tovarlar').then(r => r.json())
       setTovarlar(tv.tovarlar || [])
-      setSheriklar(Array.isArray(sh) ? sh : [])
     } else {
       const err = await res.json()
       toast.error(err.xato || 'Sotuv amalga oshmadi')
@@ -573,7 +576,6 @@ export default function SotuvPage() {
     localStorage.setItem('saqlangan-savatlar', JSON.stringify(yangilangan))
     setSavat([])
     setMijozId('')
-    setSherikDokonId('')
     setNaqdTolangan('')
     setQolBilanSumma('')
     setTolovUsuli('NAQD')
@@ -622,7 +624,6 @@ export default function SotuvPage() {
       data: s,
       dokonInfo,
       til,
-      telegramQrBase64,
       fontSize: 11,
     })
   }
@@ -817,15 +818,15 @@ export default function SotuvPage() {
       <div className="flex lg:hidden border-b border-gray-200 dark:border-neutral-800 mb-0">
         <button
           onClick={() => setMobileTab('tovarlar')}
-          className={`flex-1 py-2.5 text-sm font-medium ${mobileTab === 'tovarlar' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500 dark:text-gray-400'}`}
+          className={`flex-1 py-2.5 text-sm font-medium ${mobileTab === 'tovarlar' ? 'text-pos border-b-2 border-pos' : 'text-gray-500 dark:text-gray-400'}`}
         >
           Tovarlar
         </button>
         <button
           onClick={() => setMobileTab('savat')}
-          className={`flex-1 py-2.5 text-sm font-medium relative ${mobileTab === 'savat' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500 dark:text-gray-400'}`}
+          className={`flex-1 py-2.5 text-sm font-medium relative ${mobileTab === 'savat' ? 'text-pos border-b-2 border-pos' : 'text-gray-500 dark:text-gray-400'}`}
         >
-          Savat {savat.length > 0 && <span className="ml-1 bg-red-600 text-white text-xs rounded-full px-1.5">{savat.length}</span>}
+          Savat {savat.length > 0 && <span className="ml-1 bg-pos text-white text-xs rounded-full px-1.5">{savat.length}</span>}
         </button>
       </div>
 
@@ -834,7 +835,7 @@ export default function SotuvPage() {
         <div className="flex gap-2">
           <button
             onClick={skanerOchiq ? skanerniYopish : skanerniOchish}
-            className={`shrink-0 p-2.5 rounded-xl border transition ${skanerOchiq ? 'bg-red-600 border-red-600 text-white' : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-500 dark:text-gray-400 hover:border-red-400 hover:text-red-600'}`}
+            className={`shrink-0 p-2.5 rounded-xl border transition ${skanerOchiq ? 'bg-pos border-pos text-white' : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-500 dark:text-gray-400 hover:border-pos/50 hover:text-pos'}`}
             title="Skaner"
           >
             <ScanLine size={18} />
@@ -845,7 +846,7 @@ export default function SotuvPage() {
               value={qidiruv}
               onChange={e => setQidiruv(e.target.value)}
               placeholder="Tovar qidirish yoki shtrix-kod..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pos"
             />
           </div>
         </div>
@@ -872,7 +873,7 @@ export default function SotuvPage() {
               <p className="text-xs mt-1 text-gray-500 dark:text-gray-400 mb-3">{tovarlarXato}</p>
               <button
                 onClick={tovarlarniYuklash}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-pos hover:bg-pos-hover text-white rounded-xl text-sm font-medium transition"
               >
                 <RotateCcw size={14} />
                 Qayta urinish
@@ -885,7 +886,7 @@ export default function SotuvPage() {
               <p className="text-xs mt-1 text-gray-500 dark:text-gray-400 mb-3">Avval Tovarlar bo&apos;limidan mahsulot qo&apos;shing</p>
               <a
                 href="/tovarlar"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-pos hover:bg-pos-hover text-white rounded-xl text-sm font-medium transition"
               >
                 Tovarlar bo&apos;limiga o&apos;tish
               </a>
@@ -897,21 +898,38 @@ export default function SotuvPage() {
               <p className="text-xs mt-1 text-gray-500 dark:text-gray-400">&laquo;{qidiruv}&raquo; bo&apos;yicha tovar yo&apos;q</p>
             </div>
           ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3">
-            {korsatiladiganTovarlar.map(t => (
-              <button
-                key={t.id}
-                onClick={() => savatQosh(t)}
-                className="text-left p-3 bg-gray-50 dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-950/30 hover:border-red-300 rounded-xl transition border border-gray-200 dark:border-neutral-700"
-              >
-                <p className="text-gray-900 dark:text-gray-100 text-sm font-medium leading-tight">{t.nomi}</p>
-                <p className="text-red-600 text-sm font-bold mt-1">{formatSum(t.sotishNarxi)}</p>
-                <p className={`text-xs mt-0.5 ${t.qoldiq <= 0 ? 'text-red-500' : 'text-gray-400 dark:text-gray-600'}`}>
-                  Qoldiq: {t.qoldiq} {t.birlik.toLowerCase()}
-                  <span className="text-gray-400 dark:text-gray-600"> · Kelgan: {formatSum(t.kelishNarxi)}</span>
-                </p>
-              </button>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3">
+            {korsatiladiganTovarlar.map(t => {
+              const savatdagi = savat.find(s => s.tovarId === t.id)?.miqdor || 0
+              const tugagan = t.qoldiq <= 0
+              const kamQoldi = !tugagan && t.qoldiq <= 5
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => savatQosh(t)}
+                  disabled={tugagan}
+                  className="group relative text-left bg-white dark:bg-neutral-800 rounded-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden transition-all hover:border-pos hover:shadow-lg active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-gray-200 dark:disabled:hover:border-neutral-700 disabled:hover:shadow-none disabled:active:scale-100"
+                >
+                  {savatdagi > 0 && (
+                    <span className="absolute top-2 left-2 z-10 bg-pos text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow">
+                      {savatdagi}
+                    </span>
+                  )}
+                  <div className="h-14 bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative">
+                    <Package size={22} className="text-pos/60 group-hover:text-pos group-hover:scale-110 transition-all" />
+                    <span className={`absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
+                      tugagan ? 'bg-red-500 text-white' : kamQoldi ? 'bg-amber-500 text-white' : 'bg-white/90 dark:bg-neutral-900/80 text-gray-600 dark:text-gray-300'
+                    }`}>
+                      {tugagan ? 'Tugagan' : `${t.qoldiq} ${t.birlik.toLowerCase()}`}
+                    </span>
+                  </div>
+                  <div className="p-2.5">
+                    <p className="text-gray-900 dark:text-gray-100 text-sm font-semibold leading-tight line-clamp-2 min-h-[2.4em]">{t.nomi}</p>
+                    <p className="text-pos text-base font-bold font-mono tabular-nums mt-1.5">{formatSum(t.sotishNarxi)}</p>
+                  </div>
+                </button>
+              )
+            })}
           </div>
           )}
         </div>
@@ -1011,14 +1029,14 @@ export default function SotuvPage() {
                       <Pencil size={9} className={`absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none ${isNarxOzgartirilgan ? 'text-blue-400' : 'text-gray-300 dark:text-gray-600'}`} />
                     </div>
                     <span className="text-gray-400 dark:text-gray-600 text-xs shrink-0">×</span>
-                    <MiqdorInput miqdor={item.miqdor} onChange={v => miqdorOzgartir(item.tovarId, v)} />
+                    <MiqdorInput miqdor={item.miqdor} max={item.mavjudQoldiq} onChange={v => miqdorOzgartir(item.tovarId, v)} />
                     <span className="text-gray-400 dark:text-gray-600 text-xs shrink-0">=</span>
                     <span className="text-green-600 text-sm font-bold shrink-0 min-w-[65px] text-right">{formatSum(item.jami)}</span>
                   </div>
                   {item.miqdor > item.mavjudQoldiq && (
                     <div className="flex items-center gap-1 mt-1.5 text-amber-600 dark:text-amber-400">
                       <AlertTriangle size={11} />
-                      <span className="text-[10px]">Qoldiq: {item.mavjudQoldiq}, ortiqcha: {+(item.miqdor - item.mavjudQoldiq).toFixed(3)} (sherikdan olinadi)</span>
+                      <span className="text-[10px]">Qoldiq: {item.mavjudQoldiq}, yetarli emas!</span>
                     </div>
                   )}
                 </div>
@@ -1045,7 +1063,7 @@ export default function SotuvPage() {
                 value={qolBilanSumma}
                 onChange={e => setQolBilanSumma(e.target.value.replace(/[^\d]/g, ''))}
                 placeholder={String(Math.round(jamiSumma))}
-                className="flex-1 px-2 py-1 text-sm text-right bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 dark:text-gray-100 font-medium"
+                className="flex-1 px-2 py-1 text-sm text-right bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-pos text-gray-900 dark:text-gray-100 font-medium"
               />
             </div>
 
@@ -1069,7 +1087,7 @@ export default function SotuvPage() {
                   onClick={() => setTolovUsuli(t.value)}
                   className={`py-2 px-3 rounded-xl text-xs font-medium transition ${
                     tolovUsuli === t.value
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-pos text-white'
                       : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
                   }`}
                 >
@@ -1077,32 +1095,6 @@ export default function SotuvPage() {
                 </button>
               ))}
             </div>
-
-            {(tolovUsuli === 'NASIYA' || tolovUsuli === 'ARALASH') && (
-              <div className="space-y-1.5">
-                <p className="text-gray-500 dark:text-gray-500 text-xs">Mijoz tanlang *</p>
-                <Combobox
-                  options={mijozlar.map(m => ({ value: m.id, label: `${m.ism}${m.telefon ? ' — ' + m.telefon : ''}` }))}
-                  value={mijozId}
-                  onChange={setMijozId}
-                  placeholder="Mijoz tanlang"
-                  searchPlaceholder="Mijoz qidirish..."
-                />
-              </div>
-            )}
-
-            {tolovUsuli === 'SHERIK' && (
-              <div className="space-y-1.5">
-                <p className="text-gray-500 dark:text-gray-500 text-xs">Sherik do&apos;kon *</p>
-                <Combobox
-                  options={sherikDokonlar.map(s => ({ value: s.id, label: `${s.nomi}${s.telefon ? ' — ' + s.telefon : ''}` }))}
-                  value={sherikDokonId}
-                  onChange={setSherikDokonId}
-                  placeholder="Do'kon tanlang"
-                  searchPlaceholder="Do'kon qidirish..."
-                />
-              </div>
-            )}
 
             {tolovUsuli === 'NASIYA' && (
               <div>
@@ -1129,17 +1121,56 @@ export default function SotuvPage() {
               </div>
             )}
 
-            <button
-              onClick={sotuvYakunla}
-              disabled={yuklanmoqda}
-              className="w-full py-3 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white font-bold rounded-xl transition text-base shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
-            >
-              <CheckCircle size={18} />
-              {yuklanmoqda ? 'Amalga oshirilmoqda...' : 'Sotuvni yakunlash'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={sotuvYakunla}
+                disabled={yuklanmoqda}
+                className="flex-1 py-3 bg-pos-pay hover:bg-pos-pay-hover disabled:opacity-60 text-white font-bold rounded-xl transition text-sm shadow-md shadow-pos-pay/20 flex items-center justify-center gap-2"
+              >
+                <CheckCircle size={18} />
+                {yuklanmoqda ? 'Amalga oshirilmoqda...' : "To'lash"}
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Mijoz ma'lumotlari modal — har bir sotuvda so'raladi */}
+      {mijozModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
+            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Mijoz ma&apos;lumotlari</h3>
+              <button onClick={() => setMijozModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={mijozTasdiqlaVaYubor} className="p-5 space-y-4">
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Telefon raqam *</label>
+                <PhoneInput value={mijozTelefon} onChange={setMijozTelefon} required />
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
+                <input value={mijozIsmi} onChange={e => setMijozIsmi(e.target.value)} required autoFocus={false} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Manzil</label>
+                <input value={mijozManzil} onChange={e => setMijozManzil(e.target.value)} placeholder="Ixtiyoriy" className={inputCls} />
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setMijozModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+                  Bekor
+                </button>
+                <button type="submit" disabled={mijozAniqlanmoqda} className="flex-1 py-2.5 bg-pos-pay hover:bg-pos-pay-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  {mijozAniqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                  Sotuvni yakunlash
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Chek modal */}
       {chekModal && oxirgiSotuv && (() => {
@@ -1153,12 +1184,12 @@ export default function SotuvPage() {
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm overflow-hidden">
-              <div className="bg-red-600 px-5 py-4 flex items-center justify-between">
+              <div className="bg-pos-pay px-5 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-7 h-7 text-white shrink-0" />
                   <div>
                     <p className="text-white font-bold">{t('Sotuv amalga oshdi')}!</p>
-                    <p className="text-red-200 text-xs">{s.chekRaqami}</p>
+                    <p className="text-white/75 text-xs font-mono">{s.chekRaqami}</p>
                   </div>
                 </div>
                 <button
@@ -1221,16 +1252,6 @@ export default function SotuvPage() {
                     <div style={{ textAlign: 'center', fontSize: 11 }}>{chekMatn}</div>
                   </>
                 )}
-                {telegramQrBase64 && (
-                  <>
-                    <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                    <div style={{ textAlign: 'center', fontSize: 11, marginTop: 4 }}>{t('Telegram kanalimiz')}</div>
-                    <div style={{ textAlign: 'center', marginTop: 4 }}>
-                      <img src={telegramQrBase64} alt="Telegram QR" style={{ width: 110, height: 110, display: 'inline-block' }} />
-                    </div>
-                    <div style={{ textAlign: 'center', fontSize: 10, marginTop: 2, color: '#333' }}>{t("QR-kodni skanerlang")}</div>
-                  </>
-                )}
                 <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
                 <div style={{ textAlign: 'center', fontSize: 11 }}>{t('Rahmat')}!</div>
               </div>
@@ -1286,7 +1307,7 @@ export default function SotuvPage() {
                   </button>
                   <button
                     onClick={() => setChekModal(false)}
-                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm transition font-medium"
+                    className="flex-1 py-2 bg-pos-pay hover:bg-pos-pay-hover text-white rounded-xl text-sm transition font-medium"
                   >
                     {t('Yopish')}
                   </button>
@@ -1296,96 +1317,6 @@ export default function SotuvPage() {
           </div>
         )
       })()}
-
-      {/* Sherikdan olish modal */}
-      {sherikdanOlishModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={18} className="text-amber-600" />
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Sherikdan olish</h3>
-              </div>
-              <button onClick={() => setSherikdanOlishModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <p className="text-amber-600 dark:text-amber-400 text-sm">
-                Quyidagi tovarlar omborda yetarli emas. Har biri uchun sherik tanlang yoki yangi sherik kiriting.
-              </p>
-
-              {sherikdanOlishlar.map((item, idx) => (
-                <div key={item.tovarId} className="border border-gray-200 dark:border-neutral-700 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-900 dark:text-gray-100 text-sm font-medium">{item.tovarNomi}</span>
-                    <span className="text-amber-600 text-xs font-medium">
-                      Ortiqcha: {item.ortiqchaMiqdor} dona × {formatSum(item.narx)}
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Sherik tanlang</label>
-                    <Combobox
-                      options={sheriklar.map(s => ({ value: s.id, label: `${s.ism}${s.telefon ? ' — ' + s.telefon : ''}` }))}
-                      value={item.sherikId}
-                      onChange={val => {
-                        setSherikdanOlishlar(prev => prev.map((so, i) =>
-                          i === idx ? { ...so, sherikId: val, yangiSherikIsm: '', yangiSherikTelefon: '' } : so
-                        ))
-                      }}
-                      placeholder="Mavjud sherik tanlang"
-                      searchPlaceholder="Sherik qidirish..."
-                    />
-                  </div>
-
-                  {!item.sherikId && (
-                    <div className="space-y-1.5 bg-gray-50 dark:bg-neutral-800 rounded-lg p-2">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Yoki yangi sherik:</p>
-                      <input
-                        value={item.yangiSherikIsm}
-                        onChange={e => setSherikdanOlishlar(prev => prev.map((so, i) =>
-                          i === idx ? { ...so, yangiSherikIsm: e.target.value } : so
-                        ))}
-                        placeholder="Ism (majburiy)"
-                        className={inputCls}
-                      />
-                      <input
-                        value={item.yangiSherikTelefon}
-                        onChange={e => setSherikdanOlishlar(prev => prev.map((so, i) =>
-                          i === idx ? { ...so, yangiSherikTelefon: e.target.value } : so
-                        ))}
-                        placeholder="Telefon (ixtiyoriy)"
-                        className={inputCls}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSherikdanOlishModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium"
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  type="button"
-                  disabled={yuklanmoqda || sherikdanOlishlar.some(so => !so.sherikId && !so.yangiSherikIsm)}
-                  onClick={() => sotuvYuborish(sherikdanOlishlar)}
-                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-medium transition flex items-center justify-center gap-2"
-                >
-                  {yuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  Sotuvni yakunlash
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Saqlangan savatlar modal */}
       {saqlanganiModal && (

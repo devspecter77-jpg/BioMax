@@ -1,7 +1,7 @@
 {
-  "name": "Qaqnus 222",
-  "short_name": "Qaqnus 222",
-  "description": "Do'kon boshqaruv tizimi — Qaqnus 222",
+  "name": "BioMax",
+  "short_name": "BioMax",
+  "description": "Do'kon boshqaruv tizimi — BioMax",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

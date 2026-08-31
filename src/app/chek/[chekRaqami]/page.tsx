@@ -288,7 +288,7 @@ export default function PublicChekPage() {
           )}
 
           <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 text-center">
-            <p className="text-gray-400 text-[10px]">Qaqnus 222 — Do'kon boshqaruv tizimi</p>
+            <p className="text-gray-400 text-[10px]">BioMax — Do'kon boshqaruv tizimi</p>
           </div>
         </div>
       </div>

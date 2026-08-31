@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,11 +12,13 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const kamQolgan = searchParams.get('kamQolgan') === 'true'
     const qidiruv = searchParams.get('q') || ''
+    const filialId = sessionFilialId(session)
 
     // 1. Faqat tovar ma'lumotlarini olish (omborHarakati YUKLANMAYDI)
     const tovarlar = await prisma.tovar.findMany({
       where: {
         holati: 'FAOL',
+        ...(filialId ? { filialId } : {}),
         ...(qidiruv ? { nomi: { contains: qidiruv, mode: 'insensitive' } } : {}),
       },
       include: { kategoriya: true },

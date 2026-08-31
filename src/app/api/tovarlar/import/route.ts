@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
+    const filialId = sessionFilialId(session)
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -42,8 +44,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ xato: "Faylda mahsulot ma'lumoti topilmadi" }, { status: 400 })
     }
 
-    // Kategoriyalarni yuklash
+    // Kategoriyalarni yuklash (faqat shu filialga tegishli)
     const mavjudKategoriyalar = await prisma.kategoriya.findMany({
+      where: { filialId },
       select: { id: true, nomi: true },
     })
     const kategoriyaMap = new Map<string, string>()
@@ -51,10 +54,10 @@ export async function POST(req: NextRequest) {
       kategoriyaMap.set(k.nomi.toLowerCase().trim(), k.id)
     }
 
-    // Rejim: tozalash — mavjud FAOL tovarlarni arxivlash
+    // Rejim: tozalash — mavjud FAOL tovarlarni arxivlash (faqat shu filialda)
     if (rejim === 'tozalash') {
       await prisma.tovar.updateMany({
-        where: { holati: 'FAOL' },
+        where: { holati: 'FAOL', filialId },
         data: { holati: 'ARXIVLANGAN' },
       })
     }
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
     const mavjudNomlar = new Set<string>()
     if (rejim === 'ustiga') {
       const faolTovarlar = await prisma.tovar.findMany({
-        where: { holati: 'FAOL' },
+        where: { holati: 'FAOL', filialId },
         select: { nomi: true },
       })
       for (const t of faolTovarlar) {
@@ -92,25 +95,22 @@ export async function POST(req: NextRequest) {
       if (normalKey && kategoriyaMap.has(normalKey)) {
         kategoriyaId = kategoriyaMap.get(normalKey)!
       } else if (normalKey) {
-        const yangiKat = await prisma.kategoriya.create({ data: { nomi: kategoriyaNomi } })
+        const yangiKat = await prisma.kategoriya.create({ data: { nomi: kategoriyaNomi, filialId } })
         kategoriyaId = yangiKat.id
         kategoriyaMap.set(normalKey, kategoriyaId)
       } else {
         // Umumiy kategoriya
         if (!kategoriyaMap.has('__umumiy__')) {
-          const umumiy = await prisma.kategoriya.upsert({
-            where: { id: 'umumiy-default' },
-            update: {},
-            create: { id: 'umumiy-default', nomi: 'Umumiy' },
-          }).catch(async () => prisma.kategoriya.findFirst({ where: { nomi: 'Umumiy' } }))
-          kategoriyaMap.set('__umumiy__', umumiy!.id)
+          const umumiy = await prisma.kategoriya.findFirst({ where: { nomi: 'Umumiy', filialId } })
+            ?? await prisma.kategoriya.create({ data: { nomi: 'Umumiy', filialId } })
+          kategoriyaMap.set('__umumiy__', umumiy.id)
         }
         kategoriyaId = kategoriyaMap.get('__umumiy__')!
       }
 
       try {
         await prisma.tovar.create({
-          data: { nomi, kategoriyaId, kelishNarxi: 0, sotishNarxi: 0, birlik: 'DONA', minimalQoldiq: 5 },
+          data: { nomi, kategoriyaId, filialId, kelishNarxi: 0, sotishNarxi: 0, birlik: 'DONA', minimalQoldiq: 5 },
         })
         if (rejim === 'ustiga') mavjudNomlar.add(nomi.toLowerCase().trim())
         qoshildi++

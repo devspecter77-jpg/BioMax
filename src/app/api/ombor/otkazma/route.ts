@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 // Ombordan do'konga o'tkazma
 export async function POST(req: NextRequest) {
@@ -27,7 +28,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ xato: `Omborda yetarli emas. Mavjud: ${omborQoldiq}` }, { status: 400 })
     }
 
-    const tovar = await prisma.tovar.findUnique({ where: { id: tovarId }, select: { kelishNarxi: true } })
+    const filialId = sessionFilialId(session)
+    const tovar = await prisma.tovar.findFirst({
+      where: { id: tovarId, ...(filialId ? { filialId } : {}) },
+      select: { kelishNarxi: true },
+    })
+    if (!tovar) return NextResponse.json({ xato: 'Tovar topilmadi' }, { status: 404 })
 
     const harakat = await prisma.omborHarakati.create({
       data: {

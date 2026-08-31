@@ -10,8 +10,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem('theme') as Theme | null
-    const system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    const initial = saved || system
+    // Standart — yorug' (qizil-oq brend) uslub. Foydalanuvchi tugma orqali
+    // aniq tanlagan bo'lsa, o'sha ustunlik qiladi.
+    const initial = saved || 'light'
     setTheme(initial)
     document.documentElement.classList.toggle('dark', initial === 'dark')
   }, [])

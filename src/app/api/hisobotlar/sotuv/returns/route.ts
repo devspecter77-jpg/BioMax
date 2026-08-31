@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
+  const filialId = sessionFilialId(session)
 
   const { searchParams } = new URL(req.url)
   const tur = (searchParams.get('tur') || 'oylik') as ReportTur
@@ -16,13 +18,13 @@ export async function GET(req: NextRequest) {
 
   const [qaytarishlar, sotuvlar] = await Promise.all([
     prisma.qaytarish.findMany({
-      where: { yaratilgan: { gte: d, lt: g } },
+      where: { yaratilgan: { gte: d, lt: g }, ...(filialId ? { aslSotuv: { filialId } } : {}) },
       include: {
         tarkiblar: { include: { tovar: { select: { id: true, nomi: true } } } },
       },
     }),
     prisma.sotuv.findMany({
-      where: baseSotuvFilter(d, g),
+      where: baseSotuvFilter(d, g, undefined, filialId),
       select: { yakuniySumma: true },
     }),
   ])

@@ -2,6 +2,7 @@ import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from './prisma'
+import { barchaRuxsatKalitlari, rolStandartRuxsat } from './ruxsat-katalogi'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -28,6 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const foydalanuvchi = await prisma.foydalanuvchi.findUnique({
           where: { login: credentials.login as string },
+          include: { filial: true },
         })
 
         if (!foydalanuvchi || !foydalanuvchi.faol) return null
@@ -39,11 +41,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!parolTogri) return null
 
+        let ruxsatlar: string[] | null = null
+        if (foydalanuvchi.rol !== 'ADMIN') {
+          const overrides = await prisma.ruxsat.findMany({ where: { foydalanuvchiId: foydalanuvchi.id } })
+          const overrideMap = new Map(overrides.map(o => [o.bolim, o.korinadi]))
+          ruxsatlar = barchaRuxsatKalitlari.filter(kalit =>
+            overrideMap.has(kalit) ? overrideMap.get(kalit)! : rolStandartRuxsat(foydalanuvchi.rol, kalit)
+          )
+        }
+
         return {
           id: foydalanuvchi.id,
           name: foydalanuvchi.ism,
           email: foydalanuvchi.login,
           rol: foydalanuvchi.rol,
+          filialId: foydalanuvchi.filialId,
+          filialNomi: foydalanuvchi.filial?.nomi ?? null,
+          ruxsatlar,
         }
       },
     }),
@@ -53,6 +67,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id
         token.rol = (user as any).rol
+        token.filialId = (user as any).filialId
+        token.filialNomi = (user as any).filialNomi
+        token.ruxsatlar = (user as any).ruxsatlar
       }
       return token
     },
@@ -60,6 +77,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token) {
         session.user.id = token.id as string
         ;(session.user as any).rol = token.rol
+        ;(session.user as any).filialId = token.filialId
+        ;(session.user as any).filialNomi = token.filialNomi
+        ;(session.user as any).ruxsatlar = token.ruxsatlar
       }
       return session
     },

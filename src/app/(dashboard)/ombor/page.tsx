@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
-import { AlertTriangle, PackagePlus, X, History, Layers, ArrowRightLeft, Pencil, Trash2, Plus } from 'lucide-react'
+import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2 } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
+import { useConfirm } from '@/components/ConfirmProvider'
 
 interface QoldiqItem {
   id: string; nomi: string; kategoriya: { id: string; nomi: string }; kategoriyaId: string; shtrixKod: string | null
@@ -27,23 +28,17 @@ interface OmborHarakat {
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition'
 
 export default function OmborPage() {
+  const confirm = useConfirm()
   const [qoldiqlar, setQoldiqlar] = useState<QoldiqItem[]>([])
   const [taminotchilar, setTaminotchilar] = useState<Taminotchi[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
-  const [modal, setModal] = useState(false)
   const [qidiruv, setQidiruv] = useState('')
   const [kamQolganFilter, setKamQolganFilter] = useState(false)
   const [view, setView] = useState<'table' | 'card'>('table')
-  const [form, setForm] = useState({
-    tovarId: '', taminotchiId: '', miqdor: '', narx: '', izoh: '', turi: 'KIRIM'
-  })
   const [tarix, setTarix] = useState(false)
   const [harakatlar, setHarakatlar] = useState<OmborHarakat[]>([])
   const [harakatYuklanmoqda, setHarakatYuklanmoqda] = useState(false)
   const [harakatTur, setHarakatTur] = useState('')
-  const [ommaviyModal, setOmmaviyModal] = useState(false)
-  const [ommaviyForm, setOmmaviyForm] = useState({ miqdor: '', izoh: '' })
-  const [ommaviyYuklanmoqda, setOmmaviyYuklanmoqda] = useState(false)
   // O'tkazma (ombordan do'konga)
   const [otkazmaModal, setOtkazmaModal] = useState(false)
   const [otkazmaTovar, setOtkazmaTovar] = useState<QoldiqItem | null>(null)
@@ -63,6 +58,9 @@ export default function OmborPage() {
     nomi: '', kategoriyaId: '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA',
     minimalQoldiq: '5', shtrixKod: ''
   })
+  const [otkazmaSaqlanmoqda, setOtkazmaSaqlanmoqda] = useState(false)
+  const [yangiSaqlanmoqda, setYangiSaqlanmoqda] = useState(false)
+  const [tahrirSaqlanmoqda, setTahrirSaqlanmoqda] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('view-preference') as 'table' | 'card' | null
@@ -100,92 +98,62 @@ export default function OmborPage() {
     if (tarix) harakatlarYuklash()
   }, [tarix, harakatTur])
 
-  async function ommaviyKirim(e: React.FormEvent) {
-    e.preventDefault()
-    setOmmaviyYuklanmoqda(true)
-    const res = await fetch('/api/ombor/ommaviy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ommaviyForm),
-    })
-    setOmmaviyYuklanmoqda(false)
-    if (res.ok) {
-      const data = await res.json()
-      toast.success(`${data.soni} ta mahsulotga kirim qilindi!`)
-      setOmmaviyModal(false)
-      setOmmaviyForm({ miqdor: '', izoh: '' })
-      yuklash()
-      if (tarix) harakatlarYuklash()
-    } else {
-      const err = await res.json()
-      toast.error(err.xato || 'Xatolik yuz berdi')
-    }
-  }
-
-  async function kirimQilish(e: React.FormEvent) {
-    e.preventDefault()
-    const res = await fetch('/api/ombor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
-    })
-    if (res.ok) {
-      toast.success('Tovar qabul qilindi!')
-      setModal(false)
-      setForm({ tovarId: '', taminotchiId: '', miqdor: '', narx: '', izoh: '', turi: 'KIRIM' })
-      yuklash()
-      if (tarix) harakatlarYuklash()
-    } else {
-      toast.error('Xatolik yuz berdi')
-    }
-  }
-
   async function otkazmaQilish(e: React.FormEvent) {
     e.preventDefault()
     if (!otkazmaTovar) return
-    const res = await fetch('/api/ombor/otkazma', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tovarId: otkazmaTovar.id, miqdor: otkazmaMiqdor }),
-    })
-    if (res.ok) {
-      toast.success(`${otkazmaTovar.nomi} — ${otkazmaMiqdor} ta do'konga o'tkazildi`)
-      setOtkazmaModal(false)
-      setOtkazmaTovar(null)
-      setOtkazmaMiqdor('')
-      yuklash()
-      if (tarix) harakatlarYuklash()
-    } else {
-      const err = await res.json()
-      toast.error(err.xato || 'Xatolik')
+    setOtkazmaSaqlanmoqda(true)
+    try {
+      const res = await fetch('/api/ombor/otkazma', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tovarId: otkazmaTovar.id, miqdor: otkazmaMiqdor }),
+      })
+      if (res.ok) {
+        toast.success(`${otkazmaTovar.nomi} — ${otkazmaMiqdor} ta do'konga o'tkazildi`)
+        setOtkazmaModal(false)
+        setOtkazmaTovar(null)
+        setOtkazmaMiqdor('')
+        yuklash()
+        if (tarix) harakatlarYuklash()
+      } else {
+        const err = await res.json()
+        toast.error(err.xato || 'Xatolik')
+      }
+    } finally {
+      setOtkazmaSaqlanmoqda(false)
     }
   }
 
   // Yangi mahsulot + kirim
   async function yangiMahsulotSaqlash(e: React.FormEvent) {
     e.preventDefault()
-    const res = await fetch('/api/tovarlar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nomi: yangiForm.nomi,
-        kategoriyaId: yangiForm.kategoriyaId,
-        kelishNarxi: yangiForm.kelishNarxi,
-        sotishNarxi: yangiForm.sotishNarxi,
-        birlik: yangiForm.birlik,
-        minimalQoldiq: yangiForm.minimalQoldiq,
-        shtrixKod: yangiForm.shtrixKod,
-        boshlangichQoldiq: yangiForm.miqdor,
+    setYangiSaqlanmoqda(true)
+    try {
+      const res = await fetch('/api/tovarlar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nomi: yangiForm.nomi,
+          kategoriyaId: yangiForm.kategoriyaId,
+          kelishNarxi: yangiForm.kelishNarxi,
+          sotishNarxi: yangiForm.sotishNarxi,
+          birlik: yangiForm.birlik,
+          minimalQoldiq: yangiForm.minimalQoldiq,
+          shtrixKod: yangiForm.shtrixKod,
+          boshlangichQoldiq: yangiForm.miqdor,
+        })
       })
-    })
-    if (res.ok) {
-      toast.success('Mahsulot yaratildi va omborga kirim qilindi!')
-      setYangiModal(false)
-      setYangiForm({ nomi: '', kategoriyaId: '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', shtrixKod: '', miqdor: '', taminotchiId: '', izoh: '' })
-      yuklash()
-    } else {
-      const err = await res.json()
-      toast.error(err.xato || 'Xatolik')
+      if (res.ok) {
+        toast.success('Mahsulot yaratildi va omborga kirim qilindi!')
+        setYangiModal(false)
+        setYangiForm({ nomi: '', kategoriyaId: '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', shtrixKod: '', miqdor: '', taminotchiId: '', izoh: '' })
+        yuklash()
+      } else {
+        const err = await res.json()
+        toast.error(err.xato || 'Xatolik')
+      }
+    } finally {
+      setYangiSaqlanmoqda(false)
     }
   }
 
@@ -203,25 +171,30 @@ export default function OmborPage() {
   async function tahrirSaqlash(e: React.FormEvent) {
     e.preventDefault()
     if (!tahrirTovar) return
-    const res = await fetch(`/api/tovarlar/${tahrirTovar.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(tahrirForm)
-    })
-    if (res.ok) {
-      toast.success('Mahsulot yangilandi!')
-      setTahrirModal(false)
-      setTahrirTovar(null)
-      yuklash()
-    } else {
-      const err = await res.json()
-      toast.error(err.xato || 'Xatolik')
+    setTahrirSaqlanmoqda(true)
+    try {
+      const res = await fetch(`/api/tovarlar/${tahrirTovar.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tahrirForm)
+      })
+      if (res.ok) {
+        toast.success('Mahsulot yangilandi!')
+        setTahrirModal(false)
+        setTahrirTovar(null)
+        yuklash()
+      } else {
+        const err = await res.json()
+        toast.error(err.xato || 'Xatolik')
+      }
+    } finally {
+      setTahrirSaqlanmoqda(false)
     }
   }
 
   // O'chirish
   async function ochirish(q: QoldiqItem) {
-    if (!confirm(`"${q.nomi}" ni o'chirishni xohlaysizmi?`)) return
+    if (!(await confirm(`"${q.nomi}" ni o'chirishni xohlaysizmi?`))) return
     const res = await fetch(`/api/tovarlar/${q.id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('Mahsulot o\'chirildi')
@@ -239,7 +212,6 @@ export default function OmborPage() {
   const korsatiladiganQoldiqlar = qoldiqlar.slice(0, renderLimit)
 
   // Build combobox options from loaded data
-  const tovarOptions = qoldiqlar.map(q => ({ value: q.id, label: q.nomi }))
   const taminotchiOptions = taminotchilar.map(t => ({
     value: t.id,
     label: t.manzil ? `${t.nomi} — ${t.manzil}` : t.nomi,
@@ -264,14 +236,6 @@ export default function OmborPage() {
         >
           <History size={16} />
           Harakatlar tarixi
-        </button>
-        <button onClick={() => setOmmaviyModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition whitespace-nowrap">
-          <Layers size={16} />
-          Ommaviy kirim
-        </button>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl font-medium transition whitespace-nowrap">
-          <PackagePlus size={16} />
-          Kirim qilish
         </button>
         <button onClick={async () => { setYangiForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', shtrixKod: '', miqdor: '', taminotchiId: '', izoh: '' }); setYangiModal(true); const r = await fetch('/api/tovarlar/keyingi-kod').then(r => r.json()); if (r.kod) setYangiForm(f => ({ ...f, shtrixKod: r.kod })) }} className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
           <Plus size={16} />
@@ -356,46 +320,52 @@ export default function OmborPage() {
           ) : qoldiqlar.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Ma&apos;lumot topilmadi</p>
           ) : korsatiladiganQoldiqlar.map(q => (
-            <div key={q.id} className={`bg-white dark:bg-neutral-900 border rounded-2xl p-4 hover:shadow-md transition-shadow ${q.kamQolgan ? 'border-red-200 dark:border-red-900' : 'border-gray-200 dark:border-neutral-800'}`}>
-              <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-gray-900 dark:text-gray-100 font-semibold text-sm">{q.nomi}</p>
-                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-lg font-medium mt-1 inline-block">{q.kategoriya.nomi}</span>
-                </div>
-                <div className="shrink-0 ml-2 text-right">
-                  {q.kamQolgan ? (
-                    <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg font-medium">Kam qoldi</span>
-                  ) : (
-                    <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-lg font-medium">Normal</span>
-                  )}
-                </div>
+            <div key={q.id} className={`bg-white dark:bg-neutral-900 border rounded-2xl overflow-hidden hover:shadow-lg transition-all ${q.kamQolgan ? 'border-red-200 dark:border-red-900' : 'border-gray-200 dark:border-neutral-800 hover:border-primary/30 dark:hover:border-primary/40'}`}>
+              {/* Rasm o'rnini bosuvchi banner — katta ikonka + yumshoq nurlanish */}
+              <div className={`h-40 flex items-center justify-center relative overflow-hidden ${q.kamQolgan ? 'bg-gradient-to-br from-red-50 to-white dark:from-red-950/20 dark:to-neutral-800' : 'bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800'}`}>
+                <span className="absolute top-3 left-3 z-10 text-[11px] bg-primary text-white px-3 py-1.5 rounded-full font-semibold shadow-sm max-w-[55%] truncate" title={q.kategoriya.nomi}>
+                  {q.kategoriya.nomi}
+                </span>
+                <span className={`absolute top-3 right-3 z-10 text-[11px] px-2.5 py-1 rounded-full font-medium shadow-sm ${q.kamQolgan ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
+                  {q.kamQolgan ? 'Kam qoldi' : 'Normal'}
+                </span>
+                <div className={`absolute w-28 h-28 rounded-full blur-2xl ${q.kamQolgan ? 'bg-red-500/15' : 'bg-primary/15'}`} />
+                <Package size={64} className={q.kamQolgan ? 'text-red-500 relative drop-shadow-sm' : 'text-primary relative drop-shadow-sm'} strokeWidth={1.5} />
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Ombor</p>
-                  <p className={`font-bold text-sm ${q.omborQoldiq <= 0 ? 'text-red-600' : 'text-blue-600'}`}>{q.omborQoldiq} {q.birlik.toLowerCase()}</p>
+
+              <div className="p-4">
+                <p className="text-gray-900 dark:text-gray-100 font-bold text-base truncate" title={q.nomi}>{q.nomi}</p>
+                <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">Mahsulot kodi: #{(q.shtrixKod || '').padStart(3, '0') || '—'}</p>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-3">
+                  <div>
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Ombor</p>
+                    <p className={`font-bold text-sm mt-0.5 ${q.omborQoldiq <= 0 ? 'text-red-600' : 'text-blue-600'}`}>{q.omborQoldiq} {q.birlik.toLowerCase()}</p>
+                  </div>
+                  <div className="border-x border-gray-200 dark:border-neutral-700">
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Do&apos;kon</p>
+                    <p className={`font-bold text-sm mt-0.5 ${q.dokonQoldiq <= 0 ? 'text-gray-400' : 'text-green-600'}`}>{q.dokonQoldiq} {q.birlik.toLowerCase()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Kelish</p>
+                    <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">{formatSum(q.kelishNarxi)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Do&apos;kon</p>
-                  <p className={`font-bold text-sm ${q.dokonQoldiq <= 0 ? 'text-gray-400' : 'text-green-600'}`}>{q.dokonQoldiq} {q.birlik.toLowerCase()}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Kelish</p>
-                  <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{formatSum(q.kelishNarxi)}</p>
-                </div>
-              </div>
-              <div className="mt-2 flex gap-1.5">
+
                 {q.omborQoldiq > 0 && (
-                  <button onClick={() => { setOtkazmaTovar(q); setOtkazmaMiqdor(''); setOtkazmaModal(true) }} className="flex-1 text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-600 px-3 py-2 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-900/40 transition flex items-center justify-center gap-1">
+                  <button onClick={() => { setOtkazmaTovar(q); setOtkazmaMiqdor(''); setOtkazmaModal(true) }} className="w-full mt-3 text-xs bg-primary-light dark:bg-primary/10 text-primary px-3 py-2 rounded-lg font-medium hover:bg-primary/20 transition flex items-center justify-center gap-1">
                     <ArrowRightLeft size={12} />
-                    Do&apos;konga
+                    Do&apos;konga o&apos;tkazish
                   </button>
                 )}
-                <button onClick={() => tahrirOchish(q)} className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition" title="Tahrirlash">
-                  <Pencil size={14} />
+              </div>
+
+              <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2">
+                <button onClick={() => tahrirOchish(q)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium border-r border-gray-100 dark:border-neutral-800">
+                  <Pencil size={14} /> Tahrirlash
                 </button>
-                <button onClick={() => ochirish(q)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition" title="O'chirish">
-                  <Trash2 size={14} />
+                <button onClick={() => ochirish(q)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium">
+                  <Trash2 size={14} /> O&apos;chirish
                 </button>
               </div>
             </div>
@@ -480,141 +450,9 @@ export default function OmborPage() {
       )}
 
       {/* Ommaviy kirim modal */}
-      {ommaviyModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-md">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                  <Layers size={18} className="text-blue-500" />
-                  Ommaviy kirim
-                </h3>
-                <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
-                  {qoldiqlar.length} ta mahsulotga bir xil miqdor qo&apos;shiladi
-                </p>
-              </div>
-              <button onClick={() => setOmmaviyModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={ommaviyKirim} className="p-5 space-y-4">
-              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-blue-700 dark:text-blue-300 text-sm">
-                Kiritilgan miqdor <strong>barcha {qoldiqlar.length} ta</strong> mahsulotga qo&apos;shiladi
-              </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Miqdor (har biriga) *</label>
-                <input
-                  type="number"
-                  value={ommaviyForm.miqdor}
-                  onChange={e => setOmmaviyForm(f => ({ ...f, miqdor: e.target.value }))}
-                  required
-                  min="0.01"
-                  step="0.01"
-                  placeholder="100"
-                  className={inputCls}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Izoh</label>
-                <input
-                  value={ommaviyForm.izoh}
-                  onChange={e => setOmmaviyForm(f => ({ ...f, izoh: e.target.value }))}
-                  placeholder="Ommaviy kirim"
-                  className={inputCls}
-                />
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setOmmaviyModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button type="submit" disabled={ommaviyYuklanmoqda}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  <Layers size={15} />
-                  {ommaviyYuklanmoqda ? 'Saqlanmoqda...' : `${qoldiqlar.length} ta ga kirim`}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Kirim modal */}
-      {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Tovar kirim qilish</h3>
-              <button onClick={() => setModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={kirimQilish} className="p-5 space-y-4">
-              {/* Tovar: Combobox with search */}
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Tovar *</label>
-                <Combobox
-                  options={tovarOptions}
-                  value={form.tovarId}
-                  onChange={v => {
-                    const t = qoldiqlar.find(q => q.id === v)
-                    setForm(f => ({ ...f, tovarId: v, narx: t ? String(t.kelishNarxi) : '' }))
-                  }}
-                  placeholder="Tovar tanlang"
-                  searchPlaceholder="Tovar qidirish..."
-                />
-              </div>
-
-              {/* Ta'minotchi: Combobox with search */}
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ta&apos;minotchi</label>
-                <Combobox
-                  options={taminotchiOptions}
-                  value={form.taminotchiId}
-                  onChange={v => setForm(f => ({ ...f, taminotchiId: v }))}
-                  placeholder="Ta'minotchi tanlang (ixtiyoriy)"
-                  searchPlaceholder="Ta'minotchi qidirish..."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Miqdor *</label>
-                  <input type="number" value={form.miqdor} onChange={e => setForm(f => ({ ...f, miqdor: e.target.value }))} required min="0" step="0.01" className={inputCls} />
-                </div>
-                <div>
-                  {/* Narx: MoneyInput instead of plain number input */}
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Narx (so&apos;m) *</label>
-                  <MoneyInput
-                    value={form.narx}
-                    onChange={v => setForm(f => ({ ...f, narx: v }))}
-                    required
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Izoh</label>
-                <input value={form.izoh} onChange={e => setForm(f => ({ ...f, izoh: e.target.value }))} className={inputCls} />
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button type="submit" className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl font-medium transition">
-                  Kirim qilish
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
       {/* O'tkazma modal */}
       {otkazmaModal && otkazmaTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
@@ -650,10 +488,10 @@ export default function OmborPage() {
                   className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
                   Bekor
                 </button>
-                <button type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  <ArrowRightLeft size={15} />
-                  O&apos;tkazish
+                <button type="submit" disabled={otkazmaSaqlanmoqda}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  {otkazmaSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : <ArrowRightLeft size={15} />}
+                  {otkazmaSaqlanmoqda ? "O'tkazilmoqda..." : "O'tkazish"}
                 </button>
               </div>
             </form>
@@ -663,7 +501,7 @@ export default function OmborPage() {
 
       {/* Yangi mahsulot + kirim modal */}
       {yangiModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
@@ -728,7 +566,10 @@ export default function OmborPage() {
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setYangiModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition">Saqlash va kirim</button>
+                <button type="submit" disabled={yangiSaqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  {yangiSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
+                  {yangiSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash va kirim'}
+                </button>
               </div>
             </form>
           </div>
@@ -737,7 +578,7 @@ export default function OmborPage() {
 
       {/* Tahrirlash modal */}
       {tahrirModal && tahrirTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
@@ -788,7 +629,10 @@ export default function OmborPage() {
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-medium transition">Saqlash</button>
+                <button type="submit" disabled={tahrirSaqlanmoqda} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  {tahrirSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
+                  {tahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
+                </button>
               </div>
             </form>
           </div>

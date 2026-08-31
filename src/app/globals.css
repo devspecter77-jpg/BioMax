@@ -4,14 +4,23 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Rang sxemasi */
+  /* Rang sxemasi — Boshqaruv markazi (BioMax qizil) */
   --color-primary: #DC2626;
   --color-primary-hover: #B91C1C;
   --color-primary-light: #FEE2E2;
   --color-primary-50: #FEF2F2;
 
-  --color-secondary: #D4A017;
-  --color-secondary-hover: #B8860E;
+  --color-accent-glow: #EF4444;
+
+  /* Kassa tezkor (POS) — Sotuv ekrani uchun alohida, yuqori-kontrast urg'u */
+  --color-pos: #C8382C;
+  --color-pos-hover: #AD2F24;
+  --color-pos-light: #FBEAE3;
+  --color-pos-pay: #2E9B5D;
+  --color-pos-pay-hover: #268050;
+
+  --color-secondary: #B8860E;
+  --color-secondary-hover: #9C7009;
   --color-secondary-light: #FEF3C7;
 
   --color-success: #22C55E;
@@ -21,10 +30,34 @@
 
   /* Shrift */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   /* Background */
-  --color-background: #F9FAFB;
-  --color-foreground: #111827;
+  --color-background: #F7F9F8;
+  --color-foreground: #16211B;
+
+  /* Sovuq-yashil neytral shkala — Tailwind'ning gray/neutral ranglarini
+     butun tizim bo'ylab (matn, chegara, fon) yashil brendga mos, sokin
+     to'nga almashtiradi. Sahifalar hali ham gray va neutral klasslaridan
+     foydalanadi — qiymatlar shu yerda almashtirilgani uchun har bir
+     sahifani alohida tahrirlash shart emas. */
+  --color-gray-50: #F7F9F8;
+  --color-gray-100: #EDF2EF;
+  --color-gray-200: #DAE3DD;
+  --color-gray-300: #BECBC1;
+  --color-gray-400: #97A89D;
+  --color-gray-500: #748577;
+  --color-gray-600: #57685B;
+  --color-gray-700: #435046;
+  --color-gray-800: #2B342E;
+  --color-gray-900: #1B221D;
+  --color-gray-950: #101512;
+
+  --color-neutral-600: #57685B;
+  --color-neutral-700: #313B34;
+  --color-neutral-800: #212A24;
+  --color-neutral-900: #1A211C;
+  --color-neutral-950: #0F1411;
 }
 
 * {
@@ -36,37 +69,56 @@ html {
 }
 
 body {
-  background-color: #F9FAFB;
-  color: #111827;
+  background-color: #F7F9F8;
+  color: #1A211C;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar */
+/* Scrollbar — "suzuvchi" uslub: yo'lak ko'rinmaydi, dumaloq tayoqcha
+   scroll konteyneridan bir oz ichkarida (padding-box clip) suzib turadi. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #BECBC1 transparent;
+}
+.dark * {
+  scrollbar-color: #3A473E transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #F3F4F6;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D1D5DB;
-  border-radius: 3px;
+  background-color: #BECBC1;
+  border-radius: 999px;
+  border: 2.5px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.15s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
+  background-color: #8FA095;
 }
-.dark ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--color-primary);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: #404040;
-  border-radius: 3px;
+  background-color: #3A473E;
+  border: 2.5px solid transparent;
+  background-clip: padding-box;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #525252;
+  background-color: #4E5E52;
+}
+.dark ::-webkit-scrollbar-thumb:active {
+  background-color: var(--color-accent-glow);
 }
 
 /* iOS safe area */
@@ -90,6 +142,11 @@ body {
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes slideInUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
 }
@@ -102,12 +159,16 @@ body {
   animation: scaleIn 0.2s ease-out;
 }
 
+.animate-slideInUp {
+  animation: slideInUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 /* Jadval zebra */
 .table-zebra tbody tr:nth-child(even) {
-  background-color: #F9FAFB;
+  background-color: #F7F9F8;
 }
 .dark .table-zebra tbody tr:nth-child(even) {
-  background-color: #171717;
+  background-color: #1A211C;
 }
 
 /* Skeleton loader */
@@ -116,13 +177,13 @@ body {
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #EDF2EF 25%, #DAE3DD 50%, #EDF2EF 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 6px;
 }
 .dark .skeleton {
-  background: linear-gradient(90deg, #262626 25%, #333 50%, #262626 75%);
+  background: linear-gradient(90deg, #212A24 25%, #313B34 50%, #212A24 75%);
   background-size: 200% 100%;
 }
 
@@ -144,11 +205,18 @@ body {
   }
 }
 
-/* Dark mode base */
+/* Dark mode base — Boshqaruv markazi: deyarli qora fon + yashil urg'u */
 .dark body {
-  background-color: #0F0F0F;
-  color: #F9FAFB;
+  background-color: #0F1411;
+  color: #EDF2EF;
 }
 .dark {
   color-scheme: dark;
+}
+
+/* neutral-9xx utility overrides so the existing dark:bg-neutral-8/9/950 classes
+   read as cool forest charcoal instead of warm brown, without touching every page */
+.dark ::selection {
+  background: #EF4444;
+  color: #2B0A0A;
 }

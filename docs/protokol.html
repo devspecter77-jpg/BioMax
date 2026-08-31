@@ -1,0 +1,698 @@
+<title>ERP-Dokon Protokoli</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --paper:#f1f5ef;
+    --paper-raised:#ffffff;
+    --ink:#152019;
+    --ink-soft:#526056;
+    --ink-faint:#8b9790;
+    --line:#d7ded3;
+    --line-soft:#e6ebe1;
+    --accent:#1e7a58;
+    --accent-strong:#0f5c40;
+    --accent-soft:#e2f0e8;
+    --amber:#9a6420;
+    --amber-soft:#f5ead6;
+    --red:#a3392c;
+    --red-soft:#f6e2df;
+    --shadow: 0 1px 2px rgba(21,32,25,.04), 0 8px 24px -12px rgba(21,32,25,.12);
+    --font-head:'Sora',system-ui,sans-serif;
+    --font-body:'IBM Plex Sans',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0e1512;
+      --paper-raised:#151f19;
+      --ink:#eaf1ec;
+      --ink-soft:#a3b4a9;
+      --ink-faint:#657267;
+      --line:#26332b;
+      --line-soft:#1d281f;
+      --accent:#42c68f;
+      --accent-strong:#6fe0ac;
+      --accent-soft:#173628;
+      --amber:#dba25a;
+      --amber-soft:#382c16;
+      --red:#e08476;
+      --red-soft:#3a201b;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0e1512;
+    --paper-raised:#151f19;
+    --ink:#eaf1ec;
+    --ink-soft:#a3b4a9;
+    --ink-faint:#657267;
+    --line:#26332b;
+    --line-soft:#1d281f;
+    --accent:#42c68f;
+    --accent-strong:#6fe0ac;
+    --accent-soft:#173628;
+    --amber:#dba25a;
+    --amber-soft:#382c16;
+    --red:#e08476;
+    --red-soft:#3a201b;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent-soft); color:var(--accent-strong); }
+
+  .wrap{ max-width:860px; margin:0 auto; padding:0 20px 80px; }
+
+  /* ---------- Header ---------- */
+  header.top{
+    position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .top-inner{ max-width:860px; margin:0 auto; padding:18px 20px 14px; }
+  .eyebrow{
+    font-family:var(--font-mono); font-size:11.5px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--accent); display:flex; align-items:center; gap:8px; margin-bottom:6px;
+  }
+  .eyebrow .dot{ width:6px; height:6px; border-radius:50%; background:var(--accent); display:inline-block; }
+  h1{
+    font-family:var(--font-head); font-weight:700; font-size:clamp(22px,4vw,30px);
+    margin:0 0 4px; text-wrap:balance; letter-spacing:-.01em;
+  }
+  .sub{ color:var(--ink-soft); font-size:14px; max-width:56ch; margin:0; }
+
+  .stats-row{
+    display:flex; align-items:center; gap:18px; margin-top:16px; flex-wrap:wrap;
+  }
+  .ring-wrap{ display:flex; align-items:center; gap:12px; }
+  .ring{ width:52px; height:52px; flex:none; }
+  .ring circle{ fill:none; stroke-width:5; }
+  .ring .track{ stroke:var(--line); }
+  .ring .fill{ stroke:var(--accent); stroke-linecap:round; transition:stroke-dashoffset .35s ease; transform:rotate(-90deg); transform-origin:50% 50%; }
+  .ring-num{ font-family:var(--font-head); font-weight:700; font-size:20px; }
+  .ring-label{ font-size:11.5px; color:var(--ink-faint); font-family:var(--font-mono); }
+  .frac{ font-family:var(--font-mono); font-size:13px; color:var(--ink-soft); }
+
+  .controls{ display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+  .seg{ display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button{
+    font-family:var(--font-body); font-size:12.5px; font-weight:500; padding:7px 12px;
+    background:var(--paper-raised); color:var(--ink-soft); border:none; cursor:pointer;
+    border-right:1px solid var(--line);
+  }
+  .seg button:last-child{ border-right:none; }
+  .seg button[aria-pressed="true"]{ background:var(--accent); color:#fff; }
+  .search{
+    font-family:var(--font-body); font-size:13px; padding:7px 12px; border:1px solid var(--line);
+    border-radius:8px; background:var(--paper-raised); color:var(--ink); min-width:180px;
+  }
+  .search:focus, button:focus-visible, input:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+  .search::placeholder{ color:var(--ink-faint); }
+
+  /* ---------- Meta strip ---------- */
+  .meta-strip{
+    display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 6px;
+  }
+  .chip{
+    font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft);
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:100px;
+    padding:4px 10px;
+  }
+
+  main{ margin-top:20px; }
+
+  /* ---------- Section ---------- */
+  section.mod{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:14px;
+    box-shadow:var(--shadow); margin-bottom:16px; overflow:hidden;
+  }
+  .mod-head{
+    display:flex; align-items:center; gap:14px; padding:16px 18px; border-bottom:1px solid var(--line-soft);
+    cursor:pointer; user-select:none;
+  }
+  .mod-head:hover{ background:var(--paper); }
+  .mod-chev{
+    flex:none; width:16px; height:16px; color:var(--ink-faint);
+    transition:transform .2s ease; transform:rotate(0deg);
+  }
+  section.mod.collapsed .mod-chev{ transform:rotate(-90deg); }
+  section.mod.collapsed ul.items{ display:none; }
+  main.searching section.mod.collapsed ul.items{ display:block; }
+  .mod-title{ font-family:var(--font-head); font-weight:600; font-size:16px; margin:0; }
+  .mod-desc{ font-size:12.5px; color:var(--ink-faint); margin:2px 0 0; }
+  .mod-intro{
+    margin:0; padding:2px 18px 14px 48px; font-size:12.5px; color:var(--ink-soft);
+    max-width:64ch; border-bottom:1px solid var(--line-soft);
+  }
+  section.mod.collapsed .mod-intro{ display:none; }
+  main.searching section.mod.collapsed .mod-intro{ display:block; }
+  .mod-bar-wrap{ margin-left:auto; display:flex; align-items:center; gap:10px; flex:none; }
+  .mod-bar{ width:88px; height:6px; border-radius:4px; background:var(--line-soft); overflow:hidden; }
+  .mod-bar > i{ display:block; height:100%; background:var(--accent); border-radius:4px; transition:width .3s ease; }
+  .mod-frac{ font-family:var(--font-mono); font-size:12px; color:var(--ink-soft); min-width:38px; text-align:right; }
+
+  ul.items{ list-style:none; margin:0; padding:0; }
+  li.item{
+    display:grid; grid-template-columns:22px 1fr auto auto; column-gap:12px; row-gap:0; align-items:start;
+    padding:12px 18px; border-bottom:1px solid var(--line-soft);
+  }
+  li.item:last-child{ border-bottom:none; }
+  li.item:hover{ background:var(--paper); }
+
+  .more-toggle{
+    font-family:var(--font-mono); font-size:11px; color:var(--accent); background:none; border:none;
+    cursor:pointer; padding:3px 0 3px 4px; white-space:nowrap; display:flex; align-items:center; gap:3px;
+  }
+  .more-toggle:hover{ color:var(--accent-strong); text-decoration:underline; }
+  .more-toggle .chev{ display:inline-block; transition:transform .2s ease; transform:rotate(0deg); font-size:9px; }
+  .more-toggle[aria-expanded="true"] .chev{ transform:rotate(180deg); }
+
+  .item-more{
+    grid-column:2 / -1; margin-top:8px; padding:10px 12px; background:var(--paper);
+    border:1px dashed var(--line); border-radius:8px; font-size:12.5px; color:var(--ink-soft); line-height:1.55;
+  }
+  .item-more[hidden]{ display:none; }
+
+  .cb{
+    appearance:none; width:19px; height:19px; margin-top:2px; border-radius:5px;
+    border:1.5px solid var(--line); background:var(--paper-raised); cursor:pointer; position:relative; flex:none;
+  }
+  .cb:checked{ background:var(--accent); border-color:var(--accent); }
+  .cb:checked::after{
+    content:""; position:absolute; left:5px; top:1px; width:5px; height:9px;
+    border:solid #fff; border-width:0 2px 2px 0; transform:rotate(40deg);
+  }
+
+  .item-title{ font-size:14px; font-weight:500; }
+  .item-desc{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  li.item.done .item-title{ color:var(--ink-faint); text-decoration:line-through; text-decoration-color:var(--line); }
+  li.item.done .item-desc{ color:var(--ink-faint); }
+  li.item.done{ background:color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+
+  .tag{
+    font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
+    background:var(--paper); border:1px solid var(--line); border-radius:6px;
+    padding:3px 7px; white-space:nowrap; margin-top:1px;
+  }
+
+  li.item[hidden]{ display:none; }
+  section.mod[data-empty="true"]{ display:none; }
+
+  .empty-note{ text-align:center; color:var(--ink-faint); font-size:13px; padding:40px 0; display:none; }
+  .empty-note.show{ display:block; }
+
+  footer{
+    margin-top:28px; padding-top:18px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+  }
+  footer p{ margin:0; font-size:12px; color:var(--ink-faint); }
+  .reset-btn{
+    font-family:var(--font-body); font-size:12px; color:var(--ink-faint); background:none;
+    border:1px solid var(--line); border-radius:8px; padding:6px 11px; cursor:pointer;
+  }
+  .reset-btn:hover{ color:var(--red); border-color:var(--red); }
+
+  @media (max-width:560px){
+    .controls{ margin-left:0; width:100%; }
+    .search{ flex:1; }
+    .mod-head{ flex-wrap:wrap; }
+    .mod-bar-wrap{ margin-left:0; }
+    .mod-intro{ padding-left:18px; }
+    li.item{ grid-template-columns:20px 1fr; }
+    li.item .tag{ grid-column:2; margin-top:6px; justify-self:start; }
+    li.item .more-toggle{ grid-column:2; padding-left:0; margin-top:4px; }
+    .item-more{ grid-column:1 / -1; margin-left:0; }
+  }
+
+  @media print{
+    header.top{ position:static; backdrop-filter:none; }
+    .controls, .reset-btn{ display:none; }
+    section.mod{ box-shadow:none; break-inside:avoid; }
+  }
+</style>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="eyebrow"><span class="dot"></span>Ichki texnik audit &middot; erp-dokon</div>
+    <h1>ERP-Dokon — bajarilgan ishlar protokoli</h1>
+    <p class="sub">Loyihaning joriy manba kodi (Prisma sxemasi, API marshrutlari, sahifalar va Telegram bot) o'rganib chiqilib tuzilgan to'liq funksionallik ro'yxati. Bo'lim sarlavhasini bosib uni yig'ish/yozish, "Batafsil"ni bosib har bir funksiya haqida qo'shimcha ma'lumot o'qish, katakchani belgilab bajarilganini qayd etish mumkin — barchasi shu brauzerda saqlanadi.</p>
+
+    <div class="stats-row">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 44 44">
+          <circle class="track" cx="22" cy="22" r="18"></circle>
+          <circle class="fill" id="ringFill" cx="22" cy="22" r="18" stroke-dasharray="113.1" stroke-dashoffset="113.1"></circle>
+        </svg>
+        <div>
+          <div class="ring-num" id="ringNum">0%</div>
+          <div class="ring-label">BAJARILDI</div>
+        </div>
+      </div>
+      <div class="frac" id="overallFrac">0 / 0 band</div>
+
+      <div class="controls">
+        <input class="search" id="search" type="search" placeholder="Band bo'yicha qidirish…" aria-label="Qidirish">
+        <div class="seg" role="group" aria-label="Filtr">
+          <button type="button" data-filter="all" aria-pressed="true">Barchasi</button>
+          <button type="button" data-filter="pending" aria-pressed="false">Kutilmoqda</button>
+          <button type="button" data-filter="done" aria-pressed="false">Bajarildi</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="meta-strip" id="metaStrip"></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <main id="main"></main>
+  <p class="empty-note" id="emptyNote">Ushbu filtrga mos band topilmadi.</p>
+
+  <footer>
+    <p>Tuzilgan sana: 30.08.2026 &middot; manba kod tahlili asosida &middot; erp-dokon v0.1.0</p>
+    <button class="reset-btn" id="resetBtn" type="button">Barcha belgilarni tozalash</button>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "erp-dokon-protokol-v1";
+  var COLLAPSE_KEY = "erp-dokon-protokol-collapse-v1";
+
+  var stack = ["Next.js 16", "React 19", "Prisma 7 + PostgreSQL", "NextAuth v5", "Telegram Bot API (grammy)", "Tailwind CSS 4", "Vitest", "Playwright"];
+
+  var data = [
+    {
+      id: "asos", title: "Kirish, rollar va tizim asoslari",
+      desc: "Autentifikatsiya, rol va ruxsatlar, filiallar",
+      more: "Tizimning fundamenti — kim, qaysi filialdan, qaysi rolda va qaysi bo'limlarni ko'rish huquqi bilan kirishini belgilaydi. Boshqa barcha bo'limlar shu ustiga quriladi.",
+      items: [
+        { id:"asos-1", t:"Login sahifasi va sessiya boshqaruvi", d:"NextAuth orqali login/parol bilan kirish, parol hash (bcrypt).", tag:"/login",
+          more:"next-auth (v5, beta) Credentials provideri ishlatiladi: login+parol yuboriladi, parol bcryptjs bilan solishtiriladi, muvaffaqiyatli bo'lsa JWT sessiya ochiladi. Sessiyasiz foydalanuvchi (auth) guruhi tashqarisidagi hech qaysi sahifaga kira olmaydi." },
+        { id:"asos-2", t:"To'rtta rol tizimi", d:"ADMIN, KASSIR, OMBORCHI, SOTUVCHI — har biri o'ziga xos ko'rinish va huquqlarga ega.", tag:"Rol",
+          more:"Foydalanuvchi.rol maydoni orqali belgilanadi. Har bir rol uchun sidebar'da ko'rinadigan bo'limlar (nav-items.ts) va standart ruxsatlar oldindan berilgan — masalan OMBORCHI faqat Tovarlar va Ombor bo'limlarini ko'radi, SOTUVCHI esa alohida soddalashtirilgan panelga yo'naltiriladi." },
+        { id:"asos-3", t:"Bo'limlarga nozik ruxsatlar", d:"Har bir xodimga alohida bo'lim (jumladan hisobot bo'limchalari) ko'rinishini yoqish/o'chirish.", tag:"/ruxsatlar",
+          more:"Ruxsat modeli har bir xodim uchun har bir bo'lim (bolim) bo'yicha alohida ko'rinishni (korinadi) belgilaydi. Hisobotlar ichidagi 9 ta kichik bo'lim (umumiy, sotuv, moliya va h.k.) ham alohida-alohida yoqilishi mumkin — ruxsat-katalogi.ts shu tuzilmani belgilaydi." },
+        { id:"asos-4", t:"Filiallar boshqaruvi", d:"Ko'p filialli tuzilma, xodimni filialga biriktirish.", tag:"/filiallar",
+          more:"Filial modeli nomi, manzili va telefoni bilan saqlanadi; har bir xodim (filialId) orqali bittasiga biriktiriladi — bu ko'p do'konli tarmoqni bitta tizimda boshqarish imkonini beradi." },
+        { id:"asos-5", t:"Xodimlar (foydalanuvchilar) CRUD", d:"Xodim qo'shish, tahrirlash, faolligini o'chirish, parolni qayta o'rnatish.", tag:"/foydalanuvchilar",
+          more:"/api/foydalanuvchilar orqali xodim qo'shish, tahrirlash va faolligini o'chirish; /api/foydalanuvchilar/parol orqali admin parolni qayta o'rnatishi mumkin." },
+        { id:"asos-6", t:"Sozlamalar (key-value konfiguratsiya)", d:"Do'kon nomi, chek matni va boshqa umumiy sozlamalar.", tag:"/sozlamalar",
+          more:"Sozlama modeli sodda kalit/qiymat (kalit/qiymat) formatida — do'kon nomi, manzili, chek matni kabi umumiy matnli sozlamalarni saqlaydi va chek hamda bot xabarlarida qo'llaniladi." }
+      ]
+    },
+    {
+      id: "savdo", title: "Savdo",
+      desc: "Kassa (POS), buyurtmalar, qaytarish",
+      more: "Mijozga tovar sotishning barcha yo'llari: to'g'ridan-to'g'ri kassa, sotuvchidan buyurtma orqali va qaytarish jarayoni.",
+      items: [
+        { id:"savdo-1", t:"Sotuv (POS) kassir paneli", d:"Shtrix-kod skaneri, savatcha, tezkor qidiruv, chegirma qo'llash.", tag:"/sotuv",
+          more:"html5-qrcode kutubxonasi kamera orqali shtrix-kodni o'qiydi, tovar avtomatik savatga qo'shiladi. Har bir qatorga miqdor va chegirma kiritiladi, umumiy summa real vaqtda hisoblanadi." },
+        { id:"savdo-2", t:"Aralash to'lov usullari", d:"Naqd, karta, naqd+karta aralash, nasiya va sherik do'kon orqali to'lov.", tag:"To'lov",
+          more:"TolovUsuli enumi: NAQD, KARTA, ARALASH, NASIYA, SHERIK. Aralashda naqd va karta summasi alohida kiritiladi; NASIYA tanlanganda avtomatik Nasiya yozuvi ochiladi, SHERIK tanlanganda savdo hamkor do'konga bog'lanadi." },
+        { id:"savdo-3", t:"Chek generatsiyasi (PDF)", d:"jsPDF orqali chop etiladigan chek shakllantirish.", tag:"jsPDF",
+          more:"jsPDF kutubxonasi tovar tarkibi, summalar va shtrix-kod asosida bosma chek generatsiya qiladi — kassa printeriga yoki PDF sifatida saqlashga mos." },
+        { id:"savdo-4", t:"Ommaviy chek sahifasi", d:"Chek raqami bo'yicha havola orqali tashqi ko'rish (mijoz uchun).", tag:"/chek/[raqam]",
+          more:"Autentifikatsiyasiz ochiladigan /chek/[chekRaqami] sahifasi (/api/public/chek) — mijozga SMS yoki Telegram orqali havola yuborib, chekni onlayn ko'rsatish uchun mo'ljallangan." },
+        { id:"savdo-5", t:"Sotuvchi paneli", d:"SOTUVCHI roli uchun soddalashtirilgan, faqat buyurtma yaratishga mo'ljallangan interfeys.", tag:"/sotuvchi",
+          more:"SOTUVCHI roli kassaga emas, faqat buyurtma shakllantirishga kirish huquqiga ega — mijoz uchun buyurtma yig'ib, uni kassirga yuboradi." },
+        { id:"savdo-6", t:"Buyurtmalar oqimi", d:"Sotuvchi buyurtma yaratadi → kassir tasdiqlaydi yoki bekor qiladi.", tag:"/buyurtmalar",
+          more:"Buyurtma modeli holati: KUTILMOQDA → TASDIQLANGAN yoki BEKOR_QILINGAN. Tasdiqlanganda tarkibi kassir tomonidan yakuniy Sotuv yozuviga aylantiriladi." },
+        { id:"savdo-7", t:"Qaytarish (vozvrat)", d:"Sotilgan tovarni asl chekka bog'lab, sababi bilan qaytarish.", tag:"Qaytarish",
+          more:"Qaytarish modeli aslSotuvId orqali asl chekka bog'lanadi, tarkibidagi har bir tovar uchun miqdor va summa qaytariladi, ombor qoldig'iga QAYTARISH turi bilan avtomatik qo'shiladi." }
+      ]
+    },
+    {
+      id: "ombor", title: "Ombor va tovarlar",
+      desc: "Katalog, qoldiq, harakat jurnali",
+      more: "Tovarlar katalogi va har bir dona/kg/litrning qayerda (ombor yoki do'kon zali) ekanini, qanday kelib-ketganini kuzatib boruvchi qism.",
+      items: [
+        { id:"ombor-1", t:"Tovarlar katalogi", d:"Nomi, kategoriya, kelish/sotish narxi, birlik (dona/kg/litr/metr/pachka/quti).", tag:"/tovarlar",
+          more:"Tovar modelida kelishNarxi va sotishNarxi alohida saqlanadi (foyda hisoblash uchun), Birlik enumi (DONA/KG/LITR/METR/PACHKA/QUTI) va holati FAOL/ARXIVLANGAN orqali tovarni o'chirmasdan yashirish mumkin." },
+        { id:"ombor-2", t:"Shtrix-kod bilan ishlash", d:"Avtomatik keyingi kod generatsiyasi va shtrix-kod bo'yicha tezkor qidiruv.", tag:"by-shtrix",
+          more:"/api/tovarlar/keyingi-kod navbatdagi ichki kodni avtomatik generatsiya qiladi; /api/tovarlar/by-shtrix skanerdan kelgan kod bo'yicha tovarni bir zumda topadi." },
+        { id:"ombor-3", t:"Minimal qoldiq ogohlantirishi", d:"Har bir tovar uchun chegara belgilash va past qoldiqni ko'rsatish.", tag:"minimalQoldiq",
+          more:"Har bir tovarda minimalQoldiq (standart 5) belgilanadi; joriy qoldiq shundan pastga tushganda tovarlar ro'yxati va hisobotlarda ogohlantirish sifatida chiqadi." },
+        { id:"ombor-4", t:"Excel orqali ommaviy import", d:"Tovarlar ro'yxatini fayldan bir yo'la yuklash.", tag:"/tovarlar/import",
+          more:"xlsx kutubxonasi Excel fayldan tovarlar ro'yxatini o'qib, mavjudlarini yangilab, yangilarini bir martada bazaga qo'shadi." },
+        { id:"ombor-5", t:"Ombor harakati jurnali", d:"Kirim, chiqim, qaytarish, yo'qotish va o'tkazma turlari bo'yicha to'liq tarix.", tag:"/ombor",
+          more:"OmborHarakati modeli har bir harakatni turi (KIRIM/CHIQIM/QAYTARISH/YOQOTISH/OTKAZMA) va joyi (OMBOR/DOKON) bilan qayd etadi — to'liq audit tarixi saqlanadi." },
+        { id:"ombor-6", t:"Ombor ↔ Do'kon o'tkazmasi", d:"Tovarni ombordan savdo zaliga (va aksincha) ko'chirish.", tag:"otkazma",
+          more:"/api/ombor/otkazma bitta amal bilan tovarni bir joydan (masalan ombordan) ikkinchisiga (do'kon zaliga) ko'chiradi, ikkala tomon uchun ham harakat yozuvi yaratiladi." },
+        { id:"ombor-7", t:"Ommaviy ombor operatsiyasi", d:"Bir nechta tovarni bitta amal bilan kirim/chiqim qilish.", tag:"ommaviy",
+          more:"/api/ombor/ommaviy — bir nechta tovar qatorini jadval ko'rinishida kiritib, bittada kirim yoki chiqim qilish (masalan yetkazib berilgan partiya uchun)." },
+        { id:"ombor-8", t:"Kategoriyalar boshqaruvi", d:"Tovar toifalarini qo'shish va tahrirlash.", tag:"/kategoriyalar",
+          more:"Kategoriya nomi noyob bo'lishi shart; har bir tovar aynan bitta kategoriyaga tegishli, hisobotlarda kategoriya kesimida tahlil qilish uchun ishlatiladi." }
+      ]
+    },
+    {
+      id: "mijoz", title: "Mijozlar va nasiya",
+      desc: "Qarz kuzatuvi, Telegram bog'lanish",
+      more: "Doimiy mijozlar bazasi, ularga nasiyaga tovar berish va qarzni bosqichma-bosqich yig'ib borish, shu bilan birga mijozni Telegram botga ulash.",
+      items: [
+        { id:"mijoz-1", t:"Mijozlar bazasi", d:"Ism, telefon, manzil va har bir mijoz uchun noyob maxsus kod.", tag:"/mijozlar",
+          more:"Har bir mijozga tizim tomonidan noyob maxsus_kod (masalan 123-456-789 formatida) beriladi — bu kod Telegram botga ulanish uchun kalit vazifasini bajaradi." },
+        { id:"mijoz-2", t:"Mijozni Telegram bilan bog'lash", d:"Maxsus kod yoki deep-link orqali botda avtomatik identifikatsiya.", tag:"Telegram",
+          more:"Mijoz botga kodni yozadi yoki /start deep-link (t.me/bot?start=KOD) orqali kiradi — telegram_id mijoz yozuviga saqlanadi. Bog'lanmagan holatlar uchun telegramYoq bayrog'i qayta urinishning (PEER_FLOOD) oldini oladi." },
+        { id:"mijoz-3", t:"Nasiya (qarz) ochish", d:"Sotuvdan avtomatik yoki qo'lda nasiya yaratish, muddat belgilash.", tag:"/nasiyalar",
+          more:"Nasiya modeli jamiQarz, tolangan, qoldiq maydonlari va ixtiyoriy muddat (to'lov sanasi) bilan; holati OCHIQ, YOPILGAN yoki MUDDATI_OTGAN bo'lishi mumkin." },
+        { id:"mijoz-4", t:"Nasiya to'lovlarini qabul qilish", d:"Qisman yoki to'liq to'lov, qoldiqni avtomatik qayta hisoblash.", tag:"NasiyaTolov",
+          more:"NasiyaTolov yozuvi har bir to'lovni (summasi, usuli, qabul qiluvchi kassir) saqlaydi; qoldiq avtomatik qayta hisoblanadi, to'liq yopilganda holati YOPILGAN'ga o'zgaradi." },
+        { id:"mijoz-5", t:"Qarz tarixi jurnali", d:"Har bir qo'shilgan/qaytarilgan summa alohida yozuv sifatida saqlanadi.", tag:"QarzTarixi",
+          more:"NasiyaQarzTarixi — qarzga har qanday qo'shimcha yoki to'lov kiritilganda alohida tarix yozuvi yaratiladi, shaffof audit uchun." },
+        { id:"mijoz-6", t:"Muddati o'tgan nasiyani avtomatik aniqlash", d:"Holat OCHIQ → MUDDATI_OTGAN avtomatik o'zgaradi.", tag:"Holat",
+          more:"Muddati o'tib ketgan, hali yopilmagan nasiyalar MUDDATI_OTGAN sifatida belgilanadi va bot orqali eslatma yuborish uchun ishlatiladi (scheduler.ts, har kuni soat 09:00)." }
+      ]
+    },
+    {
+      id: "taminot", title: "Ta'minot va xarajatlar",
+      desc: "Ta'minotchilar, xaridlar, xarajatlar",
+      more: "Do'konga tovar kirib kelishining boshqa uchi — ta'minotchilar bilan hisob-kitob — hamda joriy xarajatlarni qayd etish.",
+      items: [
+        { id:"taminot-1", t:"Ta'minotchilar bazasi", d:"Kontakt shaxs, telefon, manzil bilan to'liq ro'yxat.", tag:"/taminotchilar",
+          more:"Taminotchi modeli kontakt shaxs, telefon va manzil bilan; har bir xarid va ombor kirimi ta'minotchiga bog'lanishi mumkin." },
+        { id:"taminot-2", t:"Ta'minotchidan xarid qilish", d:"Xarid tarkibi, umumiy summa va to'langan/qoldiq qarz hisobi.", tag:"/xaridlar",
+          more:"Xarid modeli tarkibidagi har bir qator (XaridTarkibi) tovar nomi, miqdor va narxi bilan saqlanadi; umumiy summa va to'langan/qoldiq qarz avtomatik hisoblanadi." },
+        { id:"taminot-3", t:"Xarid uchun qisman to'lovlar", d:"Bir nechta bo'lib to'lash va qarz tarixini yuritish.", tag:"XaridTolov",
+          more:"XaridTolov va XaridQarzTarixi orqali ta'minotchiga bir necha bosqichda to'lash va har bir bosqichni tarixda ko'rish mumkin." },
+        { id:"taminot-4", t:"Xarajatlar hisobi", d:"Ijara, maosh, transport, kommunal va boshqa toifalar bo'yicha yozuv.", tag:"/xarajatlar",
+          more:"XarajatKategoriya enumi: IJARA, MAOSH, TRANSPORT, KOMMUNAL, BOSHQA — har bir xarajat kim tomonidan kiritilgani bilan qayd etiladi va moliya hisobotida daromaddan ayiriladi." }
+      ]
+    },
+    {
+      id: "hamkorlik", title: "Hamkorlik (sheriklik tizimi)",
+      desc: "Sherik do'konlar, agentlar, tovar qarzi",
+      more: "Do'kon o'z tovarini boshqa do'konlarga yoki agentlarga qarzga/ulgurji berib turadigan holatlar uchun alohida hisob-kitob mexanizmi.",
+      items: [
+        { id:"hamkor-1", t:"Sherik do'konlar", d:"Nasiya asosida ulgurji/hamkor savdosi va ularning to'lovlari.", tag:"SherikDokon",
+          more:"SherikDokon — ulgurji hamkor do'konlarga nasiya asosida savdo qilish uchun; Sotuv.tolovUsuli = SHERIK bo'lganda shu do'konga bog'lanadi, SherikDokonTolov orqali qarz yopiladi." },
+        { id:"hamkor-2", t:"Agentlar (sheriklar) ro'yxati", d:"Tovar qarziga chiqarilgan hamkorlar bazasi.", tag:"/sheriklar",
+          more:"Sherik modeli (avvalgi nomi \"Sheriklar\") — tovarni qarzga olib, keyin pul yoki tovar sifatida qaytaradigan agentlar/dilerlar ro'yxati." },
+        { id:"hamkor-3", t:"Sherik tovar qarzi (SherikQarz)", d:"Berilgan tovar tarkibi va qaytarilgan miqdorni kuzatish.", tag:"/agentlar",
+          more:"SherikQarz + SherikQarzTarkibi — agentga berilgan har bir tovar miqdori va qaytarilgan qismi kuzatiladi, holati OCHIQ/QISMAN/YOPILGAN." },
+        { id:"hamkor-4", t:"Sherikdan olish", d:"Pul yoki tovar shaklida qaytarishni ro'yxatga olish.", tag:"/sherikdan-olish",
+          more:"SherikdanOlish — agent yoki ta'minotchidan pul (PUL) yoki tovar (TOVAR) shaklida qaytarib olishni qayd etadi (SherikdanOlishTolov)." }
+      ]
+    },
+    {
+      id: "hisobot", title: "Hisobotlar",
+      desc: "Analitika, eksport, ish samaradorligi",
+      more: "Barcha bo'limlardan yig'ilgan ma'lumotni raqamlarga, grafiklarga va Excel fayllariga aylantiruvchi tahliliy qatlam.",
+      items: [
+        { id:"hisobot-1", t:"Umumiy hisobot paneli", d:"Barcha ko'rsatkichlar bo'yicha yig'ma ko'rinish.", tag:"Umumiy",
+          more:"/hisobotlar sahifasidagi asosiy tab — kunlik/oylik savdo, foyda va asosiy ko'rsatkichlarni bitta ekranda ko'rsatadi." },
+        { id:"hisobot-2", t:"Sotuv hisoboti va grafiklar", d:"Davr bo'yicha savdo dinamikasi, diagrammalar (Recharts).", tag:"Sotuv",
+          more:"/api/hisobotlar/sotuv va /api/sotuvlar/analitika — davr, kassir yoki tovar bo'yicha filtrlab, Recharts grafiklarida vizualizatsiya qiladi." },
+        { id:"hisobot-3", t:"Moliya hisoboti", d:"Daromad, xarajat va foyda ko'rsatkichlari.", tag:"Moliya",
+          more:"/api/hisobotlar/moliya — savdo daromadi, tovar tannarxi va xarajatlarni solishtirib sof foydani hisoblaydi." },
+        { id:"hisobot-4", t:"Tovarlar, ABC tahlili va o'lik qoldiq", d:"Eng ko'p/kam sotiladigan tovarlar va harakatsiz qoldiqlar tahlili.", tag:"ABC / dead-stock",
+          more:"/api/hisobotlar/abc tovarlarni aylanma (A/B/C) bo'yicha tasniflaydi; /api/hisobotlar/dead-stock uzoq vaqt sotilmagan qoldiqlarni aniqlaydi." },
+        { id:"hisobot-5", t:"Ombor hisoboti", d:"Qoldiq va harakatlar bo'yicha umumlashtirilgan ma'lumot.", tag:"Ombor",
+          more:"/api/hisobotlar/ombor — joriy qoldiqlar, harakatlar hajmi va joylashuv kesimida umumlashtirilgan ko'rinish." },
+        { id:"hisobot-6", t:"Mijozlar hisoboti", d:"Mijozlar faolligi va xarid hajmi bo'yicha tahlil.", tag:"Mijozlar",
+          more:"/api/hisobotlar/mijozlar — eng faol mijozlar, o'rtacha chek va xarid chastotasi bo'yicha tahlil." },
+        { id:"hisobot-7", t:"Nasiya va muddat (aging) hisoboti", d:"Qarzlarni muddatiga qarab guruhlash.", tag:"Nasiya aging",
+          more:"/api/hisobotlar/nasiya va /api/hisobotlar/nasiya-aging — ochiq qarzlarni muddat oralig'iga (masalan 0-7, 8-30 kun) qarab guruhlaydi." },
+        { id:"hisobot-8", t:"Xaridlar hisoboti", d:"Ta'minotchilar bo'yicha xarid va qarz tahlili.", tag:"Xaridlar",
+          more:"/api/hisobotlar/xaridlar — ta'minotchilar bo'yicha xarid hajmi va qarzdorlik tahlili." },
+        { id:"hisobot-9", t:"Kassirlar hisoboti", d:"Ish soatlari va har bir kassirning savdo samaradorligi.", tag:"Kassirlar",
+          more:"/api/hisobotlar/kassirlar va /api/hisobotlar/soatlar — har bir kassirning ish soatlari, chek soni va savdo hajmini solishtiradi." },
+        { id:"hisobot-10", t:"Excel eksport", d:"Har qanday hisobotni Excel faylga chiqarish.", tag:"/hisobotlar/export",
+          more:"/api/hisobotlar/export istalgan hisobotni Excel (.xlsx) faylga chiqaradi; /api/sotuvlar/export orqali savdo ro'yxati alohida eksport qilinadi." }
+      ]
+    },
+    {
+      id: "bot", title: "Telegram bot",
+      desc: "Mijoz self-servisi va avtomatik eslatmalar",
+      more: "Mijozning telefonidagi Telegram orqali o'z qarzi va xaridlarini ko'rishi, shuningdek muddat yaqinlashganda avtomatik eslatma olishi.",
+      items: [
+        { id:"bot-1", t:"Mijoz identifikatsiyasi", d:"Maxsus kod yoki /start deep-link orqali botni mijozga bog'lash.", tag:"/start",
+          more:"grammy kutubxonasida yozilgan bot; /start KOD deep-link yoki botga to'g'ridan-to'g'ri XXX-XXX-XXX formatidagi kod yuborish orqali ishlaydi." },
+        { id:"bot-2", t:"\"Nasiyalarim\" bo'limi", d:"Joriy ochiq qarzlarni va muddatlarni bot orqali ko'rish.", tag:"nasiyalar",
+          more:"Ochiq va muddati o'tgan nasiyalarni ro'yxatlab, har biri uchun qoldiq summa va muddatni ko'rsatadi, jami qarzni jamlab beradi." },
+        { id:"bot-3", t:"\"Xarid tarixi\" bo'limi", d:"So'nggi xaridlar ro'yxati va tarkibi.", tag:"tarix",
+          more:"So'nggi 10 ta xaridni chek raqami, sanasi va tarkibi (3 tagacha tovar nomi bilan) ko'rsatadi." },
+        { id:"bot-4", t:"\"Mening ma'lumotlarim\" bo'limi", d:"Mijoz profili va jami xarid statistikasi.", tag:"info",
+          more:"Ism, telefon, manzil, maxsus kod, jami xarid soni va joriy nasiya qarzini bitta ekranda jamlaydi." },
+        { id:"bot-5", t:"Avtomatik nasiya eslatmalari", d:"Har kuni soat 09:00 (Toshkent) — muddatga qarab avtomatik xabar yuborish.", tag:"cron 09:00",
+          more:"node-cron orqali har kuni soat 09:00 (Asia/Tashkent) ishga tushib, muddatiga 3, 2, 1 kun qolgan va muddati o'tgan nasiyalar bo'yicha xabar navbatga qo'yiladi." },
+        { id:"bot-6", t:"Xabarlar navbati va qayta urinish", d:"Exponential backoff, urinishlar soni va holat kuzatuvi bilan navbat (queue) tizimi.", tag:"/xabarlar",
+          more:"BildirishnomLog modeli status, urinishSoni va keyingiUrinish (exponential backoff) bilan har bir xabarni kuzatadi; /xabarlar sahifasida muvaffaqiyatsizlarni qo'lda qayta yuborish mumkin. Queue worker har 5 soniyada bittadan yuboradi — Telegram flood-limitidan saqlanish uchun." }
+      ]
+    },
+    {
+      id: "zaxira", title: "Zaxira nusxa va ma'lumot almashinuvi",
+      desc: "Backup, import/eksport",
+      more: "Ma'lumotlar bazasini yo'qotmaslik va boshqa muhitga ko'chirish uchun zarur bo'lgan zaxiralash vositalari.",
+      items: [
+        { id:"zaxira-1", t:"To'liq JSON backup eksport", d:"Barcha jadvallarni bitta faylga (faqat ADMIN) yuklab olish.", tag:"/backup/export",
+          more:"/api/backup/export faqat ADMIN uchun; tovarlar, mijozlar, sotuvlar, nasiyalar, xaridlar va boshqa asosiy jadvallarni bitta JSON faylga jamlaydi." },
+        { id:"zaxira-2", t:"Excel formatida eksport", d:"Ma'lumotlarni Excel ko'rinishida saqlash.", tag:"/backup/excel",
+          more:"/api/backup/excel bazadagi asosiy jadvallarni ko'p varaqli Excel faylga chiqaradi, tashqi tahlil yoki buxgalteriya uchun qulay." },
+        { id:"zaxira-3", t:"Ma'lumotlarni import qilish", d:"Zaxira fayldan qayta tiklash.", tag:"/backup/import",
+          more:"/api/backup/import avval eksport qilingan JSON'ni qayta yuklab, ma'lumotlarni tiklash yoki boshqa muhitga ko'chirish imkonini beradi." },
+        { id:"zaxira-4", t:"Bazani tozalash vositasi", d:"Test/demo ma'lumotlarini xavfsiz tozalash skripti.", tag:"db:clean",
+          more:"prisma/clean.ts (npm run db:clean) — test/demo davrida yig'ilgan yozuvlarni xavfsiz tarzda tozalash uchun skript." }
+      ]
+    },
+    {
+      id: "infra", title: "Infratuzilma va sifat nazorati",
+      desc: "PWA, test, deploy",
+      more: "Ilovaning mobil qurilmada ishlashi, kodning sinovdan o'tganligi va serverga qanday joylashtirilishini ta'minlovchi texnik qatlam.",
+      items: [
+        { id:"infra-1", t:"PWA (mobil ilova sifatida o'rnatish)", d:"Manifest va ikonalar orqali telefon ekraniga o'rnatish imkoniyati.", tag:"manifest.json",
+          more:"next-pwa va public/manifest.json + turli o'lchamdagi ikonalar orqali ilovani telefon bosh ekraniga o'rnatish va tezkor ishlashni ta'minlaydi." },
+        { id:"infra-2", t:"Mobil pastki navigatsiya", d:"Eng ko'p ishlatiladigan bo'limlar uchun alohida mobil tab-bar.", tag:"MobileNav",
+          more:"MobileNav.tsx eng ko'p ishlatiladigan 4 bo'limni doim ko'rinadigan pastki panelda, qolganlarini \"Barchasi\" varag'ida ko'rsatadi (mobilePriorityOrder ro'yxati bo'yicha)." },
+        { id:"infra-3", t:"Unit va integratsiya testlari", d:"Vitest orqali hisob-kitob mantig'i va API testlari.", tag:"Vitest",
+          more:"Vitest bilan komponent (masalan HeroMetrics, SalesTable), hisob-kitob mantig'i (analitika-math) va API (sotuvlar/analitika, export, filter) testlari yozilgan." },
+        { id:"infra-4", t:"End-to-end (E2E) testlar", d:"Playwright orqali asosiy foydalanuvchi ssenariylari tekshiruvi.", tag:"Playwright",
+          more:"Playwright orqali sotuvlar ro'yxati va eksport ssenariylari (sotuvlar.spec.ts, export.spec.ts) haqiqiy brauzerda tekshiriladi." },
+        { id:"infra-5", t:"Deploy avtomatlashtirish", d:"deploy.sh skripti va PM2 (ecosystem.config.js) konfiguratsiyasi.", tag:"PM2",
+          more:"deploy.sh va ecosystem.config.js (PM2) production serverga joylashtirish va jarayonni doim ishga tushirib turishni avtomatlashtiradi." },
+        { id:"infra-6", t:"Nginx konfiguratsiyasi", d:"Server tomonidagi reverse-proxy sozlamalari.", tag:"nginx.conf",
+          more:"nginx.conf domenni Next.js serveriga proxy qilish va statik fayllarni tarqatish sozlamalarini belgilaydi." }
+      ]
+    }
+  ];
+
+  var main = document.getElementById("main");
+  var metaStrip = document.getElementById("metaStrip");
+  var state = {};
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      state = raw ? JSON.parse(raw) : {};
+    }catch(e){ state = {}; }
+  }
+  function saveState(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  stack.forEach(function(s){
+    var c = document.createElement("span");
+    c.className = "chip";
+    c.textContent = s;
+    metaStrip.appendChild(c);
+  });
+
+  var collapseState = {};
+  function loadCollapse(){
+    try{
+      var raw = localStorage.getItem(COLLAPSE_KEY);
+      collapseState = raw ? JSON.parse(raw) : {};
+    }catch(e){ collapseState = {}; }
+  }
+  function saveCollapse(){
+    try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapseState)); }catch(e){}
+  }
+  loadCollapse();
+
+  data.forEach(function(mod){
+    var section = document.createElement("section");
+    section.className = "mod";
+    section.dataset.mod = mod.id;
+    if (collapseState[mod.id]) section.classList.add("collapsed");
+
+    var head = document.createElement("div");
+    head.className = "mod-head";
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+    head.setAttribute("aria-expanded", collapseState[mod.id] ? "false" : "true");
+    head.innerHTML =
+      '<svg class="mod-chev" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M6 8l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '<div><p class="mod-title">' + mod.title + '</p><p class="mod-desc">' + mod.desc + '</p></div>' +
+      '<div class="mod-bar-wrap"><div class="mod-bar"><i style="width:0%"></i></div>' +
+      '<span class="mod-frac">0/' + mod.items.length + '</span></div>';
+    section.appendChild(head);
+
+    if (mod.more){
+      var intro = document.createElement("p");
+      intro.className = "mod-intro";
+      intro.textContent = mod.more;
+      section.appendChild(intro);
+    }
+
+    function toggleSection(){
+      var collapsed = section.classList.toggle("collapsed");
+      head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      collapseState[mod.id] = collapsed;
+      saveCollapse();
+    }
+    head.addEventListener("click", toggleSection);
+    head.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleSection(); }
+    });
+
+    var ul = document.createElement("ul");
+    ul.className = "items";
+
+    mod.items.forEach(function(it){
+      var li = document.createElement("li");
+      li.className = "item";
+      li.dataset.id = it.id;
+      li.dataset.text = (it.t + " " + it.d + " " + it.tag + " " + (it.more || "")).toLowerCase();
+
+      var checked = !!state[it.id];
+      if (checked) li.classList.add("done");
+
+      li.innerHTML =
+        '<input type="checkbox" class="cb" id="cb-' + it.id + '"' + (checked ? " checked" : "") + '>' +
+        '<label for="cb-' + it.id + '" style="cursor:pointer">' +
+          '<div class="item-title">' + it.t + '</div>' +
+          '<div class="item-desc">' + it.d + '</div>' +
+        '</label>' +
+        '<span class="tag">' + it.tag + '</span>' +
+        (it.more ?
+          '<button type="button" class="more-toggle" aria-expanded="false">Batafsil <span class="chev">▾</span></button>' +
+          '<div class="item-more" hidden>' + it.more + '</div>'
+        : '<span></span>');
+
+      ul.appendChild(li);
+    });
+
+    section.appendChild(ul);
+    main.appendChild(section);
+  });
+
+  main.addEventListener("click", function(e){
+    var btn = e.target.closest(".more-toggle");
+    if (!btn) return;
+    var li = btn.closest(".item");
+    var panel = li.querySelector(".item-more");
+    var open = panel.hasAttribute("hidden") === false;
+    if (open){
+      panel.setAttribute("hidden", "");
+      btn.setAttribute("aria-expanded", "false");
+      btn.innerHTML = "Batafsil <span class=\"chev\">▾</span>";
+    } else {
+      panel.removeAttribute("hidden");
+      btn.setAttribute("aria-expanded", "true");
+      btn.innerHTML = "Yopish <span class=\"chev\">▾</span>";
+    }
+  });
+
+  var ringFill = document.getElementById("ringFill");
+  var ringNum = document.getElementById("ringNum");
+  var overallFrac = document.getElementById("overallFrac");
+  var CIRC = 113.1;
+
+  function recompute(){
+    var totalAll = 0, doneAll = 0;
+
+    data.forEach(function(mod){
+      var section = main.querySelector('section[data-mod="' + mod.id + '"]');
+      var total = mod.items.length, done = 0;
+      mod.items.forEach(function(it){ if (state[it.id]) done++; });
+
+      var pct = total ? Math.round((done/total)*100) : 0;
+      section.querySelector(".mod-bar > i").style.width = pct + "%";
+      section.querySelector(".mod-frac").textContent = done + "/" + total;
+
+      totalAll += total; doneAll += done;
+    });
+
+    var overallPct = totalAll ? Math.round((doneAll/totalAll)*100) : 0;
+    ringNum.textContent = overallPct + "%";
+    overallFrac.textContent = doneAll + " / " + totalAll + " band";
+    var offset = CIRC - (CIRC * overallPct / 100);
+    ringFill.style.strokeDashoffset = offset;
+  }
+
+  main.addEventListener("change", function(e){
+    if (!e.target.classList.contains("cb")) return;
+    var li = e.target.closest(".item");
+    var id = li.dataset.id;
+    state[id] = e.target.checked;
+    li.classList.toggle("done", e.target.checked);
+    saveState();
+    recompute();
+  });
+
+  var currentFilter = "all";
+  var currentQuery = "";
+
+  function applyFilters(){
+    var anyVisible = false;
+    main.classList.toggle("searching", !!currentQuery);
+    data.forEach(function(mod){
+      var section = main.querySelector('section[data-mod="' + mod.id + '"]');
+      var visibleInSection = 0;
+      section.querySelectorAll(".item").forEach(function(li){
+        var id = li.dataset.id;
+        var isDone = !!state[id];
+        var matchesFilter = currentFilter === "all" || (currentFilter === "done" && isDone) || (currentFilter === "pending" && !isDone);
+        var matchesQuery = !currentQuery || li.dataset.text.indexOf(currentQuery) !== -1;
+        var visible = matchesFilter && matchesQuery;
+        li.hidden = !visible;
+        if (visible) { visibleInSection++; anyVisible = true; }
+      });
+      section.dataset.empty = visibleInSection === 0 ? "true" : "false";
+    });
+    document.getElementById("emptyNote").classList.toggle("show", !anyVisible);
+  }
+
+  document.querySelectorAll(".seg button").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".seg button").forEach(function(b){ b.setAttribute("aria-pressed", "false"); });
+      btn.setAttribute("aria-pressed", "true");
+      currentFilter = btn.dataset.filter;
+      applyFilters();
+    });
+  });
+
+  document.getElementById("search").addEventListener("input", function(e){
+    currentQuery = e.target.value.trim().toLowerCase();
+    applyFilters();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", function(){
+    if (!confirm("Barcha belgilangan bandlarni tozalashni tasdiqlaysizmi?")) return;
+    state = {};
+    saveState();
+    main.querySelectorAll(".cb").forEach(function(cb){ cb.checked = false; });
+    main.querySelectorAll(".item").forEach(function(li){ li.classList.remove("done"); });
+    recompute();
+  });
+
+  loadState();
+  document.querySelectorAll(".cb").forEach(function(cb){
+    var id = cb.id.replace("cb-", "");
+    if (state[id]) { cb.checked = true; cb.closest(".item").classList.add("done"); }
+  });
+  recompute();
+  applyFilters();
+})();
+</script>

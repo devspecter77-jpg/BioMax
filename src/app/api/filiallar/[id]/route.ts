@@ -1,0 +1,77 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
+import { sessionFilialId } from '@/lib/filial-scope'
+
+function faqatEga(session: any) {
+  const rol = session?.user?.rol
+  return !!session && rol === 'ADMIN' && !sessionFilialId(session)
+}
+
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const session = await auth()
+    if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
+    if (!faqatEga(session)) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+
+    const filial = await prisma.filial.findUnique({
+      where: { id },
+      include: { _count: { select: { xodimlar: true } } },
+    })
+    if (!filial) return NextResponse.json({ xato: 'Filial topilmadi' }, { status: 404 })
+
+    const [tovarSoni, mijozSoni, qarzdorlar] = await Promise.all([
+      prisma.tovar.count({ where: { filialId: id, holati: 'FAOL' } }),
+      prisma.mijoz.count({ where: { filialId: id } }),
+      prisma.nasiya.findMany({
+        where: {
+          mijoz: { filialId: id },
+          holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] },
+          qoldiq: { gt: 0 },
+        },
+        select: { mijozId: true },
+        distinct: ['mijozId'],
+      }),
+    ])
+
+    return NextResponse.json({ ...filial, tovarSoni, mijozSoni, qarzdorSoni: qarzdorlar.length })
+  } catch {
+    return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
+  }
+}
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const session = await auth()
+    if (!faqatEga(session)) {
+      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    }
+
+    const { nomi, manzil, telefon, faol } = await req.json()
+    const filial = await prisma.filial.update({
+      where: { id },
+      data: { nomi, manzil: manzil || null, telefon: telefon || null, faol },
+    })
+
+    return NextResponse.json(filial)
+  } catch {
+    return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
+  }
+}
+
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const session = await auth()
+    if (!faqatEga(session)) {
+      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    }
+
+    await prisma.filial.update({ where: { id }, data: { faol: false } })
+    return NextResponse.json({ ok: true })
+  } catch {
+    return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
+  }
+}

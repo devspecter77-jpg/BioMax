@@ -8,12 +8,21 @@ import {
   telegramDisconnect,
   testXabarYuborish,
 } from '@/lib/telegram'
+import { sessionFilialId } from '@/lib/filial-scope'
+
+// Telegram — butun kompaniya uchun umumiy ulanish. Faqat bosh egasi (Ega,
+// filialId yo'q) boshqarishi kerak — filial egasi bu umumiy hisobni
+// o'zgartira olmasligi/uza olmasligi kerak.
+function faqatEga(session: any) {
+  const rol = session?.user?.rol
+  return !!session && rol === 'ADMIN' && !sessionFilialId(session)
+}
 
 // GET — Telegram holati va so'nggi loglar
 export async function GET() {
   try {
     const session = await auth()
-    if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
+    if (!faqatEga(session)) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
 
     const status = await telegramStatus()
 
@@ -49,7 +58,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!faqatEga(session)) {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 
@@ -74,7 +83,7 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!faqatEga(session)) {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 

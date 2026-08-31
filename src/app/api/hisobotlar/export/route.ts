@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest) {
 
   const rol = (session.user as { rol?: string })?.rol
   if (rol === 'KASSIR') return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+  const filialId = sessionFilialId(session)
 
   const { searchParams } = new URL(req.url)
   const tur = (searchParams.get('tur') || 'oylik') as ReportTur
@@ -20,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   const [sotuvlar, xarajatlar, qaytarishSum] = await Promise.all([
     prisma.sotuv.findMany({
-      where: baseSotuvFilter(d, g),
+      where: baseSotuvFilter(d, g, undefined, filialId),
       include: {
         tarkiblar: {
           include: {
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.xarajat.findMany({ where: { sana: { gte: d, lt: g } } }),
     prisma.qaytarish.aggregate({
-      where: { yaratilgan: { gte: d, lt: g } },
+      where: { yaratilgan: { gte: d, lt: g }, ...(filialId ? { aslSotuv: { filialId } } : {}) },
       _sum: { jamiSumma: true },
     }),
   ])

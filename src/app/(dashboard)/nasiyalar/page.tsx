@@ -8,6 +8,7 @@ import ViewToggle from '@/components/ViewToggle'
 import MoneyInput from '@/components/ui/money-input'
 import DateInput from '@/components/ui/date-input'
 import SearchBar from '@/components/ui/search-bar'
+import { useConfirm } from '@/components/ConfirmProvider'
 
 interface NasiyaTolov {
   id: string
@@ -58,6 +59,7 @@ const holatiConfig = {
 }
 
 export default function NasiyalarPage() {
+  const confirm = useConfirm()
   const [nasiyalar, setNasiyalar] = useState<Nasiya[]>([])
   const [barchasi, setBarchasi] = useState<Nasiya[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
@@ -222,7 +224,7 @@ export default function NasiyalarPage() {
   }
 
   async function nasiyaOchirish(id: string, ism: string) {
-    if (!confirm(`"${ism}" nasiyasini o'chirishni tasdiqlaysizmi?`)) return
+    if (!(await confirm(`"${ism}" nasiyasini o'chirishni tasdiqlaysizmi?`))) return
     const res = await fetch(`/api/nasiyalar/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('Nasiya o\'chirildi')
@@ -518,7 +520,7 @@ export default function NasiyalarPage() {
 
       {/* Tahrirlash modal */}
       {tahrirlashModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Nasiyani tahrirlash</h3>
@@ -597,7 +599,7 @@ export default function NasiyalarPage() {
 
       {/* Qarz qo'shish modal */}
       {qarzQoshishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
               <div>
@@ -647,7 +649,7 @@ export default function NasiyalarPage() {
 
       {/* Nasiya qo'shish modal */}
       {qoshishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Nasiya qo&apos;shish</h3>
@@ -730,7 +732,7 @@ export default function NasiyalarPage() {
 
       {/* To'lov modal */}
       {tolovModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             {/* Modal header with progress info */}
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">

@@ -1,4 +1,20 @@
 #!/bin/bash
+# =============================================================================
+#  FIRST-TIME SETUP ONLY.  For routine updates use:  bash update.sh
+#
+#  This script installs system packages, rewrites the nginx config, requests a
+#  certificate and does `pm2 delete` + `pm2 start` — a full stop/start.  Running
+#  it against a live site is what produced the "Failed to find Server Action"
+#  errors and the 833 restarts: the build overwrites .next while users are
+#  mid-session.  update.sh builds off to the side and swaps atomically instead.
+# =============================================================================
+if [ "${I_KNOW_THIS_IS_FIRST_TIME_SETUP:-}" != "yes" ]; then
+  echo "REFUSING TO RUN."
+  echo "  Routine update -> bash update.sh"
+  echo "  Genuine first-time setup -> I_KNOW_THIS_IS_FIRST_TIME_SETUP=yes bash deploy.sh"
+  exit 1
+fi
+
 # Deploy script for qaqnus222.biznesjon.uz
 # Run on VPS: bash deploy.sh
 

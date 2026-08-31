@@ -35,16 +35,16 @@ const XaridlarTab = lazy(() =>
   import('./_tabs/XaridlarTab').then((m) => ({ default: m.XaridlarTab })),
 )
 
-const TAB_LIST: Array<{ key: string; label: string; adminOnly?: boolean }> = [
+const TAB_LIST: Array<{ key: string; label: string }> = [
   { key: 'umumiy', label: 'Umumiy' },
-  { key: 'moliya', label: 'Moliya', adminOnly: true },
+  { key: 'moliya', label: 'Moliya' },
   { key: 'sotuv', label: 'Sotuv' },
-  { key: 'tovarlar', label: 'Tovarlar', adminOnly: true },
-  { key: 'ombor', label: 'Ombor', adminOnly: true },
-  { key: 'mijozlar', label: 'Mijozlar', adminOnly: true },
-  { key: 'nasiya', label: 'Nasiya', adminOnly: true },
-  { key: 'xaridlar', label: 'Xaridlar', adminOnly: true },
-  { key: 'kassirlar', label: 'Kassirlar', adminOnly: true },
+  { key: 'tovarlar', label: 'Tovarlar' },
+  { key: 'ombor', label: 'Ombor' },
+  { key: 'mijozlar', label: 'Mijozlar' },
+  { key: 'nasiya', label: 'Nasiya' },
+  { key: 'xaridlar', label: 'Xaridlar' },
+  { key: 'kassirlar', label: 'Kassirlar' },
 ]
 
 const TAB_COMPONENTS = {
@@ -60,10 +60,10 @@ const TAB_COMPONENTS = {
 } as const
 
 // Inner component that uses useSearchParams (via useReportFilters) — must be inside Suspense
-function HisobotlarInner({ isKassir }: { isKassir: boolean }) {
+function HisobotlarInner({ isKassir, ruxsatlar }: { isKassir: boolean; ruxsatlar: string[] | null }) {
   const { filtrlar, yangilash } = useReportFilters()
 
-  const visibleTabs = TAB_LIST.filter((t) => !t.adminOnly || !isKassir)
+  const visibleTabs = TAB_LIST.filter((t) => ruxsatlar === null || ruxsatlar.includes('hisobotlar.' + t.key))
   const ActiveTab =
     TAB_COMPONENTS[filtrlar.tab as keyof typeof TAB_COMPONENTS] ?? UmumiyTab
 
@@ -134,6 +134,7 @@ function HisobotlarInner({ isKassir }: { isKassir: boolean }) {
 export default function HisobotlarPage() {
   const { data: session } = useSession()
   const isKassir = (session?.user as { rol?: string } | undefined)?.rol === 'KASSIR'
+  const ruxsatlar = (session?.user as { ruxsatlar?: string[] | null } | undefined)?.ruxsatlar ?? null
 
   return (
     <div className="space-y-4">
@@ -145,7 +146,7 @@ export default function HisobotlarPage() {
           </div>
         }
       >
-        <HisobotlarInner isKassir={isKassir} />
+        <HisobotlarInner isKassir={isKassir} ruxsatlar={ruxsatlar} />
       </Suspense>
     </div>
   )

@@ -1,19 +1,6 @@
 import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
-
-// KASSIR faqat bu yo'llarga kira oladi
-const KASSIR_RUXSAT = [
-  '/sotuv',
-  '/buyurtmalar',
-  '/tovarlar',
-  '/ombor',
-  '/mijozlar',
-  '/nasiyalar',
-  '/xaridlar',
-  '/sherikdan-olish',
-  '/hisobotlar',
-  '/api/',
-]
+import { barchaRuxsatKalitlari } from '@/lib/ruxsat-katalogi'
 
 export default auth((req) => {
   const { pathname } = req.nextUrl
@@ -28,14 +15,20 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  // KASSIR cheklovi
+  // API so'rovlari va bosh sahifa — har doim ochiq (API'lar o'zi tekshiradi,
+  // bosh sahifa hamma rolga ruxsat)
+  if (pathname.startsWith('/api/') || pathname === '/') {
+    return NextResponse.next()
+  }
+
+  // Ruxsatlar bo'yicha tekshiruv — ADMIN cheklanmaydi
   const rol = (req.auth.user as any)?.rol
-  if (rol === 'KASSIR') {
-    // Bosh sahifa — ruxsat
-    if (pathname === '/') return NextResponse.next()
-    const ruxsatBor = KASSIR_RUXSAT.some(p => pathname.startsWith(p))
-    if (!ruxsatBor) {
-      return NextResponse.redirect(new URL('/sotuv', req.url))
+  if (rol && rol !== 'ADMIN') {
+    const ruxsatlar: string[] = (req.auth.user as any)?.ruxsatlar || []
+    const bolimKalit = pathname.slice(1).split('/')[0]
+    const katalogdaBorMi = barchaRuxsatKalitlari.includes(bolimKalit)
+    if (katalogdaBorMi && !ruxsatlar.includes(bolimKalit)) {
+      return NextResponse.redirect(new URL('/', req.url))
     }
   }
 

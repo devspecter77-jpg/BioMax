@@ -32,8 +32,8 @@ function StatCard({
   const body = (
     <div className="flex items-start justify-between">
       <div className="min-w-0 flex-1">
-        <p className="text-gray-500 dark:text-gray-500 text-sm">{sarlavha}</p>
-        <p className={`text-2xl font-bold mt-1 ${rang}`}>{qiymat}</p>
+        <p className="text-gray-500 dark:text-gray-500 text-xs font-mono uppercase tracking-wide">{sarlavha}</p>
+        <p className={`text-2xl font-bold mt-1.5 font-mono tabular-nums ${rang}`}>{qiymat}</p>
         {qoshimcha && <p className="text-gray-400 dark:text-gray-600 text-xs mt-1">{qoshimcha}</p>}
       </div>
       <div className={`w-11 h-11 ${iconBg} rounded-xl flex items-center justify-center shrink-0 ml-3`}>
@@ -42,8 +42,8 @@ function StatCard({
     </div>
   )
 
-  const className = `bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5 transition ${
-    href ? 'hover:shadow-md hover:ring-2 hover:ring-red-500/30 cursor-pointer' : 'hover:shadow-md'
+  const className = `bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 dark:border-l-[3px] dark:border-l-[#2E9B6B] rounded-2xl p-5 transition ${
+    href ? 'hover:shadow-md hover:ring-2 hover:ring-primary/30 cursor-pointer' : 'hover:shadow-md'
   }`
 
   if (href) {
@@ -77,7 +77,7 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-gray-400 dark:text-gray-600 flex items-center gap-3">
-          <Loader2 className="animate-spin w-6 h-6 text-red-500" />
+          <Loader2 className="animate-spin w-6 h-6 text-primary" />
           <span>Yuklanmoqda...</span>
         </div>
       </div>
@@ -95,9 +95,9 @@ export default function DashboardPage() {
           sarlavha="Sotuv"
           qiymat={formatSum(data.jamiSotuv)}
           rang="text-gray-900 dark:text-gray-100"
-          iconBg="bg-red-500"
+          iconBg="bg-primary"
           qoshimcha={`${data.sotuvSoni} ta sotuv`}
-          href="/sotuvlar"
+          href="/xaridlar"
         />
         <StatCard
           icon={TrendingUp}
@@ -130,26 +130,26 @@ export default function DashboardPage() {
             <AreaChart data={data.grafikData || []} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
               <defs>
                 <linearGradient id="sotuvGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#DC2626" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#DC2626" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#2E9B6B" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#2E9B6B" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="sana" stroke="#6b7280" tick={{ fontSize: 12, fill: '#9ca3af' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#435046" />
+              <XAxis dataKey="sana" stroke="#748577" tick={{ fontSize: 12, fill: '#97A89D' }} />
               <YAxis
-                stroke="#6b7280"
-                tick={{ fontSize: 11, fill: '#9ca3af' }}
+                stroke="#748577"
+                tick={{ fontSize: 11, fill: '#97A89D' }}
                 tickFormatter={(v) => (v / 1000000).toFixed(1) + 'M'}
               />
               <Tooltip
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '12px', color: '#f9fafb' }}
-                labelStyle={{ color: '#9ca3af', fontSize: 12 }}
+                contentStyle={{ backgroundColor: '#1A211C', border: '1px solid #313B34', borderRadius: '12px', color: '#EDF2EF' }}
+                labelStyle={{ color: '#97A89D', fontSize: 12 }}
                 formatter={(value: number | undefined) => [formatSum(value ?? 0), 'Sotuv']}
               />
               <Area
                 type="monotone"
                 dataKey="sotuv"
-                stroke="#DC2626"
+                stroke="#0F5C3E"
                 strokeWidth={2}
                 fill="url(#sotuvGradient)"
               />
@@ -167,7 +167,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {data.topTovarlar.map((tovar, i) => (
               <div key={i} className="flex items-center gap-3">
-                <span className="w-6 h-6 bg-red-50 text-red-600 rounded-lg flex items-center justify-center text-xs font-bold shrink-0">
+                <span className="w-6 h-6 bg-primary-light dark:bg-[#132B20] text-primary dark:text-[#2E9B6B] rounded-lg flex items-center justify-center text-xs font-bold font-mono shrink-0">
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">

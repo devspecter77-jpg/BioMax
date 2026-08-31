@@ -13,6 +13,15 @@ function formatSana(d: Date) {
   return d.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// Mijozlar telefoni bazada har xil formatda saqlangan: ba'zisi "+998901234567"
+// (qo'lda kiritilgan), ba'zisi "901234567" (PhoneInput'dan — faqat 9 xonali,
+// kod yo'q). Telegram ImportContacts to'liq xalqaro raqam ("998901234567",
+// "+"siz) talab qiladi — shuning uchun har doim shu formatga keltiramiz.
+function normalizePhone(telefon: string): string {
+  const digits = telefon.replace(/\D/g, '')
+  return digits.length === 9 ? '998' + digits : digits
+}
+
 const SITE_URL = process.env.NEXTAUTH_URL || 'https://qaqnus222.biznesjon.uz'
 
 function chekLinki(chekRaqami: string): string {
@@ -156,8 +165,7 @@ function isCacheOnlyMode(): boolean {
 
 function isPhoneCached(telefon: string | null | undefined): boolean {
   if (!telefon) return false
-  const clean = telefon.replace(/[\s\-()]/g, '')
-  return _entityCache.has(clean)
+  return _entityCache.has(normalizePhone(telefon))
 }
 
 async function getClient(): Promise<TelegramClient | null> {
@@ -235,7 +243,7 @@ async function waitForRateLimit(): Promise<void> {
 // (Resolve + Import + Delete) edi, endi 0 API (cache) yoki 2 API (faqat 1-marta).
 
 async function resolvePhone(client: TelegramClient, telefon: string): Promise<Api.TypeUser | null> {
-  const cleanPhone = telefon.replace(/[\s\-()]/g, '')
+  const cleanPhone = normalizePhone(telefon)
 
   // 1) Abadiy cache — bir marta resolve qilingan mijoz keyin qayta API call talab qilmaydi
   const cached = _entityCache.get(cleanPhone)
@@ -320,8 +328,7 @@ async function sendMessageToPhone(
 
     const user = await resolvePhone(client, telefon)
     if (!user) {
-      const cleanPhone = telefon.replace(/[\s\-()]/g, '')
-      return { ok: false, xato: `${cleanPhone} raqami Telegramda topilmadi` }
+      return { ok: false, xato: `${normalizePhone(telefon)} raqami Telegramda topilmadi` }
     }
 
     await client.sendMessage(user, { message: xabar })
@@ -734,6 +741,45 @@ async function xabarYuborVaSaqla(params: {
   return { ok: true, logId: log.id }
 }
 
+// ─── Darhol yuborish (queue'siz) — bitta hodisali xabarlar uchun ────────────
+//
+// sotuv/qarz/to'lov — har biri bitta aniq voqea, tabiiy ravishda kam-kam
+// sodir bo'ladi (kassir ketma-ket 100 ta sotuvni bir soniyada qila olmaydi).
+// Shuning uchun bularni navbatga qo'yib, doimiy fon jarayonini kutishning
+// hojati yo'q — to'g'ridan-to'g'ri yuboramiz. Bu serverless (Vercel) muhitda
+// ham ishlaydi, chunki doimiy jarayon talab qilinmaydi — faqat bitta so'rov
+// davomida yuborib, natijasini saqlaymiz.
+async function xabarDarholYuborVaSaqla(params: {
+  nasiyaId: string | null
+  mijozId: string
+  xabarTuri: string
+  xabar: string
+  telefon: string
+}): Promise<{ ok: boolean; xato?: string }> {
+  const natija = await sendMessageToPhone(params.telefon, params.xabar)
+
+  await prisma.bildirishnomLog.create({
+    data: {
+      nasiyaId: params.nasiyaId,
+      mijozId: params.mijozId,
+      xabarTuri: params.xabarTuri,
+      xabarMatni: params.xabar,
+      telegramTarget: params.telefon,
+      status: natija.ok ? 'sent' : (natija.queued ? 'queued' : 'failed'),
+      yuborildi: natija.ok,
+      xato: natija.xato || null,
+      urinishSoni: 1,
+      yuborilganSana: natija.ok ? new Date() : null,
+      // Flood bo'lsa — keyinroq qayta urinish uchun navbatda qoldiramiz
+      // (agar fon jarayoni ishlab tursa, u avtomatik oladi; aks holda
+      // qo'lda "qayta yuborish" orqali ham jo'natish mumkin).
+      keyingiUrinish: natija.queued ? new Date(Date.now() + 5 * 60 * 1000) : null,
+    },
+  }).catch((e) => console.error('[Telegram] Log saqlash xatosi:', e))
+
+  return natija
+}
+
 // ─── Queue worker: bitta tick, max QUEUE_BATCH_SIZE xabar yuboradi ──────────
 //
 // Pattern: pending/queued/retry holatdagi xabarlarni keyingiUrinish vaqti
@@ -772,7 +818,7 @@ export async function queueWorkerTick(): Promise<void> {
     const expiredSales = await prisma.bildirishnomLog.updateMany({
       where: {
         status: { in: ['pending', 'queued'] },
-        xabarTuri: { in: ['nasiya_yaratildi', 'qarz_qoshildi', 'tolov_qilindi'] },
+        xabarTuri: { in: ['nasiya_yaratildi', 'qarz_qoshildi', 'tolov_qilindi', 'sotuv_cheki'] },
         sana: { lt: expireBeforeSale },
       },
       data: {
@@ -989,7 +1035,7 @@ export async function nasiyaYaratildiXabarToliq(
     `\n🔗 Chek: ${chekLinki(data.chekRaqami)}\n` +
     `\nIltimos, o'z vaqtida to'lang.`
 
-  return xabarYuborVaSaqla({
+  return xabarDarholYuborVaSaqla({
     nasiyaId,
     mijozId,
     xabarTuri: 'nasiya_yaratildi',
@@ -1019,7 +1065,7 @@ export async function qarzQoshildiXabar(nasiyaId: string, mijozId: string, summa
     chekLink +
     `\nIltimos, o'z vaqtida to'lang.`
 
-  return xabarYuborVaSaqla({
+  return xabarDarholYuborVaSaqla({
     nasiyaId,
     mijozId,
     xabarTuri: 'qarz_qoshildi',
@@ -1045,10 +1091,47 @@ export async function tolovQilindiXabar(nasiyaId: string, mijozId: string, tolov
     ? `✅ Nasiya to'liq to'landi!\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq: 0 so'm${chekLink}\n\nRahmat, nasiyangiz yopildi! ✅`
     : `💳 To'lov qabul qilindi\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq qarz: ${formatSum(qoldiq)}${chekLink}\n\nRahmat!`
 
-  return xabarYuborVaSaqla({
+  return xabarDarholYuborVaSaqla({
     nasiyaId,
     mijozId,
     xabarTuri: 'tolov_qilindi',
+    xabar,
+    telefon: mijoz.telefon,
+  })
+}
+
+const TOLOV_LABEL: Record<string, string> = {
+  NAQD: 'Naqd', KARTA: 'Karta', ARALASH: 'Aralash', SHERIK: 'Sherik',
+}
+
+export async function sotuvChekiXabar(
+  sotuvId: string,
+  mijozId: string,
+  data: { chekRaqami: string; summasi: number; tolovUsuli: string; mijozIsm?: string }
+) {
+  if (!(await isTelegramEnabled())) return
+
+  const mijoz = await prisma.mijoz.findUnique({ where: { id: mijozId } })
+  if (!mijoz?.telefon) return
+
+  const dokonNomi = (await getSozlama('dokon_nomi')) || "Do'kon"
+  const mahsulotlarMatni = await getMahsulotlarMatni(sotuvId)
+
+  const xabar =
+    `🧾 Xaridingiz uchun rahmat!\n\n` +
+    `🏪 ${dokonNomi}\n` +
+    `👤 ${data.mijozIsm || mijoz.ism}\n` +
+    `🧾 Chek: ${data.chekRaqami}\n` +
+    mahsulotlarMatni +
+    `\n💰 Jami: ${formatSum(data.summasi)}\n` +
+    `💳 To'lov: ${TOLOV_LABEL[data.tolovUsuli] || data.tolovUsuli}\n` +
+    `\n🔗 Chek: ${chekLinki(data.chekRaqami)}\n` +
+    `\nBizni tanlaganingiz uchun rahmat! 🙏`
+
+  return xabarDarholYuborVaSaqla({
+    nasiyaId: null,
+    mijozId,
+    xabarTuri: 'sotuv_cheki',
     xabar,
     telefon: mijoz.telefon,
   })

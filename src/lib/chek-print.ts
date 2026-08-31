@@ -58,13 +58,12 @@ export interface ChekPrintOptions {
   data: ChekData
   dokonInfo?: ChekDokonInfo
   til?: 'lotin' | 'kirill'
-  telegramQrBase64?: string
   fontSize?: number
 }
 
 // Chek HTML qurish (thermal 80mm)
 export function buildChekHtml(opts: ChekPrintOptions): string {
-  const { data: s, dokonInfo = {}, til = 'lotin', telegramQrBase64 = '', fontSize = 11 } = opts
+  const { data: s, dokonInfo = {}, til = 'lotin', fontSize = 11 } = opts
   const sz = fontSize
 
   const t = (text: string) => til === 'kirill' ? toKirill(text) : text
@@ -97,10 +96,6 @@ export function buildChekHtml(opts: ChekPrintOptions): string {
     : `<tr><td>${t("To'lov")}:</td><td style="text-align:right">${s.tolovUsuli === 'KARTA' ? t('Karta') : t('Naqd pul')}</td></tr>`
 
   const kassirHtml = kassirTel ? `<div>${t('Kassir tel')}: ${kassirTel}</div>` : ''
-  const qrHtml = telegramQrBase64 ? `<div class="sep"></div>
-<div class="center" style="font-size:${sz - 1}px;margin-top:2mm">${t('Telegram kanalimiz')}</div>
-<div class="center" style="margin-top:1mm"><img src="${telegramQrBase64}" alt="Telegram QR" style="width:25mm;height:25mm;display:inline-block" /></div>
-<div class="center" style="font-size:${sz - 2}px;margin-top:1mm;color:#333">${t('QR-kodni skanerlang')}</div>` : ''
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('Chek')} ${s.chekRaqami}</title>
 <style>
@@ -135,7 +130,6 @@ ${kassirHtml}
 <div class="sep"></div>
 <table>${tolov}</table>
 ${chekMatn ? `<div class="sep"></div><div class="center" style="font-size:${sz - 1}px">${chekMatn}</div>` : ''}
-${qrHtml}
 <div class="sep"></div>
 <div class="center" style="font-size:10px">${t('Rahmat')}!</div>
 </div>

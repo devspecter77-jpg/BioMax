@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,12 +22,13 @@ export async function GET(req: NextRequest) {
       1,
       Math.ceil((g.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)),
     )
+    const filialId = sessionFilialId(session)
 
     // Sotilgan miqdor (davrda) — SotuvTarkibi grouped by tovarId
     const sotilgan = await prisma.sotuvTarkibi.groupBy({
       by: ['tovarId'],
       _sum: { miqdor: true },
-      where: { sotuv: baseSotuvFilter(d, g) },
+      where: { sotuv: baseSotuvFilter(d, g, undefined, filialId) },
     })
     const sotilganMap = new Map(
       sotilgan.map((s) => [s.tovarId, Number(s._sum.miqdor || 0)]),
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
     const harakatlar = await prisma.omborHarakati.groupBy({
       by: ['tovarId', 'turi'],
       _sum: { miqdor: true },
+      where: filialId ? { tovar: { filialId } } : {},
     })
     const qoldiqMap = new Map<string, number>()
     for (const h of harakatlar) {
@@ -50,7 +53,7 @@ export async function GET(req: NextRequest) {
 
     // Aktiv tovarlar
     const tovarlar = await prisma.tovar.findMany({
-      where: { holati: 'FAOL' },
+      where: { holati: 'FAOL', ...(filialId ? { filialId } : {}) },
       select: { id: true, nomi: true, birlik: true },
     })
 

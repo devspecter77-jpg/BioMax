@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { signIn, getSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Eye, EyeOff, User, Lock, AlertCircle } from 'lucide-react'
+import { Loader2, Eye, EyeOff, Lock, AlertCircle } from 'lucide-react'
+import PhoneInput from '@/components/ui/phone-input'
 
 export default function LoginForm() {
   const router = useRouter()
@@ -29,9 +30,8 @@ export default function LoginForm() {
     if (natija?.error) {
       setXato("Login yoki parol noto'g'ri!")
     } else {
-      const session = await getSession()
-      const rol = (session?.user as any)?.rol
-      router.push(rol === 'SOTUVCHI' ? '/sotuvchi' : '/')
+      await getSession()
+      router.push('/')
       router.refresh()
     }
   }
@@ -40,31 +40,22 @@ export default function LoginForm() {
     <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl shadow-black/5 dark:shadow-none border border-gray-100 dark:border-neutral-800 p-8">
 
       <div className="mb-7">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Tizimga kirish</h2>
+        <h2 className="text-xl font-bold text-primary">Tizimga kirish</h2>
         <p className="text-gray-500 dark:text-gray-500 text-sm mt-1">Hisobingizga kiring</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Login input */}
+        {/* Telefon raqam input */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-            Login
+            Telefon raqam
           </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <User size={16} className="text-gray-400 dark:text-gray-500" />
-            </div>
-            <input
-              type="text"
-              value={login}
-              onChange={(e) => setLogin(e.target.value)}
-              placeholder="Loginni kiriting"
-              required
-              autoComplete="username"
-              autoFocus
-              className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent focus:bg-white dark:focus:bg-neutral-800 transition-all text-sm"
-            />
-          </div>
+          <PhoneInput
+            value={login}
+            onChange={setLogin}
+            required
+            className="py-3 rounded-xl bg-gray-50 dark:bg-neutral-800 focus-within:ring-primary"
+          />
         </div>
 
         {/* Parol input */}
@@ -83,7 +74,7 @@ export default function LoginForm() {
               placeholder="Parolni kiriting"
               required
               autoComplete="current-password"
-              className="w-full pl-10 pr-11 py-3 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent focus:bg-white dark:focus:bg-neutral-800 transition-all text-sm"
+              className="w-full pl-10 pr-11 py-3 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white dark:focus:bg-neutral-800 transition-all text-sm"
             />
             <button
               type="button"
@@ -109,7 +100,7 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={yuklanmoqda || !login || !parol}
-          className="w-full py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-150 shadow-md shadow-red-600/25 mt-2"
+          className="w-full py-3 bg-primary hover:bg-primary-hover active:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-150 shadow-md shadow-primary/25 mt-2"
         >
           {yuklanmoqda ? (
             <span className="flex items-center justify-center gap-2">

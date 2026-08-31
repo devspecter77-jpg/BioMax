@@ -1,18 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import dynamic from 'next/dynamic'
 import { formatSum } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Loader2, SlidersHorizontal, QrCode, Printer, CheckSquare2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Loader2, Package } from 'lucide-react'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
-
-// Dynamic import to avoid SSR issues with react-barcode
-const Barcode = dynamic(() => import('react-barcode'), { ssr: false })
+import { useConfirm } from '@/components/ConfirmProvider'
 
 interface Kategoriya { id: string; nomi: string }
 interface Tovar {
@@ -23,15 +20,25 @@ interface Tovar {
 }
 
 const BIRLIKLAR = ['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI']
+const QOLDIQ_LABEL: Record<string, string> = {
+  DONA: 'Necha dona bor?', KG: 'Necha kg bor?', LITR: 'Necha litr bor?',
+  METR: 'Necha metr bor?', PACHKA: 'Necha pachka bor?', QUTI: 'Necha quti bor?',
+}
+const QOLDIQ_QOSHISH_LABEL: Record<string, string> = {
+  DONA: "Yana necha dona qo'shmoqchisiz?", KG: "Yana necha kg qo'shmoqchisiz?", LITR: "Yana necha litr qo'shmoqchisiz?",
+  METR: "Yana necha metr qo'shmoqchisiz?", PACHKA: "Yana necha pachka qo'shmoqchisiz?", QUTI: "Yana necha quti qo'shmoqchisiz?",
+}
 
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition'
 
 export default function TovarlarPage() {
+  const confirm = useConfirm()
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
   const [kategoriyalar, setKategoriyalar] = useState<Kategoriya[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
   const [modal, setModal] = useState(false)
+  const [saqlanmoqda, setSaqlanmoqda] = useState(false)
   const [tahrirlash, setTahrirlash] = useState<Tovar | null>(null)
   const [importYuklanmoqda, setImportYuklanmoqda] = useState(false)
   const [importModal, setImportModal] = useState(false)
@@ -43,77 +50,11 @@ export default function TovarlarPage() {
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
-    sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0'
+    sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0'
   })
-
-  // Qoldiq sozlash state
-  const [qoldiqModal, setQoldiqModal] = useState(false)
-  const [qoldiqTovar, setQoldiqTovar] = useState<{ id: string; nomi: string; qoldiq: number } | null>(null)
-  const [yangiQoldiq, setYangiQoldiq] = useState('')
-  const [qoldiqYuklanmoqda, setQoldiqYuklanmoqda] = useState(false)
-
-  // Barcode print state
-  const [barcodeModal, setBarcodeModal] = useState(false)
-  const [barcodeTovar, setBarcodeTovar] = useState<{ id: string; nomi: string; shtrixKod: string | null; sotishNarxi: number } | null>(null)
-  const [senik, setSenik] = useState<'57x39' | '40x30'>('57x39')
 
   // Render limit
   const [renderLimit, setRenderLimit] = useState(50)
-
-  // Bulk selection state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-
-  function toggleSelect(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  function toggleSelectAll(filtered: Tovar[]) {
-    const withCode = filtered.filter(t => t.shtrixKod)
-    const allSelected = withCode.every(t => selectedIds.has(t.id))
-    if (allSelected) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(withCode.map(t => t.id)))
-    }
-  }
-
-  async function barcodeBatchPrint() {
-    const selected = tovarlar.filter(t => selectedIds.has(t.id) && t.shtrixKod)
-    if (selected.length === 0) { toast.error('Shtrix kodi mavjud tovar tanlanmagan'); return }
-    const JsBarcode = (await import('jsbarcode')).default
-    const is40 = senik === '40x30'
-    const pw = is40 ? '40mm' : '2.24in'
-    const ph = is40 ? '30mm' : '1.54in'
-    const bw = is40 ? 1.2 : 1.5
-    const bh = is40 ? 30 : 45
-    const bf = is40 ? 10 : 12
-    const nf = is40 ? 11 : 15
-    const labelsHtml = selected.map((t, i) => {
-      const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      JsBarcode(svgEl, t.shtrixKod!, { format: 'CODE128', width: bw, height: bh, fontSize: bf, margin: 2, displayValue: true, xmlDocument: document })
-      svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-      svgEl.setAttribute('width', '90%')
-      svgEl.removeAttribute('height')
-      const isLast = i === selected.length - 1
-      return `<div class="label"${isLast ? '' : ' style="page-break-after:always"'}><div class="nomi">${t.nomi}</div>${svgEl.outerHTML}</div>`
-    }).join('')
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{size:${pw} ${ph};margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0;background:#fff;width:${pw}}.label{width:${pw};height:${ph};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${is40 ? '1px' : '2px'};padding:${is40 ? '2px 4px' : '4px 6px'};overflow:hidden;page-break-inside:avoid}.nomi{font-family:Arial,Helvetica,sans-serif;font-size:${nf}px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:0.5px;color:#000}</style></head><body>${labelsHtml}</body></html>`
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const win = window.open(url, '_blank', `width=${is40 ? 170 : 215},height=${is40 ? 120 : 148},toolbar=no,menubar=no,location=no`)
-    if (!win) { URL.revokeObjectURL(url); return }
-    win.addEventListener('load', () => {
-      setTimeout(() => {
-        win.print()
-        win.addEventListener('afterprint', () => { win.close(); URL.revokeObjectURL(url) })
-      }, 300)
-    })
-    setSelectedIds(new Set())
-  }
 
   useEffect(() => {
     const saved = localStorage.getItem('view-preference') as 'table' | 'card' | null
@@ -150,28 +91,34 @@ export default function TovarlarPage() {
         nomi: tovar.nomi, kategoriyaId: tovar.kategoriya.id,
         shtrixKod: tovar.shtrixKod || '', kelishNarxi: String(tovar.kelishNarxi),
         sotishNarxi: String(tovar.sotishNarxi), birlik: tovar.birlik,
-        minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0'
+        minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0'
       })
     } else {
       setTahrirlash(null)
       setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
-        kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0' })
+        kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0' })
     }
     setModal(true)
   }
 
   async function saqlash(e: React.FormEvent) {
     e.preventDefault()
-    const url = tahrirlash ? `/api/tovarlar/${tahrirlash.id}` : '/api/tovarlar'
-    const method = tahrirlash ? 'PUT' : 'POST'
-    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-    if (res.ok) {
-      toast.success(tahrirlash ? 'Tovar yangilandi' : "Tovar qo'shildi")
-      setModal(false)
-      yuklash()
-    } else {
-      const err = await res.json()
-      toast.error(err.xato || 'Xatolik yuz berdi')
+    if (!form.kategoriyaId) { toast.error('Avval kategoriya tanlang yoki yarating'); return }
+    setSaqlanmoqda(true)
+    try {
+      const url = tahrirlash ? `/api/tovarlar/${tahrirlash.id}` : '/api/tovarlar'
+      const method = tahrirlash ? 'PUT' : 'POST'
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      if (res.ok) {
+        toast.success(tahrirlash ? 'Tovar yangilandi' : "Tovar qo'shildi")
+        setModal(false)
+        yuklash()
+      } else {
+        const err = await res.json()
+        toast.error(err.xato || 'Xatolik yuz berdi')
+      }
+    } finally {
+      setSaqlanmoqda(false)
     }
   }
 
@@ -197,28 +144,10 @@ export default function TovarlarPage() {
   }
 
   async function ochirish(id: string) {
-    if (!confirm('Tovarni arxivlashni xohlaysizmi?')) return
+    if (!(await confirm('Tovarni arxivlashni xohlaysizmi?'))) return
     const res = await fetch(`/api/tovarlar/${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Tovar arxivlandi'); yuklash() }
     else toast.error('Xatolik yuz berdi')
-  }
-
-  async function qoldiqSaqlash() {
-    if (!qoldiqTovar) return
-    setQoldiqYuklanmoqda(true)
-    const res = await fetch('/api/ombor/sozlash', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tovarId: qoldiqTovar.id, yangiQoldiq: parseFloat(yangiQoldiq) }),
-    })
-    setQoldiqYuklanmoqda(false)
-    if (res.ok) {
-      toast.success('Qoldiq yangilandi')
-      setQoldiqModal(false)
-      yuklash()
-    } else {
-      toast.error('Xatolik yuz berdi')
-    }
   }
 
   function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
@@ -322,8 +251,6 @@ export default function TovarlarPage() {
       {/* Table view */}
       {(() => {
         const filteredTovarlar = tovarlar.slice(0, renderLimit)
-        const withCode = tovarlar.filter(t => t.shtrixKod)
-        const allSelected = withCode.length > 0 && withCode.every(t => selectedIds.has(t.id))
         return (<>
       {view === 'table' && (
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
@@ -331,9 +258,6 @@ export default function TovarlarPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-800">
-                  <th className="px-4 py-3 w-8">
-                    <input type="checkbox" checked={allSelected} onChange={() => toggleSelectAll(filteredTovarlar)} className="w-4 h-4 rounded accent-red-600 cursor-pointer" />
-                  </th>
                   <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Tovar nomi</th>
                   <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Miqdori</th>
                   <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Kelish narxi</th>
@@ -348,14 +272,10 @@ export default function TovarlarPage() {
                 ) : filteredTovarlar.length === 0 ? (
                   <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-600 py-12">Tovarlar topilmadi</td></tr>
                 ) : filteredTovarlar.map((t, idx) => (
-                  <tr key={t.id} className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition ${selectedIds.has(t.id) ? 'bg-red-50 dark:bg-red-950/20' : idx % 2 === 0 ? '' : 'bg-gray-50/40 dark:bg-neutral-800/40'}`}>
-                    <td className="px-4 py-3 w-8">
-                      {t.shtrixKod && <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} className="w-4 h-4 rounded accent-red-600 cursor-pointer" />}
-                    </td>
+                  <tr key={t.id} className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition ${idx % 2 === 0 ? '' : 'bg-gray-50/40 dark:bg-neutral-800/40'}`}>
                     {/* Tovar nomi — title for full text on hover */}
                     <td className="px-4 py-3 whitespace-nowrap max-w-[200px]">
                       <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate" title={t.nomi}>{t.nomi}</p>
-                      {t.shtrixKod && <p className="text-gray-400 dark:text-gray-600 text-xs truncate" title={t.shtrixKod}>{t.shtrixKod}</p>}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <span className={`text-sm font-medium ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
@@ -373,22 +293,6 @@ export default function TovarlarPage() {
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Qoldiq sozlash button */}
-                        <button
-                          onClick={() => { setQoldiqTovar({ id: t.id, nomi: t.nomi, qoldiq: t.qoldiq }); setYangiQoldiq(String(t.qoldiq)); setQoldiqModal(true) }}
-                          className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950 rounded-lg transition"
-                          title="Qoldiq sozlash"
-                        >
-                          <SlidersHorizontal size={15} />
-                        </button>
-                        {/* Barcode print button */}
-                        <button
-                          onClick={() => { setBarcodeTovar({ id: t.id, nomi: t.nomi, shtrixKod: t.shtrixKod, sotishNarxi: Number(t.sotishNarxi) }); setBarcodeModal(true) }}
-                          className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950 rounded-lg transition"
-                          title="Shtrix kod"
-                        >
-                          <QrCode size={15} />
-                        </button>
                         <button onClick={() => ochModal(t)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
                           <Pencil size={15} />
                         </button>
@@ -418,59 +322,45 @@ export default function TovarlarPage() {
           ) : filteredTovarlar.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Tovarlar topilmadi</p>
           ) : filteredTovarlar.map(t => (
-            <div key={t.id} className={`relative bg-white dark:bg-neutral-900 border rounded-2xl p-4 hover:shadow-md transition-shadow ${selectedIds.has(t.id) ? 'border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20' : 'border-gray-200 dark:border-neutral-800'}`}>
-              {t.shtrixKod && (
-                <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
-                  className="absolute top-3 left-3 w-4 h-4 rounded accent-red-600 cursor-pointer" />
-              )}
-              <div className="flex items-start justify-between">
-                <div className={`min-w-0 flex-1 ${t.shtrixKod ? 'pl-6' : ''}`}>
-                  <p className="text-gray-900 dark:text-gray-100 font-semibold text-sm">{t.nomi}</p>
-                  {t.shtrixKod && <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">{t.shtrixKod}</p>}
-                </div>
-                <div className="flex items-center gap-1 shrink-0 ml-2">
-                  {/* Qoldiq sozlash button */}
-                  <button
-                    onClick={() => { setQoldiqTovar({ id: t.id, nomi: t.nomi, qoldiq: t.qoldiq }); setYangiQoldiq(String(t.qoldiq)); setQoldiqModal(true) }}
-                    className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950 rounded-lg transition"
-                    title="Qoldiq sozlash"
-                  >
-                    <SlidersHorizontal size={15} />
-                  </button>
-                  {/* Barcode print button */}
-                  <button
-                    onClick={() => { setBarcodeTovar({ id: t.id, nomi: t.nomi, shtrixKod: t.shtrixKod, sotishNarxi: Number(t.sotishNarxi) }); setBarcodeModal(true) }}
-                    className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950 rounded-lg transition"
-                    title="Shtrix kod"
-                  >
-                    <QrCode size={15} />
-                  </button>
-                  <button onClick={() => ochModal(t)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
-                    <Pencil size={15} />
-                  </button>
-                  <button onClick={() => ochirish(t.id)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
-                    <Trash2 size={15} />
-                  </button>
+            <div key={t.id} className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all">
+              {/* Rasm o'rnini bosuvchi banner — katta ikonka + yumshoq nurlanish */}
+              <div className="h-40 bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
+                <span className="absolute top-3 left-3 z-10 text-[11px] bg-primary text-white px-3 py-1.5 rounded-full font-semibold shadow-sm max-w-[65%] truncate" title={t.kategoriya.nomi}>
+                  {t.kategoriya.nomi}
+                </span>
+                <div className="absolute w-28 h-28 bg-primary/15 rounded-full blur-2xl" />
+                <Package size={64} className="text-primary relative drop-shadow-sm" strokeWidth={1.5} />
+              </div>
+
+              <div className="p-4">
+                <p className="text-gray-900 dark:text-gray-100 font-bold text-base truncate" title={t.nomi}>{t.nomi}</p>
+                <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">Mahsulot kodi: #{(t.shtrixKod || '').padStart(3, '0') || '—'}</p>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-3">
+                  <div>
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Miqdori</p>
+                    <p className={`font-bold text-sm mt-0.5 ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                      {t.qoldiq} {t.birlik.toLowerCase()}
+                    </p>
+                  </div>
+                  <div className="border-x border-gray-200 dark:border-neutral-700">
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Kelish</p>
+                    <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">{formatSum(t.kelishNarxi)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Sotish</p>
+                    <p className="text-green-600 font-semibold text-sm mt-0.5">{formatSum(t.sotishNarxi)}</p>
+                  </div>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Miqdori</p>
-                  <p className={`font-semibold text-sm ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
-                    {t.qoldiq} {t.birlik.toLowerCase()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Kelish</p>
-                  <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{formatSum(t.kelishNarxi)}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Sotish</p>
-                  <p className="text-green-600 font-semibold text-sm">{formatSum(t.sotishNarxi)}</p>
-                </div>
-              </div>
-              <div className="mt-2">
-                <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-lg font-medium">{t.kategoriya.nomi}</span>
+
+              <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2">
+                <button onClick={() => ochModal(t)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium border-r border-gray-100 dark:border-neutral-800">
+                  <Pencil size={14} /> Tahrirlash
+                </button>
+                <button onClick={() => ochirish(t.id)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium">
+                  <Trash2 size={14} /> O&apos;chirish
+                </button>
               </div>
             </div>
           ))}
@@ -478,24 +368,6 @@ export default function TovarlarPage() {
       )}
 
       </>)})()}
-
-      {/* Bulk selection floating bar */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-5 py-3 rounded-2xl shadow-2xl">
-          <CheckSquare2 size={18} className="text-red-400 dark:text-red-600" />
-          <span className="text-sm font-medium">{selectedIds.size} ta tanlandi</span>
-          <button
-            onClick={barcodeBatchPrint}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-xl text-sm font-semibold transition"
-          >
-            <Printer size={15} />
-            Barchasini chop etish
-          </button>
-          <button onClick={() => setSelectedIds(new Set())} className="text-gray-400 dark:text-gray-500 hover:text-white dark:hover:text-gray-900 transition">
-            <X size={16} />
-          </button>
-        </div>
-      )}
 
       {/* Import rejimi tanlash modali */}
       {importModal && (
@@ -548,9 +420,9 @@ export default function TovarlarPage() {
         </div>
       )}
 
-      {/* Kategoriya qo'shish modali */}
+      {/* Kategoriya qo'shish modali — tovar modali ustida chiqishi uchun yuqoriroq z-index */}
       {katModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi kategoriya</h3>
@@ -582,127 +454,10 @@ export default function TovarlarPage() {
         </div>
       )}
 
-      {/* Qoldiq sozlash modali */}
-      {qoldiqModal && qoldiqTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Qoldiq sozlash</h3>
-              <button
-                onClick={() => setQoldiqModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">{qoldiqTovar.nomi}</p>
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                  Hozirgi qoldiq: {qoldiqTovar.qoldiq}
-                </label>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Yangi qoldiq</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={yangiQoldiq}
-                  onChange={e => setYangiQoldiq(e.target.value.replace(/[^0-9.]/g, ''))}
-                  autoFocus
-                  className={inputCls}
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setQoldiqModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium"
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  onClick={qoldiqSaqlash}
-                  disabled={qoldiqYuklanmoqda}
-                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-medium transition"
-                >
-                  {qoldiqYuklanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Barcode print modali */}
-      {barcodeModal && barcodeTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Shtrix kod</h3>
-              <button
-                onClick={() => setBarcodeModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="px-3 pt-2 flex justify-center gap-2">
-              <button onClick={() => setSenik('57x39')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${senik === '57x39' ? 'bg-red-600 text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400'}`}>57×39mm</button>
-              <button onClick={() => setSenik('40x30')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${senik === '40x30' ? 'bg-red-600 text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400'}`}>40×30mm</button>
-            </div>
-            <div className="px-3 pt-3 pb-2 text-center bg-white" id="barcode-print-area">
-              <p className="font-bold tracking-wide uppercase text-gray-900" style={{ fontFamily: 'Arial, sans-serif', fontSize: senik === '40x30' ? 16 : 24, marginBottom: senik === '40x30' ? 4 : 12 }}>{barcodeTovar.nomi}</p>
-              {barcodeTovar.shtrixKod ? (
-                <div className="flex justify-center" style={{ width: '90%', margin: '0 auto' }}>
-                  <Barcode value={barcodeTovar.shtrixKod} width={senik === '40x30' ? 0.8 : 1.0} height={senik === '40x30' ? 22 : 28} fontSize={senik === '40x30' ? 8 : 9} margin={0} />
-                </div>
-              ) : (
-                <p className="text-gray-400 text-sm">Shtrix kod mavjud emas</p>
-              )}
-            </div>
-            <div className="p-4 flex gap-3">
-              <button
-                onClick={() => setBarcodeModal(false)}
-                className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium"
-              >
-                Yopish
-              </button>
-              <button
-                onClick={() => {
-                  if (!barcodeTovar.shtrixKod) return
-                  const svgEl = document.querySelector('#barcode-print-area svg')
-                  if (svgEl) { svgEl.setAttribute('width', '100%'); svgEl.removeAttribute('height') }
-                  const svgHtml = svgEl ? svgEl.outerHTML : ''
-                  const is40 = senik === '40x30'
-                  const pw = is40 ? '40mm' : '2.24in'
-                  const ph = is40 ? '30mm' : '1.54in'
-                  const nf = is40 ? 14 : 20
-                  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{size:${pw} ${ph};margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;padding:${is40 ? '2px 4px' : '4px 6px'};width:${pw};height:${ph};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${is40 ? '1px' : '2px'};overflow:hidden;background:#fff}.nomi{font-family:Arial,Helvetica,sans-serif;font-size:${nf}px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:0.5px;line-height:1.2;color:#000;-webkit-font-smoothing:none;text-rendering:geometricPrecision}svg{width:90%}</style></head><body><div class="nomi">${barcodeTovar.nomi}</div>${svgHtml}</body></html>`
-                  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-                  const url = URL.createObjectURL(blob)
-                  const win = window.open(url, '_blank', `width=${is40 ? 200 : 300},height=${is40 ? 180 : 250},toolbar=no,menubar=no,location=no`)
-                  if (!win) { URL.revokeObjectURL(url); return }
-                  win.addEventListener('load', () => {
-                    setTimeout(() => {
-                      win.print()
-                      win.addEventListener('afterprint', () => { win.close(); URL.revokeObjectURL(url) })
-                    }, 200)
-                  })
-                }}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition flex items-center justify-center gap-2"
-              >
-                <Printer size={16} />
-                Chop etish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">{tahrirlash ? 'Tovarni tahrirlash' : 'Yangi tovar'}</h3>
@@ -717,14 +472,27 @@ export default function TovarlarPage() {
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kategoriya *</label>
-                {/* Combobox replaces plain <select> for searchable category selection */}
-                <Combobox
-                  options={kategoriyalar.map(k => ({ value: k.id, label: k.nomi }))}
-                  value={form.kategoriyaId}
-                  onChange={v => setForm(f => ({ ...f, kategoriyaId: v }))}
-                  placeholder="Kategoriya tanlang"
-                  searchPlaceholder="Kategoriya qidirish..."
-                />
+                {kategoriyalar.length === 0 ? (
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl">
+                    <span className="text-amber-700 dark:text-amber-500 text-sm">Hali kategoriya yo&apos;q</span>
+                    <button
+                      type="button"
+                      onClick={() => { setKatNomi(''); setKatModal(true) }}
+                      className="shrink-0 px-3 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-medium rounded-lg transition"
+                    >
+                      + Kategoriya yaratish
+                    </button>
+                  </div>
+                ) : (
+                  /* Combobox replaces plain <select> for searchable category selection */
+                  <Combobox
+                    options={kategoriyalar.map(k => ({ value: k.id, label: k.nomi }))}
+                    value={form.kategoriyaId}
+                    onChange={v => setForm(f => ({ ...f, kategoriyaId: v }))}
+                    placeholder="Kategoriya tanlang"
+                    searchPlaceholder="Kategoriya qidirish..."
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -748,29 +516,35 @@ export default function TovarlarPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
-                  <select value={form.birlik} onChange={e => setForm(f => ({...f, birlik: e.target.value}))} className={inputCls}>
-                    {BIRLIKLAR.map(b => <option key={b} value={b}>{b.toLowerCase()}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Min. qoldiq</label>
-                  <input type="number" value={form.minimalQoldiq} onChange={e => setForm(f => ({...f, minimalQoldiq: e.target.value}))} min="0" className={inputCls} />
-                </div>
-              </div>
               <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Shtrix-kod</label>
-                <input value={form.shtrixKod} onChange={e => setForm(f => ({...f, shtrixKod: e.target.value}))} className={inputCls} />
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
+                <select value={form.birlik} onChange={e => setForm(f => ({...f, birlik: e.target.value}))} className={inputCls}>
+                  {BIRLIKLAR.map(b => <option key={b} value={b}>{b.toLowerCase()}</option>)}
+                </select>
               </div>
-              {!tahrirlash && (
+              {!tahrirlash ? (
                 <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Boshlang&apos;ich qoldiq</label>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">{QOLDIQ_LABEL[form.birlik] || 'Necha dona bor?'}</label>
                   {/* MoneyInput for initial stock quantity */}
                   <MoneyInput
                     value={form.boshlangichQoldiq}
                     onChange={v => setForm(f => ({ ...f, boshlangichQoldiq: v }))}
+                    placeholder="0"
+                    suffix=""
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                    {QOLDIQ_QOSHISH_LABEL[form.birlik] || "Yana necha dona qo'shmoqchisiz?"}
+                    <span className="text-gray-400 dark:text-gray-600 font-normal"> (ixtiyoriy)</span>
+                  </label>
+                  <p className="text-gray-400 dark:text-gray-600 text-xs mb-1.5">
+                    Hozirgi qoldiq: <span className="font-medium text-gray-600 dark:text-gray-400">{tahrirlash.qoldiq} {form.birlik.toLowerCase()}</span> — kiritilgan miqdor shunga qo&apos;shiladi.
+                  </p>
+                  <MoneyInput
+                    value={form.qoldiqQoshish}
+                    onChange={v => setForm(f => ({ ...f, qoldiqQoshish: v }))}
                     placeholder="0"
                     suffix=""
                   />
@@ -781,8 +555,9 @@ export default function TovarlarPage() {
                   className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
                   Bekor qilish
                 </button>
-                <button type="submit" className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition">
-                  {tahrirlash ? 'Saqlash' : "Qo'shish"}
+                <button type="submit" disabled={saqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  {saqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
+                  {saqlanmoqda ? 'Saqlanmoqda...' : (tahrirlash ? 'Saqlash' : "Qo'shish")}
                 </button>
               </div>
             </form>

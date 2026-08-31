@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Bebas_Neue } from 'next/font/google'
+import { Inter, Bebas_Neue, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'sonner'
 import SessionProvider from '@/components/SessionProvider'
 import { ThemeProvider } from '@/components/ThemeContext'
+import ConfirmProvider from '@/components/ConfirmProvider'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -18,9 +19,16 @@ const bebasNeue = Bebas_Neue({
   display: 'swap',
 })
 
+const plexMono = IBM_Plex_Mono({
+  weight: ['400', '500', '600'],
+  subsets: ['latin'],
+  variable: '--font-plex-mono',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
-  title: 'Qaqnus 222',
-  description: "Do'kon boshqaruv tizimi — Qaqnus 222",
+  title: 'BioMax',
+  description: "Do'kon boshqaruv tizimi — BioMax",
   manifest: '/manifest.json',
   icons: {
     icon: [
@@ -36,30 +44,40 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Qaqnus 222',
+    title: 'BioMax',
   },
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#DC2626',
+  themeColor: '#161210',
 }
+
+// Sahifa render bo'lishidan oldin .dark klassini sinxron o'rnatadi —
+// aks holda saqlangan tanlov bir lahza yaltirab, keyin o'zgarib ketadi (FOUC).
+// Standart — yorug' (qizil-oq brend) uslub.
+const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.add('dark')}}catch(e){}})()`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="uz" className={`${inter.variable} ${bebasNeue.variable}`}>
+    <html lang="uz" className={`${inter.variable} ${bebasNeue.variable} ${plexMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="antialiased font-sans">
         <ThemeProvider>
           <SessionProvider>
-            {children}
-            <Toaster
-              richColors
-              position="top-right"
-              toastOptions={{
-                style: { fontFamily: 'Inter, sans-serif' },
-              }}
-            />
+            <ConfirmProvider>
+              {children}
+              <Toaster
+                richColors
+                position="top-right"
+                toastOptions={{
+                  style: { fontFamily: 'Inter, sans-serif' },
+                }}
+              />
+            </ConfirmProvider>
           </SessionProvider>
         </ThemeProvider>
       </body>

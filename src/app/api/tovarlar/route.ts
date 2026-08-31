@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { normalizeUzbek, toKirill, toLotin } from '@/lib/utils'
 import { getStockMap } from '@/lib/stock'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,7 +18,9 @@ export async function GET(req: NextRequest) {
     const limitParam = searchParams.get('limit')
     const limit = limitParam ? parseInt(limitParam) : 0
 
+    const filialId = sessionFilialId(session)
     const where: any = {}
+    if (filialId) where.filialId = filialId
     if (holati !== 'BARCHASI') where.holati = holati
     if (kategoriyaId) where.kategoriyaId = kategoriyaId
     if (qidiruv) {
@@ -61,9 +64,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-async function keyingiShtrixKod(): Promise<string> {
+async function keyingiShtrixKod(filialId: string | null): Promise<string> {
   const barchasi = await prisma.tovar.findMany({
-    where: { shtrixKod: { not: null } },
+    where: { shtrixKod: { not: null }, filialId },
     select: { shtrixKod: true }
   })
   const raqamlar = new Set(
@@ -80,15 +83,17 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const data = await req.json()
+    const filialId = sessionFilialId(session)
 
     // Shtrix kod yo'q bo'lsa ketma-ketlikdagi bo'sh raqamni topib berish
-    const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod()
+    const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod(filialId)
 
     const tovar = await prisma.tovar.create({
       data: {
         nomi: data.nomi,
         kategoriyaId: data.kategoriyaId,
         shtrixKod: autoShtrixKod,
+        filialId,
         kelishNarxi: parseFloat(data.kelishNarxi),
         sotishNarxi: parseFloat(data.sotishNarxi),
         birlik: data.birlik || 'DONA',
@@ -118,6 +123,7 @@ export async function POST(req: NextRequest) {
     if (e.code === 'P2002') {
       return NextResponse.json({ xato: 'Bu shtrix-kod allaqachon mavjud' }, { status: 400 })
     }
+    console.error(e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
 }

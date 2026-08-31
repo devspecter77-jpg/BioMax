@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { hisoblaOrtachaChek, soatTaqsimoti } from '@/lib/analitika'
 import type { TolovUsuli } from '@prisma/client'
+import { sessionFilialId } from '@/lib/filial-scope'
 
 const TOP_N = 20
 
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
     const kassirId = searchParams.get('kassirId') || undefined
     const mijozId = searchParams.get('mijozId') || undefined
     const tolovUsuli = (searchParams.get('tolovUsuli') as TolovUsuli | null) || undefined
+    const filialId = sessionFilialId(session)
 
     const bugun = new Date()
     bugun.setHours(23, 59, 59, 999)
@@ -34,6 +36,7 @@ export async function GET(req: NextRequest) {
       tolovUsuli: tolovUsuli ?? { not: 'SHERIK' as const },
       ...(kassirId ? { kassirId } : {}),
       ...(mijozId ? { mijozId } : {}),
+      ...(filialId ? { filialId } : {}),
     }
 
     const [joriySotuvlar, qaytarishSum, topTarkiblar] = await Promise.all([
@@ -50,6 +53,7 @@ export async function GET(req: NextRequest) {
           yaratilgan: { gte: danSana, lte: gachaSana },
           ...(kassirId ? { kassirId } : {}),
           ...(mijozId ? { aslSotuv: { mijozId } } : {}),
+          ...(filialId ? { aslSotuv: { filialId } } : {}),
         },
         _sum: { jamiSumma: true },
       }),
@@ -130,7 +134,10 @@ export async function GET(req: NextRequest) {
     const qaytarishlar = await prisma.qaytarish.groupBy({
       by: ['kassirId'],
       _count: true,
-      where: { yaratilgan: { gte: danSana, lte: gachaSana } },
+      where: {
+        yaratilgan: { gte: danSana, lte: gachaSana },
+        ...(filialId ? { aslSotuv: { filialId } } : {}),
+      },
     })
     for (const q of qaytarishlar) {
       const k = kassirlar.find((x) => x.kassirId === q.kassirId)
