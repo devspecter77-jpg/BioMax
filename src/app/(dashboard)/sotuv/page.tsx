@@ -1164,7 +1164,7 @@ export default function SotuvPage() {
                 </button>
                 <button type="submit" disabled={mijozAniqlanmoqda} className="flex-1 py-2.5 bg-pos-pay hover:bg-pos-pay-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
                   {mijozAniqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  Sotuvni yakunlash
+                  {mijozAniqlanmoqda ? 'Sotilmoqda...' : 'Sotish'}
                 </button>
               </div>
             </form>

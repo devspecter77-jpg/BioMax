@@ -30,19 +30,20 @@ function StatCard({
   href?: string
 }) {
   const body = (
-    <div className="flex items-start justify-between">
+    <div className="flex items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
-        <p className="text-gray-500 dark:text-gray-500 text-xs font-mono uppercase tracking-wide">{sarlavha}</p>
-        <p className={`text-2xl font-bold mt-1.5 font-mono tabular-nums ${rang}`}>{qiymat}</p>
-        {qoshimcha && <p className="text-gray-400 dark:text-gray-600 text-xs mt-1">{qoshimcha}</p>}
+        <p className="text-gray-500 dark:text-gray-500 text-[10px] sm:text-xs font-mono uppercase tracking-wide truncate">{sarlavha}</p>
+        <p className={`text-lg sm:text-2xl font-bold mt-1 sm:mt-1.5 font-mono tabular-nums truncate ${rang}`}>{qiymat}</p>
+        {qoshimcha && <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1 truncate">{qoshimcha}</p>}
       </div>
-      <div className={`w-11 h-11 ${iconBg} rounded-xl flex items-center justify-center shrink-0 ml-3`}>
-        <Icon size={20} className="text-white" />
+      <div className={`w-8 h-8 sm:w-11 sm:h-11 ${iconBg} rounded-lg sm:rounded-xl flex items-center justify-center shrink-0`}>
+        <Icon size={16} className="text-white sm:hidden" />
+        <Icon size={20} className="text-white hidden sm:block" />
       </div>
     </div>
   )
 
-  const className = `bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 dark:border-l-[3px] dark:border-l-[#2E9B6B] rounded-2xl p-5 transition ${
+  const className = `bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 dark:border-l-[3px] dark:border-l-[#2E9B6B] rounded-xl sm:rounded-2xl p-3.5 sm:p-5 transition ${
     href ? 'hover:shadow-md hover:ring-2 hover:ring-primary/30 cursor-pointer' : 'hover:shadow-md'
   }`
 
@@ -89,7 +90,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Stat kartalar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <StatCard
           icon={ShoppingBag}
           sarlavha="Sotuv"
