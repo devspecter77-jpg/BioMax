@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
-import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2 } from 'lucide-react'
+import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -36,6 +36,7 @@ export default function OmborPage() {
   const [qidiruv, setQidiruv] = useState('')
   const [kamQolganFilter, setKamQolganFilter] = useState(false)
   const [view, setView] = useState<'table' | 'card'>('table')
+  const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [tarix, setTarix] = useState(false)
   const [harakatlar, setHarakatlar] = useState<OmborHarakat[]>([])
   const [harakatYuklanmoqda, setHarakatYuklanmoqda] = useState(false)
@@ -323,7 +324,7 @@ export default function OmborPage() {
           ) : korsatiladiganQoldiqlar.map(q => (
             <div key={q.id} className={`bg-white dark:bg-neutral-900 border rounded-2xl overflow-hidden hover:shadow-lg transition-all ${q.kamQolgan ? 'border-red-200 dark:border-red-900' : 'border-gray-200 dark:border-neutral-800 hover:border-primary/30 dark:hover:border-primary/40'}`}>
               {/* Rasm o'rnini bosuvchi banner — katta ikonka + yumshoq nurlanish */}
-              <div className={`h-40 flex items-center justify-center relative overflow-hidden ${q.kamQolgan ? 'bg-gradient-to-br from-red-50 to-white dark:from-red-950/20 dark:to-neutral-800' : 'bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800'}`}>
+              <div className={`h-56 flex items-center justify-center relative overflow-hidden ${q.kamQolgan ? 'bg-gradient-to-br from-red-50 to-white dark:from-red-950/20 dark:to-neutral-800' : 'bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800'}`}>
                 <span className="absolute top-3 left-3 z-10 text-[11px] bg-primary text-white px-3 py-1.5 rounded-full font-semibold shadow-sm max-w-[55%] truncate" title={q.kategoriya.nomi}>
                   {q.kategoriya.nomi}
                 </span>
@@ -332,7 +333,12 @@ export default function OmborPage() {
                 </span>
                 {q.rasmlar?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={q.rasmlar[0]} alt={q.nomi} className="w-full h-full object-cover" />
+                  <img
+                    src={q.rasmlar[0]}
+                    alt={q.nomi}
+                    className="w-full h-full object-cover cursor-zoom-in"
+                    onClick={(e) => { e.stopPropagation(); setRasmModal({ rasmlar: q.rasmlar!, nomi: q.nomi, index: 0 }) }}
+                  />
                 ) : (
                   <>
                     <div className={`absolute w-28 h-28 rounded-full blur-2xl ${q.kamQolgan ? 'bg-red-500/15' : 'bg-primary/15'}`} />
@@ -643,6 +649,44 @@ export default function OmborPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rasm lightbox */}
+      {rasmModal && (
+        <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-6" onClick={() => setRasmModal(null)}>
+          <button
+            onClick={() => setRasmModal(null)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+          >
+            <X size={20} />
+          </button>
+          {rasmModal.rasmlar.length > 1 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); setRasmModal(m => m && ({ ...m, index: (m.index - 1 + m.rasmlar.length) % m.rasmlar.length })) }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setRasmModal(m => m && ({ ...m, index: (m.index + 1) % m.rasmlar.length })) }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <ChevronRight size={22} />
+              </button>
+            </>
+          )}
+          <div className="flex flex-col items-center gap-3 max-w-3xl max-h-full" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={rasmModal.rasmlar[rasmModal.index]} alt={rasmModal.nomi} className="max-w-full max-h-[75vh] object-contain rounded-2xl" />
+            <div className="text-white text-center">
+              <p className="font-medium">{rasmModal.nomi}</p>
+              {rasmModal.rasmlar.length > 1 && (
+                <p className="text-white/60 text-sm mt-1">{rasmModal.index + 1} / {rasmModal.rasmlar.length}</p>
+              )}
+            </div>
           </div>
         </div>
       )}

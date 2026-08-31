@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight } from 'lucide-react'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -47,6 +47,7 @@ export default function TovarlarPage() {
   const [katModal, setKatModal] = useState(false)
   const [katNomi, setKatNomi] = useState('')
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
+  const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
     sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
@@ -337,13 +338,18 @@ export default function TovarlarPage() {
           ) : filteredTovarlar.map(t => (
             <div key={t.id} className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all">
               {/* Mahsulot rasmi (agar bo'lsa), aks holda ikonka + yumshoq nurlanish */}
-              <div className="h-40 bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
+              <div className="h-56 bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
                 <span className="absolute top-3 left-3 z-10 text-[11px] bg-primary text-white px-3 py-1.5 rounded-full font-semibold shadow-sm max-w-[65%] truncate" title={t.kategoriya.nomi}>
                   {t.kategoriya.nomi}
                 </span>
                 {t.rasmlar?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={t.rasmlar[0]} alt={t.nomi} className="w-full h-full object-cover" />
+                  <img
+                    src={t.rasmlar[0]}
+                    alt={t.nomi}
+                    className="w-full h-full object-cover cursor-zoom-in"
+                    onClick={(e) => { e.stopPropagation(); setRasmModal({ rasmlar: t.rasmlar, nomi: t.nomi, index: 0 }) }}
+                  />
                 ) : (
                   <>
                     <div className="absolute w-28 h-28 bg-primary/15 rounded-full blur-2xl" />
@@ -557,6 +563,44 @@ export default function TovarlarPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rasm lightbox */}
+      {rasmModal && (
+        <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-6" onClick={() => setRasmModal(null)}>
+          <button
+            onClick={() => setRasmModal(null)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+          >
+            <X size={20} />
+          </button>
+          {rasmModal.rasmlar.length > 1 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); setRasmModal(m => m && ({ ...m, index: (m.index - 1 + m.rasmlar.length) % m.rasmlar.length })) }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setRasmModal(m => m && ({ ...m, index: (m.index + 1) % m.rasmlar.length })) }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <ChevronRight size={22} />
+              </button>
+            </>
+          )}
+          <div className="flex flex-col items-center gap-3 max-w-3xl max-h-full" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={rasmModal.rasmlar[rasmModal.index]} alt={rasmModal.nomi} className="max-w-full max-h-[75vh] object-contain rounded-2xl" />
+            <div className="text-white text-center">
+              <p className="font-medium">{rasmModal.nomi}</p>
+              {rasmModal.rasmlar.length > 1 && (
+                <p className="text-white/60 text-sm mt-1">{rasmModal.index + 1} / {rasmModal.rasmlar.length}</p>
+              )}
+            </div>
           </div>
         </div>
       )}
