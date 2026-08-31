@@ -343,17 +343,13 @@ export default function TovarlarPage() {
                   {t.kategoriya.nomi}
                 </span>
                 {t.rasmlar?.[0] ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={t.rasmlar[0]} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-50" />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={t.rasmlar[0]}
-                      alt={t.nomi}
-                      className="relative w-full h-full object-contain p-4 cursor-zoom-in"
-                      onClick={(e) => { e.stopPropagation(); setRasmModal({ rasmlar: t.rasmlar, nomi: t.nomi, index: 0 }) }}
-                    />
-                  </>
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={t.rasmlar[0]}
+                    alt={t.nomi}
+                    className="w-full h-full object-cover cursor-zoom-in"
+                    onClick={(e) => { e.stopPropagation(); setRasmModal({ rasmlar: t.rasmlar, nomi: t.nomi, index: 0 }) }}
+                  />
                 ) : (
                   <>
                     <div className="absolute w-28 h-28 bg-primary/15 rounded-full blur-2xl" />

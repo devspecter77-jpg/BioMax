@@ -332,17 +332,13 @@ export default function OmborPage() {
                   {q.kamQolgan ? 'Kam qoldi' : 'Normal'}
                 </span>
                 {q.rasmlar?.[0] ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={q.rasmlar[0]} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-50" />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={q.rasmlar[0]}
-                      alt={q.nomi}
-                      className="relative w-full h-full object-contain p-4 cursor-zoom-in"
-                      onClick={(e) => { e.stopPropagation(); setRasmModal({ rasmlar: q.rasmlar!, nomi: q.nomi, index: 0 }) }}
-                    />
-                  </>
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={q.rasmlar[0]}
+                    alt={q.nomi}
+                    className="w-full h-full object-cover cursor-zoom-in"
+                    onClick={(e) => { e.stopPropagation(); setRasmModal({ rasmlar: q.rasmlar!, nomi: q.nomi, index: 0 }) }}
+                  />
                 ) : (
                   <>
                     <div className={`absolute w-28 h-28 rounded-full blur-2xl ${q.kamQolgan ? 'bg-red-500/15' : 'bg-primary/15'}`} />
