@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, Barcode, Tag, Calendar } from 'lucide-react'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -50,6 +50,7 @@ export default function TovarlarPage() {
   const [katNomi, setKatNomi] = useState('')
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
+  const [detailTovar, setDetailTovar] = useState<Tovar | null>(null)
   const [kursi, setKursi] = useState<number | null>(null)
   const [kursSana, setKursSana] = useState<string | null>(null)
   const [kursYangilanmoqda, setKursYangilanmoqda] = useState(false)
@@ -246,47 +247,52 @@ export default function TovarlarPage() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
         <SearchBar
           value={qidiruv}
           onChange={setQidiruv}
+          onScan={setQidiruv}
           placeholder="Tovar nomi yoki shtrix-kod..."
           className="flex-1"
         />
-        <BarcodeScanner onScan={setQidiruv} title="Mahsulotni qidirish uchun skanerlang" />
-        <button
-          onClick={kursniYangilash}
-          disabled={kursYangilanmoqda}
-          title={`Markaziy bank kursi${kursSana ? ` (${kursSana})` : ''} — bosilsa qayta yuklanadi`}
-          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-60"
-        >
-          {kursYangilanmoqda ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
-          {kursi ? formatSum(kursi) : '...'}
-        </button>
-        <ViewToggle view={view} onChange={changeView} />
-        <a
-          href="/api/tovarlar/export"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
-        >
-          <Download size={16} />
-          Excel export
-        </a>
-        {/* Excel import */}
-        <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
-          {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-          {importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            disabled={importYuklanmoqda}
-            onChange={excelTanlash}
-          />
-        </label>
-        <button onClick={() => ochModal()} className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
-          <Plus size={16} />
-          Tovar qo&apos;shish
-        </button>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={kursniYangilash}
+            disabled={kursYangilanmoqda}
+            title={`Markaziy bank kursi${kursSana ? ` (${kursSana})` : ''} — bosilsa qayta yuklanadi`}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-60 text-sm"
+          >
+            {kursYangilanmoqda ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
+            {kursi ? formatSum(kursi) : '...'}
+          </button>
+          <div className="hidden sm:block">
+            <ViewToggle view={view} onChange={changeView} />
+          </div>
+          <a
+            href="/api/tovarlar/export"
+            title="Excel export"
+            className="flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+          >
+            <Download size={16} />
+            <span className="hidden sm:inline">Excel export</span>
+          </a>
+          {/* Excel import */}
+          <label title="Excel import" className={`flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+            {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              disabled={importYuklanmoqda}
+              onChange={excelTanlash}
+            />
+          </label>
+          <button onClick={() => ochModal()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
+            <Plus size={16} />
+            <span className="hidden sm:inline">Tovar qo&apos;shish</span>
+          </button>
+        </div>
       </div>
 
       {/* Category navbar */}
@@ -328,7 +334,7 @@ export default function TovarlarPage() {
         const filteredTovarlar = tovarlar.slice(0, renderLimit)
         return (<>
       {view === 'table' && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
+        <div className="hidden sm:block bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -389,9 +395,8 @@ export default function TovarlarPage() {
         </div>
       )}
 
-      {/* Card view */}
-      {view === 'card' && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* Card view — mobilda har doim ko'rinadi, desktopda faqat view==='card' bo'lsa */}
+      <div className={`grid grid-cols-1 gap-3 sm:gap-4 ${view === 'card' ? 'lg:grid-cols-4' : 'sm:hidden'}`}>
           {yuklanmoqda ? (
             <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Yuklanmoqda...</p>
           ) : filteredTovarlar.length === 0 ? (
@@ -442,18 +447,20 @@ export default function TovarlarPage() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2">
-                <button onClick={() => ochModal(t)} className="flex items-center justify-center gap-1.5 py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-xs sm:text-sm font-medium border-r border-gray-100 dark:border-neutral-800">
-                  <Pencil size={13} /> Tahrirlash
+              <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3">
+                <button onClick={() => setDetailTovar(t)} title="Batafsil" className="flex items-center justify-center py-2.5 sm:py-3 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800 transition border-r border-gray-100 dark:border-neutral-800">
+                  <Eye size={16} />
                 </button>
-                <button onClick={() => ochirish(t.id)} className="flex items-center justify-center gap-1.5 py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-xs sm:text-sm font-medium">
-                  <Trash2 size={13} /> O&apos;chirish
+                <button onClick={() => ochModal(t)} title="Tahrirlash" className="flex items-center justify-center py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800">
+                  <Pencil size={16} />
+                </button>
+                <button onClick={() => ochirish(t.id)} title="O'chirish" className="flex items-center justify-center py-2.5 sm:py-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition">
+                  <Trash2 size={16} />
                 </button>
               </div>
             </div>
           ))}
-        </div>
-      )}
+      </div>
 
       </>)})()}
 
@@ -724,6 +731,84 @@ export default function TovarlarPage() {
               {rasmModal.rasmlar.length > 1 && (
                 <p className="text-white/60 text-sm mt-1">{rasmModal.index + 1} / {rasmModal.rasmlar.length}</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mahsulot batafsil ma'lumoti */}
+      {detailTovar && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4" onClick={() => setDetailTovar(null)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
+                <Eye size={18} className="text-primary" />
+                Mahsulot ma&apos;lumotlari
+              </h3>
+              <button onClick={() => setDetailTovar(null)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {detailTovar.rasmlar?.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {detailTovar.rasmlar.map((rasm, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={rasm}
+                      alt={`${detailTovar.nomi} ${i + 1}`}
+                      className="aspect-square object-cover rounded-xl border border-gray-200 dark:border-neutral-700 cursor-zoom-in"
+                      onClick={() => setRasmModal({ rasmlar: detailTovar.rasmlar, nomi: detailTovar.nomi, index: i })}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="aspect-[4/3] bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 rounded-xl flex items-center justify-center">
+                  <Package size={56} className="text-primary" strokeWidth={1.5} />
+                </div>
+              )}
+
+              <div>
+                <p className="text-gray-900 dark:text-gray-100 font-bold text-lg">{detailTovar.nomi}</p>
+                <span className="inline-block mt-1 text-xs bg-red-50 dark:bg-red-950/30 text-red-600 px-2.5 py-1 rounded-full font-medium">{detailTovar.kategoriya.nomi}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                  <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Kelish narxi</p>
+                  <p className="text-gray-900 dark:text-gray-100 font-semibold mt-0.5">{formatNarx(detailTovar.kelishNarxi, detailTovar.valyuta)}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                  <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Sotish narxi</p>
+                  <p className="text-green-600 font-semibold mt-0.5">{formatNarx(detailTovar.sotishNarxi, detailTovar.valyuta)}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                  <p className="text-gray-400 dark:text-gray-600 text-[11px]">Miqdori</p>
+                  <p className={`font-semibold mt-0.5 ${detailTovar.qoldiq <= detailTovar.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {detailTovar.qoldiq} {detailTovar.birlik.toLowerCase()}
+                  </p>
+                </div>
+                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                  <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Barcode size={11} /> Shtrix-kod</p>
+                  <p className="text-gray-900 dark:text-gray-100 font-semibold mt-0.5">#{(detailTovar.shtrixKod || '').padStart(3, '0') || '—'}</p>
+                </div>
+                {detailTovar.yaroqlilikMuddati && (
+                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 col-span-2">
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Calendar size={11} /> Yaroqlilik muddati</p>
+                    <p className="text-gray-900 dark:text-gray-100 font-semibold mt-0.5">{detailTovar.yaroqlilikMuddati.slice(0, 10)}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => { setDetailTovar(null); ochModal(detailTovar) }} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  <Pencil size={15} /> Tahrirlash
+                </button>
+                <button onClick={() => setDetailTovar(null)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+                  Yopish
+                </button>
+              </div>
             </div>
           </div>
         </div>
