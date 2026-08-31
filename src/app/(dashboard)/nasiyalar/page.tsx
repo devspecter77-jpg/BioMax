@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatSana, uzSearch } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown, Download, Upload, Loader2 } from 'lucide-react'
+import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown, Download, Upload, Loader2, Calendar } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import MoneyInput from '@/components/ui/money-input'
 import DateInput from '@/components/ui/date-input'
@@ -104,8 +104,11 @@ export default function NasiyalarPage() {
 
   async function yuklash() {
     setYuklanmoqda(true)
+    // "BUGUN" — muddat bo'yicha, holati emas — server so'rovida qatnashmaydi,
+    // to'liq ro'yxatdan (barchasi) client tomonda hisoblanadi.
+    const holatiParam = filter && filter !== 'BUGUN' ? `?holati=${filter}` : ''
     const [filtered, all] = await Promise.all([
-      fetch(`/api/nasiyalar${filter ? `?holati=${filter}` : ''}`).then(r => r.json()),
+      fetch(`/api/nasiyalar${holatiParam}`).then(r => r.json()),
       fetch('/api/nasiyalar').then(r => r.json()),
     ])
     setNasiyalar(filtered || [])
@@ -121,6 +124,10 @@ export default function NasiyalarPage() {
 
   useEffect(() => { yuklash() }, [filter])
 
+  // Muddati aynan bugun bo'lgan, hali yopilmagan nasiyalar — alohida kategoriya
+  const bugunSanasi = new Date().toISOString().slice(0, 10)
+  const bugunList = barchasi.filter(n => n.holati !== 'YOPILGAN' && n.muddat && n.muddat.slice(0, 10) === bugunSanasi)
+
   // Stats hisoblash
   const yopilganlar = barchasi.filter(n => n.holati === 'YOPILGAN')
   const stats = {
@@ -132,6 +139,8 @@ export default function NasiyalarPage() {
     yopilgan: yopilganlar.length,
     yopilganTolangan: yopilganlar.reduce((s, n) => s + Math.min(Number(n.tolangan), Number(n.jamiQarz)), 0),
     mijozlarSoni: new Set(barchasi.map(n => n.mijoz.ism)).size,
+    bugunSoni: bugunList.length,
+    bugunQoldiq: bugunList.reduce((s, n) => s + Number(n.qoldiq), 0),
   }
 
   function changeView(v: 'table' | 'card') {
@@ -261,17 +270,18 @@ export default function NasiyalarPage() {
 
   // Qidiruv — barcha statuslarda qidirish, keyin filtrga qarab ko'rsatish
   const filteredNasiyalar = (() => {
-    let list = nasiyalar
+    let list = filter === 'BUGUN' ? bugunList : nasiyalar
     if (qidiruv) {
-      // Barcha nasiyalar ichidan qidirish
-      const topilganlar = barchasi.filter(n =>
+      // "BUGUN" tanlangan bo'lsa — shu ro'yxat ichida, aks holda barcha nasiyalar ichidan qidirish
+      const manba = filter === 'BUGUN' ? bugunList : barchasi
+      const topilganlar = manba.filter(n =>
         uzSearch(n.mijoz.ism, qidiruv) ||
         (n.sotuv?.chekRaqami || '').toLowerCase().includes(qidiruv.toLowerCase()) ||
         uzSearch(n.mijoz.manzil || '', qidiruv) ||
         (n.mijoz.telefon || '').includes(qidiruv)
       )
       // Agar filtr tanlangan bo'lsa — shu filtr ichida qidiradi, aks holda hammasi
-      list = filter ? topilganlar.filter(n => n.holati === filter) : topilganlar
+      list = (filter && filter !== 'BUGUN') ? topilganlar.filter(n => n.holati === filter) : topilganlar
     }
     return list
   })()
@@ -279,7 +289,7 @@ export default function NasiyalarPage() {
   return (
     <div className="space-y-4">
       {/* Stats Cards = Filter */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <button onClick={() => setFilter('')}
           className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === '' ? 'border-red-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
           <div className="flex items-start justify-between">
@@ -290,6 +300,19 @@ export default function NasiyalarPage() {
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 bg-red-500 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
               <Banknote size={16} className="text-white sm:w-5 sm:h-5" />
+            </div>
+          </div>
+        </button>
+        <button onClick={() => setFilter('BUGUN')}
+          className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === 'BUGUN' ? 'border-orange-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
+          <div className="flex items-start justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Bugun to&apos;lov sanasi</p>
+              <p className="text-base sm:text-2xl font-bold mt-1 text-orange-600">{stats.bugunSoni} ta</p>
+              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Qarz: {formatSum(stats.bugunQoldiq)}</p>
+            </div>
+            <div className="w-8 h-8 sm:w-11 sm:h-11 bg-orange-500 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
+              <Calendar size={16} className="text-white sm:w-5 sm:h-5" />
             </div>
           </div>
         </button>
@@ -388,7 +411,7 @@ export default function NasiyalarPage() {
               <tbody>
                 {yuklanmoqda ? (
                   <tr><td colSpan={8} className="text-center text-gray-400 dark:text-gray-600 py-12">Yuklanmoqda...</td></tr>
-                ) : nasiyalar.length === 0 ? (
+                ) : filteredNasiyalar.length === 0 ? (
                   <tr><td colSpan={8} className="text-center text-gray-400 dark:text-gray-600 py-12">Nasiyalar topilmadi</td></tr>
                 ) : filteredNasiyalar.map((n, idx) => {
                   const hCfg = holatiConfig[n.holati as keyof typeof holatiConfig]
@@ -475,7 +498,7 @@ export default function NasiyalarPage() {
       <div className={`space-y-3 ${view === 'card' ? '' : 'sm:hidden'}`}>
           {yuklanmoqda ? (
             <p className="text-gray-400 dark:text-gray-600 text-center py-12">Yuklanmoqda...</p>
-          ) : nasiyalar.length === 0 ? (
+          ) : filteredNasiyalar.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-600 text-center py-12">Nasiyalar topilmadi</p>
           ) : filteredNasiyalar.map(n => {
             const hCfg = holatiConfig[n.holati as keyof typeof holatiConfig]
