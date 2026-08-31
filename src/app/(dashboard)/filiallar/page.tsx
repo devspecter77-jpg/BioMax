@@ -28,7 +28,7 @@ interface Filial {
   _count: { xodimlar: number }
   xodimlar: FilialEga[]
 }
-interface BogliqAdmin {
+interface EgaHisob {
   id: string; ism: string; login: string; telefon: string | null; faol: boolean; filialId: string | null
 }
 
@@ -38,14 +38,14 @@ export default function FiliallarPage() {
   const confirm = useConfirm()
   const { data: session } = useSession()
   const [filiallar, setFiliallar] = useState<Filial[]>([])
-  const [bogliqAdminlar, setBogliqAdminlar] = useState<BogliqAdmin[]>([])
+  const [egalar, setEgaHisoblar] = useState<EgaHisob[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [modal, setModal] = useState(false)
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
   const [parolKorinsin, setParolKorinsin] = useState(false)
   const emptyForm = { nomi: '', manzil: '', telefon: '', egaIsm: '', egaLogin: '', egaParol: '' }
   const [form, setForm] = useState(emptyForm)
-  const [egaTuri, setEgaTuri] = useState<'FILIALCHI' | 'ADMIN'>('FILIALCHI')
+  const [egaTuri, setEgaTuri] = useState<'FILIALCHI' | 'EGA' | 'ADMIN'>('FILIALCHI')
   const [boglashOchiq, setBoglashOchiq] = useState(false)
   const [boglanganFilialId, setBoglanganFilialId] = useState('')
   const [qidiruv, setQidiruv] = useState('')
@@ -67,7 +67,7 @@ export default function FiliallarPage() {
     ])
     setFiliallar(Array.isArray(data) ? data : [])
     const meId = (session?.user as any)?.id
-    setBogliqAdminlar(
+    setEgaHisoblar(
       Array.isArray(hammaFoydalanuvchi)
         ? hammaFoydalanuvchi.filter((u: any) => u.rol === 'ADMIN' && !u.filialId && u.id !== meId)
         : []
@@ -120,6 +120,22 @@ export default function FiliallarPage() {
           return
         }
         toast.success('Filial va uning egasi qo\'shildi')
+      } else if (egaTuri === 'EGA') {
+        // Ega — filialsiz, to'liq huquqli yangi bosh egasi
+        const egaRes = await fetch('/api/foydalanuvchilar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ism: form.egaIsm, login: form.egaLogin, parol: form.egaParol,
+            rol: 'ADMIN', filialId: null,
+          }),
+        })
+        if (!egaRes.ok) {
+          const err = await egaRes.json()
+          toast.error(err.xato || 'Ega qo\'shilmadi')
+          return
+        }
+        toast.success('Yangi ega qo\'shildi')
       } else {
         // Admin — yangi filial yaratilmaydi, ixtiyoriy ravishda mavjud filialga bog'lanadi
         const egaRes = await fetch('/api/foydalanuvchilar', {
@@ -145,7 +161,7 @@ export default function FiliallarPage() {
     }
   }
 
-  async function bogliqAdminOchirish(u: BogliqAdmin) {
+  async function egaOchirish(u: EgaHisob) {
     if (!(await confirm(`"${u.ism}" hisobini o'chirasizmi?`))) return
     setOchirilayotganId(u.id)
     try {
@@ -334,13 +350,13 @@ export default function FiliallarPage() {
         ))}
       </div>
 
-      {bogliqAdminlar.length > 0 && (
+      {egalar.length > 0 && (
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
           <p className="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide flex items-center gap-2 mb-3">
-            <ShieldCheck size={13} /> Filialga bog&apos;lanmagan adminlar
+            <ShieldCheck size={13} /> Egalar
           </p>
           <div className="space-y-2">
-            {bogliqAdminlar.map(u => (
+            {egalar.map(u => (
               <div key={u.id} className="flex items-center gap-2 py-1.5">
                 <div className="w-8 h-8 rounded-full bg-primary-light dark:bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
                   {u.ism[0]?.toUpperCase()}
@@ -350,7 +366,7 @@ export default function FiliallarPage() {
                   <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(u.login)}</p>
                 </div>
                 <button
-                  onClick={() => bogliqAdminOchirish(u)}
+                  onClick={() => egaOchirish(u)}
                   disabled={ochirilayotganId === u.id}
                   className="p-2 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50 shrink-0"
                   title="O'chirish"
@@ -385,6 +401,13 @@ export default function FiliallarPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setEgaTuri('EGA')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${egaTuri === 'EGA' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                  >
+                    Ega
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setEgaTuri('ADMIN')}
                     className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${egaTuri === 'ADMIN' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
                   >
@@ -394,6 +417,8 @@ export default function FiliallarPage() {
                 <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5">
                   {egaTuri === 'FILIALCHI'
                     ? "Filialchi — yangi filial yaratiladi, u shu filialning egasi bo'ladi."
+                    : egaTuri === 'EGA'
+                    ? "Ega — filialga bog'lanmagan, to'liq huquqli bosh hisob. Barcha filiallarni ko'radi va yangi filial/ega/admin qo'sha oladi."
                     : "Admin — yangi filial yaratilmaydi. Alohida login yaratiladi, ixtiyoriy ravishda mavjud filial ma'lumotlariga ulanishi mumkin."}
                 </p>
               </div>
@@ -416,7 +441,7 @@ export default function FiliallarPage() {
                     <PhoneInput value={form.telefon} onChange={v => setForm(p => ({ ...p, telefon: v }))} />
                   </div>
                 </>
-              ) : (
+              ) : egaTuri === 'ADMIN' ? (
                 <div className="pt-2 border-t border-gray-100 dark:border-neutral-800">
                   {!boglashOchiq ? (
                     <button
@@ -447,10 +472,10 @@ export default function FiliallarPage() {
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
               <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
-                <UserPlus size={13} /> {egaTuri === 'FILIALCHI' ? 'Filial egasi' : 'Admin hisobi'}
+                <UserPlus size={13} /> {egaTuri === 'FILIALCHI' ? 'Filial egasi' : egaTuri === 'EGA' ? 'Ega hisobi' : 'Admin hisobi'}
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ega ismi *</label>
