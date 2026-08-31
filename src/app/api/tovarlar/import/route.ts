@@ -65,20 +65,20 @@ export async function POST(req: NextRequest) {
             data: { kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, holati },
           })
 
-          // Ombordagi sonini faylga moslash — farqni ombor harakati bilan tuzatish
+          // Miqdorini faylga moslash — farqni ombor harakati bilan tuzatish (do'kon zaxirasi)
           const { getStockMap } = await import('@/lib/stock')
           const stockMap = await getStockMap([mavjud.id])
-          const hozirgiQoldiq = stockMap.get(mavjud.id)?.omborQoldiq ?? 0
+          const hozirgiQoldiq = stockMap.get(mavjud.id)?.dokonQoldiq ?? 0
           const farq = qoldiq - hozirgiQoldiq
           if (Math.abs(farq) > 0.0001) {
             await prisma.omborHarakati.create({
               data: {
                 tovarId: mavjud.id,
                 turi: farq > 0 ? 'KIRIM' : 'CHIQIM',
-                joy: 'OMBOR',
+                joy: 'DOKON',
                 miqdor: Math.abs(farq),
                 narx: kelishNarxi,
-                izoh: 'Excel import orqali ombordagi soni moslashtirildi',
+                izoh: 'Excel import orqali miqdor moslashtirildi',
                 foydalanuvchiId: (session.user as any).id,
               },
             })
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
               data: {
                 tovarId: yangiTovar.id,
                 turi: 'KIRIM',
-                joy: 'OMBOR',
+                joy: 'DOKON',
                 miqdor: qoldiq,
                 narx: kelishNarxi,
                 izoh: 'Excel import',

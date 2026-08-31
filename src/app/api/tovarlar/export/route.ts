@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest) {
         'Kelish narxi': Number(t.kelishNarxi),
         'Sotish narxi': Number(t.sotishNarxi),
         'Birlik': t.birlik,
-        'Miqdori': stock?.omborQoldiq ?? 0,
+        'Miqdori': stock?.dokonQoldiq ?? 0,
         'Holati': t.holati,
       }
     })
