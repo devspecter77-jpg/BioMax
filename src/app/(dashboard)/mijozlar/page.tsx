@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users, Download, Upload } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users, Download, Upload, Eye, Pencil } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
@@ -30,7 +30,19 @@ export default function MijozlarPage() {
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
   const [modal, setModal] = useState(false)
+  const [tahrirlash, setTahrirlash] = useState<Mijoz | null>(null)
   const [form, setForm] = useState({ ism: '', telefon: '', manzil: '', izoh: '' })
+
+  function modalOchish(mijoz?: Mijoz) {
+    if (mijoz) {
+      setTahrirlash(mijoz)
+      setForm({ ism: mijoz.ism, telefon: mijoz.telefon || '', manzil: mijoz.manzil || '', izoh: '' })
+    } else {
+      setTahrirlash(null)
+      setForm({ ism: '', telefon: '', manzil: '', izoh: '' })
+    }
+    setModal(true)
+  }
   const [view, setView] = useState<'table' | 'card'>('table')
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
   const [ochirilayotganId, setOchirilayotganId] = useState<string | null>(null)
@@ -111,14 +123,17 @@ export default function MijozlarPage() {
     e.preventDefault()
     setSaqlanmoqda(true)
     try {
-      const res = await fetch('/api/mijozlar', {
-        method: 'POST',
+      const url = tahrirlash ? `/api/mijozlar/${tahrirlash.id}` : '/api/mijozlar'
+      const method = tahrirlash ? 'PUT' : 'POST'
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       })
       if (res.ok) {
-        toast.success("Mijoz qo'shildi")
+        toast.success(tahrirlash ? 'Mijoz yangilandi' : "Mijoz qo'shildi")
         setModal(false)
+        setTahrirlash(null)
         setForm({ ism: '', telefon: '', manzil: '', izoh: '' })
         yuklash()
       } else toast.error('Xatolik yuz berdi')
@@ -133,31 +148,35 @@ export default function MijozlarPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
         <SearchBar
           value={qidiruv}
           onChange={setQidiruv}
           placeholder="Ism yoki telefon raqam bo'yicha qidirish..."
           className="flex-1"
         />
-        {/* View toggle placed between search and add button */}
-        <ViewToggle view={view} onChange={changeView} />
-        <a
-          href="/api/mijozlar/export"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
-        >
-          <Download size={16} />
-          Excel export
-        </a>
-        <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
-          {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-          {importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}
-          <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
-        </label>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
-          <UserPlus size={16} />
-          Mijoz qo&apos;shish
-        </button>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden sm:block">
+            <ViewToggle view={view} onChange={changeView} />
+          </div>
+          <a
+            href="/api/mijozlar/export"
+            title="Excel export"
+            className="flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+          >
+            <Download size={16} />
+            <span className="hidden sm:inline">Excel export</span>
+          </a>
+          <label title="Excel import" className={`flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+            {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
+            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
+          </label>
+          <button onClick={() => modalOchish()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
+            <UserPlus size={16} />
+            <span className="hidden sm:inline">Mijoz qo&apos;shish</span>
+          </button>
+        </div>
       </div>
 
       {/* Kategoriya tablari */}
@@ -184,9 +203,9 @@ export default function MijozlarPage() {
         </button>
       </div>
 
-      {/* TABLE VIEW */}
+      {/* TABLE VIEW — faqat desktopda */}
       {view === 'table' && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
+        <div className="hidden sm:block bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full table-fixed">
               <thead>
@@ -275,15 +294,14 @@ export default function MijozlarPage() {
         </div>
       )}
 
-      {/* CARD VIEW */}
-      {view === 'card' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* CARD VIEW — mobilda har doim ko'rinadi, desktopda faqat view==='card' bo'lsa */}
+      <div className={`grid grid-cols-1 gap-4 ${view === 'card' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:hidden'}`}>
           {yuklanmoqda ? (
-            <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Yuklanmoqda...</p>
+            <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Yuklanmoqda...</p>
           ) : korsatiladiganMijozlar.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Mijozlar topilmadi</p>
+            <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Mijozlar topilmadi</p>
           ) : korsatiladiganMijozlar.map((m, idx) => (
-            <div key={m.id} onClick={() => mijozOch(m.id)} className="relative bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4 hover:shadow-md transition-shadow cursor-pointer">
+            <div key={m.id} className="relative bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4 hover:shadow-md transition-shadow">
               {kategoriya === 'top' && (
                 <span className={`absolute -top-2 -left-2 inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shadow ${
                   idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-gray-300 text-gray-700' : idx === 2 ? 'bg-orange-400 text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400'
@@ -291,30 +309,19 @@ export default function MijozlarPage() {
               )}
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-gray-900 dark:text-gray-100 font-semibold">{m.ism}</p>
-                    <button
-                      onClick={e => { e.stopPropagation(); ochirish(m) }}
-                      disabled={ochirilayotganId === m.id}
-                      className="p-1.5 text-gray-300 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition shrink-0 disabled:opacity-50"
-                      title="O'chirish"
-                    >
-                      {ochirilayotganId === m.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                    </button>
-                  </div>
-                  {/* Clickable phone link */}
+                  <p className="text-gray-900 dark:text-gray-100 font-semibold text-base">{m.ism}</p>
                   {m.telefon && (
-                    <a href={`tel:${m.telefon.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="text-blue-500 hover:text-blue-600 text-sm flex items-center gap-1">
+                    <a href={`tel:${m.telefon.replace(/\s/g, '')}`} className="text-blue-500 hover:text-blue-600 text-sm flex items-center gap-1 mt-0.5">
                       <Phone size={12} /> {formatPhone(m.telefon)}
                     </a>
                   )}
                   {m.manzil && (
-                    <p className="text-gray-400 dark:text-gray-600 text-sm flex items-center gap-1">
+                    <p className="text-gray-400 dark:text-gray-600 text-sm flex items-center gap-1 mt-0.5">
                       <MapPin size={12} /> {m.manzil}
                     </p>
                   )}
                 </div>
-                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center text-red-600 font-bold text-lg shrink-0 ml-2">
+                <div className="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center text-red-600 font-bold text-lg shrink-0 ml-2">
                   {m.ism[0]?.toUpperCase()}
                 </div>
               </div>
@@ -335,17 +342,32 @@ export default function MijozlarPage() {
                   </p>
                 </div>
               </div>
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3 -mx-4 -mb-4">
+                <button onClick={() => mijozOch(m.id)} title="Batafsil" className="flex items-center justify-center py-2.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800 transition border-r border-gray-100 dark:border-neutral-800 rounded-bl-2xl">
+                  <Eye size={16} />
+                </button>
+                <button onClick={() => modalOchish(m)} title="Tahrirlash" className="flex items-center justify-center py-2.5 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800">
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => ochirish(m)}
+                  disabled={ochirilayotganId === m.id}
+                  title="O'chirish"
+                  className="flex items-center justify-center py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition disabled:opacity-50 rounded-br-2xl"
+                >
+                  {ochirilayotganId === m.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                </button>
+              </div>
             </div>
           ))}
-        </div>
-      )}
+      </div>
 
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi mijoz</h3>
-              <button onClick={() => setModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">{tahrirlash ? 'Mijozni tahrirlash' : 'Yangi mijoz'}</h3>
+              <button onClick={() => { setModal(false); setTahrirlash(null) }} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -376,11 +398,11 @@ export default function MijozlarPage() {
                   className={inputCls} />
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setModal(false)}
+                <button type="button" onClick={() => { setModal(false); setTahrirlash(null) }}
                   className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
                 <button type="submit" disabled={saqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
                   {saqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : null}
-                  {saqlanmoqda ? "Qo'shilmoqda..." : "Qo'shish"}
+                  {saqlanmoqda ? 'Saqlanmoqda...' : (tahrirlash ? 'Saqlash' : "Qo'shish")}
                 </button>
               </div>
             </form>

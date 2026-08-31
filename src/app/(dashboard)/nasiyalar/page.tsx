@@ -344,31 +344,33 @@ export default function NasiyalarPage() {
       {/* ViewToggle + Qo'shish */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1" />
-        <ViewToggle view={view} onChange={changeView} />
+        <div className="hidden sm:block">
+          <ViewToggle view={view} onChange={changeView} />
+        </div>
         <a
           href="/api/nasiyalar/export"
-          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+          title="Excel export"
+          className="flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
         >
           <Download size={16} />
           <span className="hidden sm:inline">Excel export</span>
         </a>
-        <label className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+        <label title="Excel import" className={`flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
           {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
           <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
           <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
         </label>
         <button
           onClick={() => setQoshishModal(true)}
-          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition">
+          className="flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition">
           <Plus size={16} />
           <span className="hidden sm:inline">Nasiya qo&apos;shish</span>
-          <span className="sm:hidden">Qo&apos;shish</span>
         </button>
       </div>
 
-      {/* TABLE VIEW */}
+      {/* TABLE VIEW — faqat desktopda */}
       {view === 'table' && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
+        <div className="hidden sm:block bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full table-fixed">
               <thead>
@@ -469,9 +471,8 @@ export default function NasiyalarPage() {
         </div>
       )}
 
-      {/* CARD VIEW */}
-      {view === 'card' && (
-        <div className="space-y-3">
+      {/* CARD VIEW — mobilda har doim ko'rinadi, desktopda faqat view==='card' bo'lsa */}
+      <div className={`space-y-3 ${view === 'card' ? '' : 'sm:hidden'}`}>
           {yuklanmoqda ? (
             <p className="text-gray-400 dark:text-gray-600 text-center py-12">Yuklanmoqda...</p>
           ) : nasiyalar.length === 0 ? (
@@ -551,8 +552,7 @@ export default function NasiyalarPage() {
               </div>
             )
           })}
-        </div>
-      )}
+      </div>
 
       {/* Tahrirlash modal */}
       {tahrirlashModal && (
