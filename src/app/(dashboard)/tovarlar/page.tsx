@@ -250,9 +250,36 @@ export default function TovarlarPage() {
       const method = tahrirlash ? 'PUT' : 'POST'
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       if (res.ok) {
+        const natija = await res.json()
         toast.success(tahrirlash ? 'Tovar yangilandi' : "Tovar qo'shildi")
         setModal(false)
-        yuklash()
+        if (tahrirlash) {
+          const tahrirId = tahrirlash.id
+          const qoshiladigan = parseFloat(form.qoldiqQoshish) || 0
+          setTovarlar(prev => prev
+            .map(t => t.id !== tahrirId ? t : {
+              ...t,
+              nomi: natija.nomi,
+              kategoriya: natija.kategoriya,
+              shtrixKod: natija.shtrixKod,
+              valyuta: natija.valyuta,
+              birlik: natija.birlik,
+              minimalQoldiq: natija.minimalQoldiq,
+              rasmlar: natija.rasmlar,
+              yaroqlilikMuddati: natija.yaroqlilikMuddati,
+              sotishNarxi: natija.sotishNarxi,
+              // Kelish narxi shu hisobdan yashirilgan bo'lsa (null), API javobi
+              // asl qiymatni yashirmasdan qaytaradi — shu sababli uni serverdan
+              // olmaymiz, aks holda yashirilgan narx ekranda ko'rinib qolardi.
+              kelishNarxi: t.kelishNarxi === null ? null : natija.kelishNarxi,
+              qoldiq: t.qoldiq === null ? null : t.qoldiq + qoshiladigan,
+            })
+            // Aktiv kategoriya filtri bilan mos kelmay qolgan bo'lsa (tovar
+            // boshqa kategoriyaga ko'chirildi) — ro'yxatdan chiqib ketadi.
+            .filter(t => !aktifKategoriya || t.id !== tahrirId || t.kategoriya.id === aktifKategoriya))
+        } else {
+          yuklash()
+        }
       } else {
         const err = await res.json()
         toast.error(err.xato || 'Xatolik yuz berdi')
@@ -302,8 +329,12 @@ export default function TovarlarPage() {
   async function ochirish(id: string) {
     if (!(await confirm('Tovarni arxivlashni xohlaysizmi?'))) return
     const res = await fetch(`/api/tovarlar/${id}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Tovar arxivlandi'); yuklash() }
-    else toast.error('Xatolik yuz berdi')
+    if (res.ok) {
+      toast.success('Tovar arxivlandi')
+      setTovarlar(prev => prev.filter(t => t.id !== id))
+    } else {
+      toast.error('Xatolik yuz berdi')
+    }
   }
 
   async function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
