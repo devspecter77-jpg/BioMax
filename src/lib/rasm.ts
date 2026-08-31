@@ -1,12 +1,12 @@
 import sharp from 'sharp'
 
 const MAX_RASM = 3
-const MAX_OLCHAM = 640 // eng katta tomon (piksel)
+const MAX_OLCHAM = 1080 // eng katta tomon (piksel)
 
 /**
  * Base64 data URL rasmlarni siqib, cheklangan o'lchamda qayta saqlashga tayyor
  * data URL qatorlariga aylantiradi. Bazani shishirmaslik uchun eng katta
- * tomonini 640px ga, sifatini esa JPEG ~70% ga tushiradi.
+ * tomonini 1080px ga tushiradi, sifatini esa yuqori (JPEG ~90%) saqlaydi.
  */
 export async function rasmlarniSiqish(dataUrls: unknown): Promise<string[]> {
   if (!Array.isArray(dataUrls)) return []
@@ -21,7 +21,7 @@ export async function rasmlarniSiqish(dataUrls: unknown): Promise<string[]> {
       const siqilgan = await sharp(buffer)
         .rotate() // EXIF orientatsiyasini to'g'irlash
         .resize(MAX_OLCHAM, MAX_OLCHAM, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 70 })
+        .jpeg({ quality: 90, mozjpeg: true })
         .toBuffer()
       natija.push(`data:image/jpeg;base64,${siqilgan.toString('base64')}`)
     } catch {
