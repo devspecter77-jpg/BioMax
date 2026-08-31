@@ -27,15 +27,14 @@ export async function GET(_req: NextRequest) {
         'Kelish narxi': Number(t.kelishNarxi),
         'Sotish narxi': Number(t.sotishNarxi),
         'Birlik': t.birlik,
-        'Qoldiq': stock?.dokonQoldiq ?? 0,
-        'Minimal qoldiq': t.minimalQoldiq,
+        'Ombordagi soni': stock?.omborQoldiq ?? 0,
         'Holati': t.holati,
       }
     })
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 9 }, { wch: 13 }, { wch: 12 }]
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 14 }, { wch: 12 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Tovarlar')
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 

@@ -51,10 +51,9 @@ export async function POST(req: NextRequest) {
         const sotishNarxi = parseFloat(String(row['Sotish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
         const birlikRaw = String(row['Birlik'] || 'DONA').trim().toUpperCase()
         const birlik = (BIRLIKLAR.has(birlikRaw) ? birlikRaw : 'DONA') as any
-        const minimalQoldiq = parseInt(String(row['Minimal qoldiq'] || '5')) || 5
         const holatiRaw = String(row['Holati'] || 'FAOL').trim().toUpperCase()
         const holati = (HOLATLAR.has(holatiRaw) ? holatiRaw : 'FAOL') as any
-        const qoldiq = parseFloat(String(row['Qoldiq'] || '0').replace(/[^\d.]/g, '')) || 0
+        const qoldiq = parseFloat(String(row['Ombordagi soni'] || '0').replace(/[^\d.]/g, '')) || 0
 
         const mavjud = await prisma.tovar.findFirst({
           where: { nomi: { equals: nomi, mode: 'insensitive' }, ...(filialId ? { filialId } : {}) },
@@ -63,23 +62,23 @@ export async function POST(req: NextRequest) {
         if (mavjud) {
           await prisma.tovar.update({
             where: { id: mavjud.id },
-            data: { kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, minimalQoldiq, holati },
+            data: { kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, holati },
           })
 
-          // Qoldiqni faylga moslash — farqni ombor harakati bilan tuzatish
+          // Ombordagi sonini faylga moslash — farqni ombor harakati bilan tuzatish
           const { getStockMap } = await import('@/lib/stock')
           const stockMap = await getStockMap([mavjud.id])
-          const hozirgiQoldiq = stockMap.get(mavjud.id)?.dokonQoldiq ?? 0
+          const hozirgiQoldiq = stockMap.get(mavjud.id)?.omborQoldiq ?? 0
           const farq = qoldiq - hozirgiQoldiq
           if (Math.abs(farq) > 0.0001) {
             await prisma.omborHarakati.create({
               data: {
                 tovarId: mavjud.id,
                 turi: farq > 0 ? 'KIRIM' : 'CHIQIM',
-                joy: 'DOKON',
+                joy: 'OMBOR',
                 miqdor: Math.abs(farq),
                 narx: kelishNarxi,
-                izoh: 'Excel import orqali qoldiq moslashtirildi',
+                izoh: 'Excel import orqali ombordagi soni moslashtirildi',
                 foydalanuvchiId: (session.user as any).id,
               },
             })
@@ -87,14 +86,14 @@ export async function POST(req: NextRequest) {
           yangilandi++
         } else {
           const yangiTovar = await prisma.tovar.create({
-            data: { nomi, kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, minimalQoldiq, holati, filialId },
+            data: { nomi, kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, holati, filialId },
           })
           if (qoldiq > 0) {
             await prisma.omborHarakati.create({
               data: {
                 tovarId: yangiTovar.id,
                 turi: 'KIRIM',
-                joy: 'DOKON',
+                joy: 'OMBOR',
                 miqdor: qoldiq,
                 narx: kelishNarxi,
                 izoh: 'Excel import',
