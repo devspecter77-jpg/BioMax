@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, Barcode, Tag, Calendar } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, Barcode, Tag, Calendar, Check } from 'lucide-react'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -14,7 +14,7 @@ import BarcodeScanner from '@/components/BarcodeScanner'
 import { useConfirm } from '@/components/ConfirmProvider'
 import { YASHIRILADIGAN_MAYDONLAR } from '@/lib/maydon-katalogi'
 
-interface Kategoriya { id: string; nomi: string }
+interface Kategoriya { id: string; nomi: string; _count?: { tovarlar: number } }
 interface Tovar {
   id: string; nomi: string; kategoriya: Kategoriya
   kelishNarxi: number | null; sotishNarxi: number | null; valyuta: string
@@ -79,6 +79,10 @@ export default function TovarlarPage() {
   const [katModal, setKatModal] = useState(false)
   const [katNomi, setKatNomi] = useState('')
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
+  const [katTahrirId, setKatTahrirId] = useState<string | null>(null)
+  const [katTahrirNomi, setKatTahrirNomi] = useState('')
+  const [katTahrirSaqlanmoqda, setKatTahrirSaqlanmoqda] = useState(false)
+  const [katOchirilayotganId, setKatOchirilayotganId] = useState<string | null>(null)
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [detailTovar, setDetailTovar] = useState<Tovar | null>(null)
   const [kursi, setKursi] = useState<number | null>(null)
@@ -337,11 +341,57 @@ export default function TovarlarPage() {
       setKategoriyalar(prev => [...prev, yangi])
       setAktifKategoriya(yangi.id)
       setKatNomi('')
-      setKatModal(false)
     } else {
       toast.error("Xatolik yuz berdi")
     }
     setKatYuklanmoqda(false)
+  }
+
+  function kategoriyaTahrirBoshlash(k: Kategoriya) {
+    setKatTahrirId(k.id)
+    setKatTahrirNomi(k.nomi)
+  }
+
+  async function kategoriyaTahrirSaqlash() {
+    if (!katTahrirId || !katTahrirNomi.trim()) return
+    setKatTahrirSaqlanmoqda(true)
+    try {
+      const res = await fetch(`/api/kategoriyalar/${katTahrirId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nomi: katTahrirNomi.trim() }),
+      })
+      if (res.ok) {
+        const yangilangan = await res.json()
+        setKategoriyalar(prev => prev.map(k => k.id === katTahrirId ? { ...k, nomi: yangilangan.nomi } : k))
+        setTovarlar(prev => prev.map(t => t.kategoriya.id === katTahrirId ? { ...t, kategoriya: { ...t.kategoriya, nomi: yangilangan.nomi } } : t))
+        toast.success('Kategoriya yangilandi')
+        setKatTahrirId(null)
+      } else {
+        const err = await res.json()
+        toast.error(err.xato || 'Xatolik yuz berdi')
+      }
+    } finally {
+      setKatTahrirSaqlanmoqda(false)
+    }
+  }
+
+  async function kategoriyaOchirish(k: Kategoriya) {
+    if (!(await confirm(`"${k.nomi}" kategoriyasini o'chirasizmi?`))) return
+    setKatOchirilayotganId(k.id)
+    try {
+      const res = await fetch(`/api/kategoriyalar/${k.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Kategoriya o\'chirildi')
+        setKategoriyalar(prev => prev.filter(x => x.id !== k.id))
+        if (aktifKategoriya === k.id) setAktifKategoriya(null)
+      } else {
+        const err = await res.json()
+        toast.error(err.xato || "O'chirishda xatolik")
+      }
+    } finally {
+      setKatOchirilayotganId(null)
+    }
   }
 
   async function ochirish(id: string) {
@@ -482,9 +532,9 @@ export default function TovarlarPage() {
           </button>
         ))}
         <button
-          onClick={() => { setKatNomi(''); setKatModal(true) }}
+          onClick={() => { setKatNomi(''); setKatTahrirId(null); setKatModal(true) }}
           className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400 transition font-bold text-lg leading-none"
-          title="Yangi kategoriya qo'shish"
+          title="Kategoriyalarni boshqarish"
         >
           +
         </button>
@@ -641,34 +691,72 @@ export default function TovarlarPage() {
 
       </>)})()}
 
-      {/* Kategoriya qo'shish modali — tovar modali ustida chiqishi uchun yuqoriroq z-index */}
+      {/* Kategoriyalarni boshqarish modali — qo'shish, tahrirlash, o'chirish. Tovar modali ustida chiqishi uchun yuqoriroq z-index */}
       {katModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi kategoriya</h3>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={() => setKatModal(false)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Kategoriyalarni boshqarish</h3>
               <button onClick={() => setKatModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
-            <div className="p-5 space-y-4">
-              <input
-                autoFocus
-                value={katNomi}
-                onChange={e => setKatNomi(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && kategoriyaQoshish()}
-                placeholder="Kategoriya nomi..."
-                className={inputCls}
-              />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setKatModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor qilish
-                </button>
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Yangi kategoriya qo'shish */}
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  value={katNomi}
+                  onChange={e => setKatNomi(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && kategoriyaQoshish()}
+                  placeholder="Yangi kategoriya nomi..."
+                  className={inputCls}
+                />
                 <button type="button" onClick={kategoriyaQoshish} disabled={katYuklanmoqda || !katNomi.trim()}
-                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-medium transition">
-                  {katYuklanmoqda ? 'Saqlanmoqda...' : "Qo'shish"}
+                  title="Qo'shish"
+                  className="shrink-0 w-10 h-10 flex items-center justify-center bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl transition">
+                  {katYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Plus size={18} />}
                 </button>
+              </div>
+
+              {/* Mavjud kategoriyalar ro'yxati — tahrirlash/o'chirish */}
+              <div className="border border-gray-200 dark:border-neutral-700 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800">
+                {kategoriyalar.length === 0 ? (
+                  <p className="text-center text-gray-400 dark:text-gray-600 text-sm py-6">Hali kategoriya yo&apos;q</p>
+                ) : kategoriyalar.map(k => (
+                  <div key={k.id} className="flex items-center gap-2 px-3 py-2.5">
+                    {katTahrirId === k.id ? (
+                      <>
+                        <input
+                          autoFocus
+                          value={katTahrirNomi}
+                          onChange={e => setKatTahrirNomi(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') kategoriyaTahrirSaqlash(); if (e.key === 'Escape') setKatTahrirId(null) }}
+                          className="flex-1 min-w-0 px-2.5 py-1.5 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                        <button onClick={kategoriyaTahrirSaqlash} disabled={katTahrirSaqlanmoqda || !katTahrirNomi.trim()} className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 rounded-lg transition disabled:opacity-50" title="Saqlash">
+                          {katTahrirSaqlanmoqda ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        </button>
+                        <button onClick={() => setKatTahrirId(null)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition" title="Bekor qilish">
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 min-w-0 text-sm text-gray-900 dark:text-gray-100 truncate">{k.nomi}</span>
+                        {typeof k._count?.tovarlar === 'number' && (
+                          <span className="shrink-0 text-xs text-gray-400 dark:text-gray-600">{k._count.tovarlar} ta</span>
+                        )}
+                        <button onClick={() => kategoriyaTahrirBoshlash(k)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition" title="Tahrirlash">
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => kategoriyaOchirish(k)} disabled={katOchirilayotganId === k.id} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50" title="O'chirish">
+                          {katOchirilayotganId === k.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
