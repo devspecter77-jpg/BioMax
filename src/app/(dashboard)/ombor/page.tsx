@@ -49,12 +49,6 @@ export default function OmborPage() {
   const [otkazmaMiqdor, setOtkazmaMiqdor] = useState('')
   // Kategoriyalar
   const [kategoriyalar, setKategoriyalar] = useState<Kategoriya[]>([])
-  // Yangi mahsulot + kirim
-  const [yangiModal, setYangiModal] = useState(false)
-  const [yangiForm, setYangiForm] = useState({
-    nomi: '', kategoriyaId: '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA',
-    minimalQoldiq: '5', shtrixKod: '', miqdor: '', taminotchiId: '', izoh: ''
-  })
   // Tahrirlash
   const [tahrirModal, setTahrirModal] = useState(false)
   const [tahrirTovar, setTahrirTovar] = useState<QoldiqItem | null>(null)
@@ -63,7 +57,6 @@ export default function OmborPage() {
     minimalQoldiq: '5', shtrixKod: '', yaroqlilikMuddati: ''
   })
   const [otkazmaSaqlanmoqda, setOtkazmaSaqlanmoqda] = useState(false)
-  const [yangiSaqlanmoqda, setYangiSaqlanmoqda] = useState(false)
   const [tahrirSaqlanmoqda, setTahrirSaqlanmoqda] = useState(false)
 
   useEffect(() => {
@@ -125,39 +118,6 @@ export default function OmborPage() {
       }
     } finally {
       setOtkazmaSaqlanmoqda(false)
-    }
-  }
-
-  // Yangi mahsulot + kirim
-  async function yangiMahsulotSaqlash(e: React.FormEvent) {
-    e.preventDefault()
-    setYangiSaqlanmoqda(true)
-    try {
-      const res = await fetch('/api/tovarlar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nomi: yangiForm.nomi,
-          kategoriyaId: yangiForm.kategoriyaId,
-          kelishNarxi: yangiForm.kelishNarxi,
-          sotishNarxi: yangiForm.sotishNarxi,
-          birlik: yangiForm.birlik,
-          minimalQoldiq: yangiForm.minimalQoldiq,
-          shtrixKod: yangiForm.shtrixKod,
-          boshlangichQoldiq: yangiForm.miqdor,
-        })
-      })
-      if (res.ok) {
-        toast.success('Mahsulot yaratildi va omborga kirim qilindi!')
-        setYangiModal(false)
-        setYangiForm({ nomi: '', kategoriyaId: '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', shtrixKod: '', miqdor: '', taminotchiId: '', izoh: '' })
-        yuklash()
-      } else {
-        const err = await res.json()
-        toast.error(err.xato || 'Xatolik')
-      }
-    } finally {
-      setYangiSaqlanmoqda(false)
     }
   }
 
@@ -248,10 +208,6 @@ export default function OmborPage() {
         >
           <History size={16} />
           Harakatlar tarixi
-        </button>
-        <button onClick={async () => { setYangiForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', shtrixKod: '', miqdor: '', taminotchiId: '', izoh: '' }); setYangiModal(true); const r = await fetch('/api/tovarlar/keyingi-kod').then(r => r.json()); if (r.kod) setYangiForm(f => ({ ...f, shtrixKod: r.kod })) }} className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
-          <Plus size={16} />
-          Yangi mahsulot
         </button>
       </div>
 
@@ -528,83 +484,6 @@ export default function OmborPage() {
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
                   {otkazmaSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : <ArrowRightLeft size={15} />}
                   {otkazmaSaqlanmoqda ? "O'tkazilmoqda..." : "O'tkazish"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Yangi mahsulot + kirim modal */}
-      {yangiModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                <Plus size={18} className="text-red-500" />
-                Yangi mahsulot + kirim
-              </h3>
-              <button onClick={() => setYangiModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"><X size={18} /></button>
-            </div>
-            <form onSubmit={yangiMahsulotSaqlash} className="p-5 space-y-4">
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Mahsulot nomi *</label>
-                <input value={yangiForm.nomi} onChange={e => setYangiForm(f => ({ ...f, nomi: e.target.value }))} required className={inputCls} autoFocus />
-              </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kategoriya *</label>
-                <Combobox options={kategoriyalar.map(k => ({ value: k.id, label: k.nomi }))} value={yangiForm.kategoriyaId} onChange={v => setYangiForm(f => ({ ...f, kategoriyaId: v }))} placeholder="Kategoriya tanlang" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kirim miqdori *</label>
-                  <input type="number" value={yangiForm.miqdor} onChange={e => setYangiForm(f => ({ ...f, miqdor: e.target.value }))} required min="0" step="0.01" className={inputCls} />
-                </div>
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Tan narxi *</label>
-                  <MoneyInput value={yangiForm.kelishNarxi} onChange={v => setYangiForm(f => ({ ...f, kelishNarxi: v }))} required />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Sotuv narxi *</label>
-                  <MoneyInput value={yangiForm.sotishNarxi} onChange={v => setYangiForm(f => ({ ...f, sotishNarxi: v }))} required />
-                </div>
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
-                  <select value={yangiForm.birlik} onChange={e => setYangiForm(f => ({ ...f, birlik: e.target.value }))} className={inputCls}>
-                    <option value="DONA">Dona</option>
-                    <option value="KG">Kg</option>
-                    <option value="LITR">Litr</option>
-                    <option value="METR">Metr</option>
-                    <option value="PACHKA">Pachka</option>
-                    <option value="QUTI">Quti</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Min qoldiq</label>
-                  <input type="number" value={yangiForm.minimalQoldiq} onChange={e => setYangiForm(f => ({ ...f, minimalQoldiq: e.target.value }))} className={inputCls} />
-                </div>
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Shtrix-kod</label>
-                  <input value={yangiForm.shtrixKod} onChange={e => setYangiForm(f => ({ ...f, shtrixKod: e.target.value }))} className={inputCls} placeholder="Avtomatik" />
-                </div>
-              </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ta&apos;minotchi</label>
-                <Combobox options={taminotchiOptions} value={yangiForm.taminotchiId} onChange={v => setYangiForm(f => ({ ...f, taminotchiId: v }))} placeholder="Ixtiyoriy" />
-              </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Izoh</label>
-                <input value={yangiForm.izoh} onChange={e => setYangiForm(f => ({ ...f, izoh: e.target.value }))} className={inputCls} />
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setYangiModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" disabled={yangiSaqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {yangiSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
-                  {yangiSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash va kirim'}
                 </button>
               </div>
             </form>

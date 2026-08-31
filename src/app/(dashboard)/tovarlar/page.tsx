@@ -9,6 +9,7 @@ import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
+import BarcodeScanner from '@/components/BarcodeScanner'
 import { useConfirm } from '@/components/ConfirmProvider'
 
 interface Kategoriya { id: string; nomi: string }
@@ -51,9 +52,29 @@ export default function TovarlarPage() {
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
-    sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+    sotishNarxi: '', foiz: '15', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
     rasmlar: [] as string[], yaroqlilikMuddati: '',
   })
+
+  // Kelish narxi / ustama foiz / sotish narxi — uchtasi bir-biriga bog'liq.
+  // Kelish yoki foiz o'zgarsa -> sotish avtomatik hisoblanadi.
+  function kelishNarxiOzgardi(v: string) {
+    const kelish = parseFloat(v) || 0
+    const foiz = parseFloat(form.foiz) || 0
+    setForm(f => ({ ...f, kelishNarxi: v, sotishNarxi: kelish > 0 ? String(Math.round(kelish * (1 + foiz / 100))) : f.sotishNarxi }))
+  }
+  function foizOzgardi(v: string) {
+    const foiz = parseFloat(v) || 0
+    const kelish = parseFloat(form.kelishNarxi) || 0
+    setForm(f => ({ ...f, foiz: v, sotishNarxi: kelish > 0 ? String(Math.round(kelish * (1 + foiz / 100))) : f.sotishNarxi }))
+  }
+  // Sotish to'g'ridan-to'g'ri o'zgartirilsa -> foiz avtomatik hisoblanadi.
+  function sotishNarxiOzgardi(v: string) {
+    const sotish = parseFloat(v) || 0
+    const kelish = parseFloat(form.kelishNarxi) || 0
+    const yangiFoiz = kelish > 0 ? Math.round(((sotish - kelish) / kelish) * 1000) / 10 : null
+    setForm(f => ({ ...f, sotishNarxi: v, foiz: yangiFoiz !== null ? String(yangiFoiz) : f.foiz }))
+  }
 
   // Render limit
   const [renderLimit, setRenderLimit] = useState(50)
@@ -89,10 +110,12 @@ export default function TovarlarPage() {
   function ochModal(tovar?: Tovar) {
     if (tovar) {
       setTahrirlash(tovar)
+      const kelish = tovar.kelishNarxi
+      const foiz = kelish > 0 ? Math.round(((tovar.sotishNarxi - kelish) / kelish) * 1000) / 10 : 15
       setForm({
         nomi: tovar.nomi, kategoriyaId: tovar.kategoriya.id,
         shtrixKod: tovar.shtrixKod || '', kelishNarxi: String(tovar.kelishNarxi),
-        sotishNarxi: String(tovar.sotishNarxi), birlik: tovar.birlik,
+        sotishNarxi: String(tovar.sotishNarxi), foiz: String(foiz), birlik: tovar.birlik,
         minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: tovar.rasmlar || [],
         yaroqlilikMuddati: tovar.yaroqlilikMuddati ? tovar.yaroqlilikMuddati.slice(0, 10) : '',
@@ -100,7 +123,7 @@ export default function TovarlarPage() {
     } else {
       setTahrirlash(null)
       setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
-        kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+        kelishNarxi: '', sotishNarxi: '', foiz: '15', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: [], yaroqlilikMuddati: '' })
     }
     setModal(true)
@@ -204,6 +227,7 @@ export default function TovarlarPage() {
           placeholder="Tovar nomi yoki shtrix-kod..."
           className="flex-1"
         />
+        <BarcodeScanner onScan={setQidiruv} title="Mahsulotni qidirish uchun skanerlang" />
         <ViewToggle view={view} onChange={changeView} />
         <a
           href="/api/tovarlar/export"
@@ -449,6 +473,18 @@ export default function TovarlarPage() {
                 <input value={form.nomi} onChange={e => setForm(f => ({...f, nomi: e.target.value}))} required className={inputCls} />
               </div>
               <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Shtrix-kod</label>
+                <div className="flex gap-2">
+                  <input
+                    value={form.shtrixKod}
+                    onChange={e => setForm(f => ({ ...f, shtrixKod: e.target.value }))}
+                    className={inputCls}
+                    placeholder="Bo'sh qoldirsangiz avtomatik beriladi"
+                  />
+                  <BarcodeScanner onScan={kod => setForm(f => ({ ...f, shtrixKod: kod }))} title="Shtrix-kodni skanerlang" />
+                </div>
+              </div>
+              <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kategoriya *</label>
                 {kategoriyalar.length === 0 ? (
                   <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl">
@@ -478,21 +514,34 @@ export default function TovarlarPage() {
                   {/* MoneyInput for formatted currency entry */}
                   <MoneyInput
                     value={form.kelishNarxi}
-                    onChange={v => setForm(f => ({ ...f, kelishNarxi: v }))}
+                    onChange={kelishNarxiOzgardi}
                     required
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Sotish narxi *</label>
-                  {/* MoneyInput for formatted currency entry */}
-                  <MoneyInput
-                    value={form.sotishNarxi}
-                    onChange={v => setForm(f => ({ ...f, sotishNarxi: v }))}
-                    required
-                    placeholder="0"
-                  />
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ustama foiz</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={form.foiz}
+                      onChange={e => foizOzgardi(e.target.value)}
+                      className={inputCls + ' pr-8'}
+                      placeholder="15"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 text-sm">%</span>
+                  </div>
                 </div>
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Sotish narxi *</label>
+                {/* MoneyInput for formatted currency entry */}
+                <MoneyInput
+                  value={form.sotishNarxi}
+                  onChange={sotishNarxiOzgardi}
+                  required
+                  placeholder="0"
+                />
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
