@@ -332,16 +332,16 @@ export default function TovarlarPage() {
 
       {/* Card view */}
       {view === 'card' && (
-        <div className="grid grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {yuklanmoqda ? (
             <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Yuklanmoqda...</p>
           ) : filteredTovarlar.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Tovarlar topilmadi</p>
           ) : filteredTovarlar.map(t => (
-            <div key={t.id} className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl sm:rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all">
+            <div key={t.id} className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all">
               {/* Mahsulot rasmi (agar bo'lsa), aks holda ikonka + yumshoq nurlanish */}
-              <div className="aspect-square bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
-                <span className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 z-10 text-[8px] sm:text-[11px] bg-primary text-white px-1.5 py-0.5 sm:px-3 sm:py-1.5 rounded-full font-semibold shadow-sm max-w-[70%] truncate" title={t.kategoriya.nomi}>
+              <div className="aspect-[4/3] bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
+                <span className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 text-[10px] sm:text-[11px] bg-primary text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full font-semibold shadow-sm max-w-[70%] truncate" title={t.kategoriya.nomi}>
                   {t.kategoriya.nomi}
                 </span>
                 {t.rasmlar?.[0] ? (
@@ -354,41 +354,41 @@ export default function TovarlarPage() {
                   />
                 ) : (
                   <>
-                    <div className="absolute w-14 h-14 sm:w-28 sm:h-28 bg-primary/15 rounded-full blur-2xl" />
-                    <Package size={28} className="text-primary relative drop-shadow-sm sm:hidden" strokeWidth={1.5} />
-                    <Package size={64} className="text-primary relative drop-shadow-sm hidden sm:block" strokeWidth={1.5} />
+                    <div className="absolute w-20 h-20 sm:w-28 sm:h-28 bg-primary/15 rounded-full blur-2xl" />
+                    <Package size={40} className="text-primary relative drop-shadow-sm sm:hidden" strokeWidth={1.5} />
+                    <Package size={56} className="text-primary relative drop-shadow-sm hidden sm:block" strokeWidth={1.5} />
                   </>
                 )}
               </div>
 
-              <div className="p-2 sm:p-4">
-                <p className="text-gray-900 dark:text-gray-100 font-bold text-xs sm:text-base truncate" title={t.nomi}>{t.nomi}</p>
-                <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 hidden sm:block">Mahsulot kodi: #{(t.shtrixKod || '').padStart(3, '0') || '—'}</p>
+              <div className="p-3 sm:p-4">
+                <p className="text-gray-900 dark:text-gray-100 font-bold text-sm sm:text-base truncate" title={t.nomi}>{t.nomi}</p>
+                <p className="text-gray-400 dark:text-gray-600 text-[11px] sm:text-xs mt-0.5">Mahsulot kodi: #{(t.shtrixKod || '').padStart(3, '0') || '—'}</p>
 
-                <div className="mt-1.5 sm:mt-3 flex sm:grid sm:grid-cols-3 items-center justify-between sm:items-stretch gap-1 sm:gap-2 sm:text-center bg-gray-50 dark:bg-neutral-800/60 rounded-lg sm:rounded-xl py-1.5 sm:py-3 px-1.5 sm:px-0">
+                <div className="mt-2.5 sm:mt-3 grid grid-cols-3 gap-1.5 sm:gap-2 text-center bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-2 sm:py-3">
                   <div>
-                    <p className="text-gray-400 dark:text-gray-600 text-[8px] sm:text-[11px] hidden sm:block">Miqdori</p>
-                    <p className={`font-bold text-[10px] sm:text-sm mt-0.5 ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                    <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Miqdori</p>
+                    <p className={`font-bold text-xs sm:text-sm mt-0.5 ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
                       {t.qoldiq} {t.birlik.toLowerCase()}
                     </p>
                   </div>
-                  <div className="hidden sm:block border-x border-gray-200 dark:border-neutral-700">
-                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Kelish</p>
-                    <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">{formatSum(t.kelishNarxi)}</p>
+                  <div className="border-x border-gray-200 dark:border-neutral-700">
+                    <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Kelish</p>
+                    <p className="text-gray-700 dark:text-gray-300 font-medium text-xs sm:text-sm mt-0.5">{formatSum(t.kelishNarxi)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-400 dark:text-gray-600 text-[8px] sm:text-[11px] hidden sm:block">Sotish</p>
-                    <p className="text-green-600 font-semibold text-[10px] sm:text-sm mt-0.5">{formatSum(t.sotishNarxi)}</p>
+                    <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Sotish</p>
+                    <p className="text-green-600 font-semibold text-xs sm:text-sm mt-0.5">{formatSum(t.sotishNarxi)}</p>
                   </div>
                 </div>
               </div>
 
               <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2">
-                <button onClick={() => ochModal(t)} className="flex items-center justify-center gap-1.5 py-1.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-[11px] sm:text-sm font-medium border-r border-gray-100 dark:border-neutral-800">
-                  <Pencil size={12} className="sm:hidden" /><Pencil size={14} className="hidden sm:block" /> <span className="hidden sm:inline">Tahrirlash</span>
+                <button onClick={() => ochModal(t)} className="flex items-center justify-center gap-1.5 py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-xs sm:text-sm font-medium border-r border-gray-100 dark:border-neutral-800">
+                  <Pencil size={13} /> Tahrirlash
                 </button>
-                <button onClick={() => ochirish(t.id)} className="flex items-center justify-center gap-1.5 py-1.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-[11px] sm:text-sm font-medium">
-                  <Trash2 size={12} className="sm:hidden" /><Trash2 size={14} className="hidden sm:block" /> <span className="hidden sm:inline">O&apos;chirish</span>
+                <button onClick={() => ochirish(t.id)} className="flex items-center justify-center gap-1.5 py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-xs sm:text-sm font-medium">
+                  <Trash2 size={13} /> O&apos;chirish
                 </button>
               </div>
             </div>
