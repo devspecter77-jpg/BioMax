@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { normalizeUzbek, toKirill, toLotin } from '@/lib/utils'
 import { getStockMap } from '@/lib/stock'
 import { sessionFilialId } from '@/lib/filial-scope'
+import { rasmlarniSiqish } from '@/lib/rasm'
 
 export async function GET(req: NextRequest) {
   try {
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
 
     // Shtrix kod yo'q bo'lsa ketma-ketlikdagi bo'sh raqamni topib berish
     const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod(filialId)
+    const rasmlar = await rasmlarniSiqish(data.rasmlar)
 
     const tovar = await prisma.tovar.create({
       data: {
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
         sotishNarxi: parseFloat(data.sotishNarxi),
         birlik: data.birlik || 'DONA',
         minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
-        rasmUrl: data.rasmUrl || null,
+        rasmlar,
       },
       include: { kategoriya: true },
     })

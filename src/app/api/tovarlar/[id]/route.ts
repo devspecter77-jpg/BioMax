@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId } from '@/lib/filial-scope'
+import { rasmlarniSiqish } from '@/lib/rasm'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -39,6 +40,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
     const data = await req.json()
+    const rasmlar = await rasmlarniSiqish(data.rasmlar)
     const tovar = await prisma.tovar.update({
       where: { id },
       data: {
@@ -49,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         sotishNarxi: parseFloat(data.sotishNarxi),
         birlik: data.birlik,
         minimalQoldiq: parseInt(data.minimalQoldiq),
-        rasmUrl: data.rasmUrl || null,
+        rasmlar,
       },
       include: { kategoriya: true },
     })

@@ -112,7 +112,7 @@ model Tovar {
   sotishNarxi   Decimal   @db.Decimal(12, 2)
   birlik        Birlik    @default(DONA)
   minimalQoldiq Int       @default(5)
-  rasmUrl       String?
+  rasmlar       String[]  @default([])
   holati        TovarHolati @default(FAOL)
   yaratilgan    DateTime  @default(now())
   yangilangan   DateTime  @updatedAt

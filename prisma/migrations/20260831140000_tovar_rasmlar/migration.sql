@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "tovarlar" DROP COLUMN IF EXISTS "rasmUrl";
+ALTER TABLE "tovarlar" ADD COLUMN IF NOT EXISTS "rasmlar" TEXT[] DEFAULT ARRAY[]::TEXT[];

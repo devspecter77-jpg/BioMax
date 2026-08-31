@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus } from 'lucide-react'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -16,9 +16,10 @@ interface Tovar {
   id: string; nomi: string; kategoriya: Kategoriya
   kelishNarxi: number; sotishNarxi: number
   birlik: string; minimalQoldiq: number; shtrixKod: string | null
-  holati: string; qoldiq: number
+  holati: string; qoldiq: number; rasmlar: string[]
 }
 
+const MAX_RASM = 3
 const BIRLIKLAR = ['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI']
 const QOLDIQ_LABEL: Record<string, string> = {
   DONA: 'Necha dona bor?', KG: 'Necha kg bor?', LITR: 'Necha litr bor?',
@@ -48,7 +49,8 @@ export default function TovarlarPage() {
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
-    sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0'
+    sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+    rasmlar: [] as string[],
   })
 
   // Render limit
@@ -89,12 +91,14 @@ export default function TovarlarPage() {
         nomi: tovar.nomi, kategoriyaId: tovar.kategoriya.id,
         shtrixKod: tovar.shtrixKod || '', kelishNarxi: String(tovar.kelishNarxi),
         sotishNarxi: String(tovar.sotishNarxi), birlik: tovar.birlik,
-        minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0'
+        minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0',
+        rasmlar: tovar.rasmlar || [],
       })
     } else {
       setTahrirlash(null)
       setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
-        kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0' })
+        kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+        rasmlar: [] })
     }
     setModal(true)
   }
@@ -118,6 +122,22 @@ export default function TovarlarPage() {
     } finally {
       setSaqlanmoqda(false)
     }
+  }
+
+  function rasmTanlash(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) { toast.error("Faqat rasm fayli tanlang"); return }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setForm(f => f.rasmlar.length >= MAX_RASM ? f : { ...f, rasmlar: [...f.rasmlar, reader.result as string] })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function rasmOchirish(index: number) {
+    setForm(f => ({ ...f, rasmlar: f.rasmlar.filter((_, i) => i !== index) }))
   }
 
   async function kategoriyaQoshish() {
@@ -316,13 +336,20 @@ export default function TovarlarPage() {
             <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Tovarlar topilmadi</p>
           ) : filteredTovarlar.map(t => (
             <div key={t.id} className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all">
-              {/* Rasm o'rnini bosuvchi banner — katta ikonka + yumshoq nurlanish */}
+              {/* Mahsulot rasmi (agar bo'lsa), aks holda ikonka + yumshoq nurlanish */}
               <div className="h-40 bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
                 <span className="absolute top-3 left-3 z-10 text-[11px] bg-primary text-white px-3 py-1.5 rounded-full font-semibold shadow-sm max-w-[65%] truncate" title={t.kategoriya.nomi}>
                   {t.kategoriya.nomi}
                 </span>
-                <div className="absolute w-28 h-28 bg-primary/15 rounded-full blur-2xl" />
-                <Package size={64} className="text-primary relative drop-shadow-sm" strokeWidth={1.5} />
+                {t.rasmlar?.[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.rasmlar[0]} alt={t.nomi} className="w-full h-full object-cover" />
+                ) : (
+                  <>
+                    <div className="absolute w-28 h-28 bg-primary/15 rounded-full blur-2xl" />
+                    <Package size={64} className="text-primary relative drop-shadow-sm" strokeWidth={1.5} />
+                  </>
+                )}
               </div>
 
               <div className="p-4">
@@ -463,6 +490,33 @@ export default function TovarlarPage() {
                 <select value={form.birlik} onChange={e => setForm(f => ({...f, birlik: e.target.value}))} className={inputCls}>
                   {BIRLIKLAR.map(b => <option key={b} value={b}>{b.toLowerCase()}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Rasmlar <span className="text-gray-400 font-normal">(ixtiyoriy, maksimal {MAX_RASM} ta)</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {form.rasmlar.map((rasm, i) => (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-700 group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={rasm} alt={`Rasm ${i + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => rasmOchirish(i)}
+                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  {form.rasmlar.length < MAX_RASM && (
+                    <label className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-neutral-700 hover:border-primary dark:hover:border-primary flex flex-col items-center justify-center gap-1 cursor-pointer text-gray-400 hover:text-primary transition">
+                      <ImagePlus size={20} />
+                      <span className="text-[10px]">Qo&apos;shish</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={rasmTanlash} />
+                    </label>
+                  )}
+                </div>
               </div>
               {!tahrirlash ? (
                 <div>

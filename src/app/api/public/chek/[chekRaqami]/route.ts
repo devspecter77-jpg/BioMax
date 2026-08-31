@@ -17,7 +17,7 @@ export async function GET(
         kassir: { select: { ism: true } },
         tarkiblar: {
           include: {
-            tovar: { select: { nomi: true, birlik: true, rasmUrl: true } },
+            tovar: { select: { nomi: true, birlik: true } },
           },
         },
         nasiya: {

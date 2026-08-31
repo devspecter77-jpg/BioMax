@@ -14,6 +14,7 @@ interface QoldiqItem {
   id: string; nomi: string; kategoriya: { id: string; nomi: string }; kategoriyaId: string; shtrixKod: string | null
   birlik: string; sotishNarxi: number; kelishNarxi: number
   minimalQoldiq: number; qoldiq: number; omborQoldiq: number; dokonQoldiq: number; kamQolgan: boolean
+  rasmlar?: string[]
 }
 interface Taminotchi { id: string; nomi: string; manzil?: string | null }
 interface Kategoriya { id: string; nomi: string }
@@ -329,8 +330,15 @@ export default function OmborPage() {
                 <span className={`absolute top-3 right-3 z-10 text-[11px] px-2.5 py-1 rounded-full font-medium shadow-sm ${q.kamQolgan ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
                   {q.kamQolgan ? 'Kam qoldi' : 'Normal'}
                 </span>
-                <div className={`absolute w-28 h-28 rounded-full blur-2xl ${q.kamQolgan ? 'bg-red-500/15' : 'bg-primary/15'}`} />
-                <Package size={64} className={q.kamQolgan ? 'text-red-500 relative drop-shadow-sm' : 'text-primary relative drop-shadow-sm'} strokeWidth={1.5} />
+                {q.rasmlar?.[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={q.rasmlar[0]} alt={q.nomi} className="w-full h-full object-cover" />
+                ) : (
+                  <>
+                    <div className={`absolute w-28 h-28 rounded-full blur-2xl ${q.kamQolgan ? 'bg-red-500/15' : 'bg-primary/15'}`} />
+                    <Package size={64} className={q.kamQolgan ? 'text-red-500 relative drop-shadow-sm' : 'text-primary relative drop-shadow-sm'} strokeWidth={1.5} />
+                  </>
+                )}
               </div>
 
               <div className="p-4">

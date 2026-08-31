@@ -12,6 +12,7 @@ import PhoneInput from '@/components/ui/phone-input'
 
 interface Tovar {
   id: string; nomi: string; sotishNarxi: number; kelishNarxi: number; birlik: string; qoldiq: number; shtrixKod: string | null
+  rasmlar?: string[]
 }
 interface Mijoz { id: string; ism: string; telefon: string | null }
 interface SavatItem {
@@ -189,6 +190,7 @@ export default function SotuvPage() {
         birlik: data.birlik,
         qoldiq: Number(data.qoldiq ?? 0),
         shtrixKod: data.shtrixKod ?? null,
+        rasmlar: data.rasmlar ?? [],
       }
       // Topilgan tovarni local cache'ga qo'shamiz — keyingi skanlar tezlashadi
       setTovarlar(prev => prev.some(t => t.id === tovar.id) ? prev : [tovar, ...prev])
@@ -915,8 +917,13 @@ export default function SotuvPage() {
                       {savatdagi}
                     </span>
                   )}
-                  <div className="h-14 bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative">
-                    <Package size={22} className="text-pos/60 group-hover:text-pos group-hover:scale-110 transition-all" />
+                  <div className="h-14 bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
+                    {t.rasmlar?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.rasmlar[0]} alt={t.nomi} className="w-full h-full object-cover" />
+                    ) : (
+                      <Package size={22} className="text-pos/60 group-hover:text-pos group-hover:scale-110 transition-all" />
+                    )}
                     <span className={`absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
                       tugagan ? 'bg-red-500 text-white' : kamQoldi ? 'bg-amber-500 text-white' : 'bg-white/90 dark:bg-neutral-900/80 text-gray-600 dark:text-gray-300'
                     }`}>
