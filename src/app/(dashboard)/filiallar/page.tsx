@@ -162,12 +162,22 @@ export default function FiliallarPage() {
   }
 
   async function egaOchirish(u: EgaHisob) {
-    if (!(await confirm(`"${u.ism}" hisobini o'chirasizmi?`))) return
+    const savol = u.faol
+      ? `"${u.ism}" hisobini nofaol qilasizmi? (Qayta bossangiz butunlay o'chiriladi)`
+      : `"${u.ism}" hisobi butunlay o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi!`
+    if (!(await confirm(savol))) return
     setOchirilayotganId(u.id)
     try {
       const res = await fetch(`/api/foydalanuvchilar/${u.id}`, { method: 'DELETE' })
-      if (res.ok) { toast.success("Hisob o'chirildi"); yuklash() }
-      else {
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(
+          data.holat === 'ochirildi' ? "Hisob butunlay o'chirildi"
+            : data.holat === 'anonimlashtirildi' ? "Hisob nofaol qilindi va telefon raqami bo'shatildi (savdo tarixi borligi uchun yozuv saqlab qolindi)"
+            : 'Hisob nofaol qilindi'
+        )
+        yuklash()
+      } else {
         const err = await res.json()
         toast.error(err.xato || "O'chirishda xatolik")
       }
@@ -362,7 +372,14 @@ export default function FiliallarPage() {
                   {u.ism[0]?.toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{u.ism}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{u.ism}</p>
+                    {!u.faol && (
+                      <span className="inline-flex items-center text-[10px] bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-500 px-1.5 py-0.5 rounded font-medium shrink-0">
+                        Nofaol
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(u.login)}</p>
                 </div>
                 <button

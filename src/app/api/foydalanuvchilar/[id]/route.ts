@@ -59,8 +59,31 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    await prisma.foydalanuvchi.update({ where: { id }, data: { faol: false } })
-    return NextResponse.json({ ok: true })
+    const nishon = await prisma.foydalanuvchi.findUnique({ where: { id }, select: { faol: true, login: true } })
+    if (!nishon) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
+
+    if (nishon.faol) {
+      await prisma.foydalanuvchi.update({ where: { id }, data: { faol: false } })
+      return NextResponse.json({ ok: true, holat: 'nofaol' })
+    }
+
+    try {
+      await prisma.foydalanuvchi.delete({ where: { id } })
+      return NextResponse.json({ ok: true, holat: 'ochirildi' })
+    } catch {
+      // Bu hisob nomidan haqiqiy savdo/ombor/xarid tarixi bor — yozuvni
+      // butunlay o'chirish o'sha tarixni buzadi, shuning uchun faqat login
+      // (telefon raqami) bo'shatiladi va parol bekor qilinadi, yozuv esa
+      // eski hisobotlar uchun nofaol holicha saqlanadi.
+      await prisma.foydalanuvchi.update({
+        where: { id },
+        data: {
+          login: `ochirilgan_${Date.now()}_${nishon.login}`,
+          parolHash: await bcrypt.hash(`o'chirilgan_${Date.now()}_${Math.random()}`, 10),
+        },
+      })
+      return NextResponse.json({ ok: true, holat: 'anonimlashtirildi' })
+    }
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
