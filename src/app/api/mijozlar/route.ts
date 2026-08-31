@@ -85,7 +85,11 @@ export async function POST(req: NextRequest) {
 
     const maxsus_kod = await generateUniqueKod()
     const mijoz = await prisma.mijoz.create({
-      data: { ism: data.ism, telefon: data.telefon, manzil: data.manzil, izoh: data.izoh, maxsus_kod, filialId },
+      data: {
+        ism: data.ism, telefon: data.telefon, manzil: data.manzil, izoh: data.izoh, maxsus_kod, filialId,
+        lokatsiyaLat: typeof data.lokatsiyaLat === 'number' ? data.lokatsiyaLat : null,
+        lokatsiyaLng: typeof data.lokatsiyaLng === 'number' ? data.lokatsiyaLng : null,
+      },
     })
     return NextResponse.json(mijoz, { status: 201 })
   } catch {

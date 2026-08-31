@@ -433,13 +433,10 @@ export async function nasiyaEslatmalarYuborish() {
     } else if (kunFarq === 1) {
       xabarTuri = '1_kun'
       xabarMatni =
-        `🔴 MUHIM: Nasiya muddati ertaga!\n\n` +
-        `🏪 ${dokonNomi}\n` +
-        `👤 ${nasiya.mijoz.ism}\n` +
-        `🧾 ${nasiya.sotuv?.chekRaqami || 'Nasiya'}\n` +
-        `💰 Qoldiq qarz: ${formatSum(Number(nasiya.qoldiq))}\n` +
-        `📅 Muddat: ${formatSana(muddat)} (ertaga!)` +
-        `\n\nIltimos, bugun to'lang!`
+        `Assalomu alaykum, ${nasiya.mijoz.ism}!\n\n` +
+        `Sizda ${dokonNomi} do'konidan ${formatSum(Number(nasiya.qoldiq))} miqdorida qarz summasi bor ekan. ` +
+        `Ertaga (${formatSana(muddat)}) to'lov sanangiz.\n\n` +
+        `Iltimos, to'lovni o'z vaqtida amalga oshiring. Oldindan rahmat!`
     } else if (kunFarq <= 0 && nasiya.holati !== 'YOPILGAN') {
       xabarTuri = 'muddati_otgan'
       const otganKun = Math.abs(kunFarq)

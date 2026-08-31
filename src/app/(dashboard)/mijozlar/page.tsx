@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users, Download, Upload, Eye, Pencil } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users, Download, Upload, Eye, Pencil, LocateFixed } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/ConfirmProvider'
 
 interface Mijoz {
   id: string; ism: string; telefon: string | null; manzil: string | null
+  lokatsiyaLat: number | null; lokatsiyaLng: number | null
   maxsus_kod: string | null
   _count: { sotuvlar: number; nasiyalar: number }; jami_qarz: number
 }
@@ -31,17 +32,45 @@ export default function MijozlarPage() {
   const [qidiruv, setQidiruv] = useState('')
   const [modal, setModal] = useState(false)
   const [tahrirlash, setTahrirlash] = useState<Mijoz | null>(null)
-  const [form, setForm] = useState({ ism: '', telefon: '', manzil: '', izoh: '' })
+  const [form, setForm] = useState({
+    ism: '', telefon: '', manzil: '', izoh: '',
+    lokatsiyaLat: null as number | null, lokatsiyaLng: null as number | null,
+  })
+  const [joylashuvOlinmoqda, setJoylashuvOlinmoqda] = useState(false)
 
   function modalOchish(mijoz?: Mijoz) {
     if (mijoz) {
       setTahrirlash(mijoz)
-      setForm({ ism: mijoz.ism, telefon: mijoz.telefon || '', manzil: mijoz.manzil || '', izoh: '' })
+      setForm({
+        ism: mijoz.ism, telefon: mijoz.telefon || '', manzil: mijoz.manzil || '', izoh: '',
+        lokatsiyaLat: mijoz.lokatsiyaLat, lokatsiyaLng: mijoz.lokatsiyaLng,
+      })
     } else {
       setTahrirlash(null)
-      setForm({ ism: '', telefon: '', manzil: '', izoh: '' })
+      setForm({ ism: '', telefon: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
     }
     setModal(true)
+  }
+
+  // GPS orqali joriy joylashuvni olish — mijoz oldiga borib bosiladi.
+  function joylashuvniOlish() {
+    if (!navigator.geolocation) {
+      toast.error("Bu qurilma/brauzer GPS joylashuvni qo'llab-quvvatlamaydi")
+      return
+    }
+    setJoylashuvOlinmoqda(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm(f => ({ ...f, lokatsiyaLat: pos.coords.latitude, lokatsiyaLng: pos.coords.longitude }))
+        toast.success('Joylashuv aniqlandi')
+        setJoylashuvOlinmoqda(false)
+      },
+      (err) => {
+        toast.error(err.code === err.PERMISSION_DENIED ? 'Joylashuvga ruxsat berilmadi' : "Joylashuvni aniqlab bo'lmadi")
+        setJoylashuvOlinmoqda(false)
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    )
   }
   const [view, setView] = useState<'table' | 'card'>('table')
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
@@ -134,7 +163,7 @@ export default function MijozlarPage() {
         toast.success(tahrirlash ? 'Mijoz yangilandi' : "Mijoz qo'shildi")
         setModal(false)
         setTahrirlash(null)
-        setForm({ ism: '', telefon: '', manzil: '', izoh: '' })
+        setForm({ ism: '', telefon: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
         yuklash()
       } else toast.error('Xatolik yuz berdi')
     } finally {
@@ -262,7 +291,15 @@ export default function MijozlarPage() {
                     {/* Manzil */}
                     <td className="px-4 py-3 text-gray-400 dark:text-gray-600 text-sm hidden md:table-cell whitespace-nowrap">
                       {m.manzil ? (
-                        <span className="flex items-center gap-1 truncate"><MapPin size={12} />{m.manzil}</span>
+                        <span className="flex items-center gap-1 truncate">
+                          {m.lokatsiyaLat !== null && m.lokatsiyaLng !== null ? (
+                            <a href={`https://www.google.com/maps?q=${m.lokatsiyaLat},${m.lokatsiyaLng}`} target="_blank" rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()} title="Xaritada ko'rish" className="text-primary hover:text-primary-hover shrink-0">
+                              <MapPin size={12} />
+                            </a>
+                          ) : <MapPin size={12} className="shrink-0" />}
+                          {m.manzil}
+                        </span>
                       ) : <span className="text-gray-300 dark:text-gray-700">—</span>}
                     </td>
                     {/* Jami sotuv */}
@@ -317,7 +354,13 @@ export default function MijozlarPage() {
                   )}
                   {m.manzil && (
                     <p className="text-gray-400 dark:text-gray-600 text-sm flex items-center gap-1 mt-0.5">
-                      <MapPin size={12} /> {m.manzil}
+                      {m.lokatsiyaLat !== null && m.lokatsiyaLng !== null ? (
+                        <a href={`https://www.google.com/maps?q=${m.lokatsiyaLat},${m.lokatsiyaLng}`} target="_blank" rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()} title="Xaritada ko'rish" className="text-primary hover:text-primary-hover shrink-0">
+                          <MapPin size={12} />
+                        </a>
+                      ) : <MapPin size={12} className="shrink-0" />}
+                      {m.manzil}
                     </p>
                   )}
                 </div>
@@ -397,6 +440,33 @@ export default function MijozlarPage() {
                   onChange={e => setForm(prev => ({ ...prev, manzil: e.target.value }))}
                   className={inputCls} />
               </div>
+              {/* GPS joylashuv — mijoz oldiga borib olinadi, manzil matnidan mustaqil */}
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  GPS joylashuv <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
+                </label>
+                {form.lokatsiyaLat !== null && form.lokatsiyaLng !== null ? (
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/40 rounded-xl">
+                    <a
+                      href={`https://www.google.com/maps?q=${form.lokatsiyaLat},${form.lokatsiyaLng}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-green-700 dark:text-green-500 text-sm font-medium flex items-center gap-1.5 hover:underline min-w-0 truncate"
+                    >
+                      <MapPin size={14} className="shrink-0" /> Joylashuv saqlandi — xaritada ko&apos;rish
+                    </a>
+                    <button type="button" onClick={() => setForm(f => ({ ...f, lokatsiyaLat: null, lokatsiyaLng: null }))}
+                      className="p-1 text-gray-400 hover:text-red-600 rounded-lg transition shrink-0" title="Joylashuvni olib tashlash">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={joylashuvniOlish} disabled={joylashuvOlinmoqda}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:border-primary hover:text-primary transition disabled:opacity-60">
+                    {joylashuvOlinmoqda ? <Loader2 size={15} className="animate-spin" /> : <LocateFixed size={15} />}
+                    {joylashuvOlinmoqda ? 'Aniqlanmoqda...' : 'Joriy GPS joylashuvni olish'}
+                  </button>
+                )}
+              </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => { setModal(false); setTahrirlash(null) }}
                   className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
@@ -441,6 +511,15 @@ export default function MijozlarPage() {
                     <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 px-2.5 py-1 rounded-lg">
                       <MapPin size={12} />{tanlanganMijoz.manzil}
                     </span>
+                  )}
+                  {tanlanganMijoz.lokatsiyaLat !== null && tanlanganMijoz.lokatsiyaLng !== null && (
+                    <a
+                      href={`https://www.google.com/maps?q=${tanlanganMijoz.lokatsiyaLat},${tanlanganMijoz.lokatsiyaLng}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-primary hover:underline bg-primary-light dark:bg-primary/10 px-2.5 py-1 rounded-lg font-medium"
+                    >
+                      <LocateFixed size={12} /> GPS joylashuv
+                    </a>
                   )}
                   {tanlanganMijoz.jami_qarz > 0 && (
                     <span className="flex items-center gap-1 text-red-600 bg-red-50 dark:bg-red-950/30 px-2.5 py-1 rounded-lg font-medium">

@@ -79,6 +79,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         telefon: data.telefon || null,
         manzil: data.manzil || null,
         izoh: data.izoh || null,
+        lokatsiyaLat: typeof data.lokatsiyaLat === 'number' ? data.lokatsiyaLat : null,
+        lokatsiyaLng: typeof data.lokatsiyaLng === 'number' ? data.lokatsiyaLng : null,
       },
     })
     return NextResponse.json(mijoz)
