@@ -17,7 +17,15 @@ export async function GET() {
     if (!faqatEga(session)) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
 
     const filiallar = await prisma.filial.findMany({
-      include: { _count: { select: { xodimlar: true } } },
+      include: {
+        _count: { select: { xodimlar: true } },
+        xodimlar: {
+          where: { rol: 'ADMIN' },
+          take: 1,
+          orderBy: { yaratilgan: 'asc' },
+          select: { id: true, ism: true, login: true, telefon: true, faol: true },
+        },
+      },
       orderBy: { yaratilgan: 'asc' },
     })
 

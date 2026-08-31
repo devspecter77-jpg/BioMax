@@ -21,21 +21,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     })
     if (!filial) return NextResponse.json({ xato: 'Filial topilmadi' }, { status: 404 })
 
-    const [tovarSoni, mijozSoni, qarzdorlar] = await Promise.all([
-      prisma.tovar.count({ where: { filialId: id, holati: 'FAOL' } }),
-      prisma.mijoz.count({ where: { filialId: id } }),
-      prisma.nasiya.findMany({
-        where: {
-          mijoz: { filialId: id },
-          holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] },
-          qoldiq: { gt: 0 },
-        },
-        select: { mijozId: true },
-        distinct: ['mijozId'],
-      }),
-    ])
-
-    return NextResponse.json({ ...filial, tovarSoni, mijozSoni, qarzdorSoni: qarzdorlar.length })
+    return NextResponse.json(filial)
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }

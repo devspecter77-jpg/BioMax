@@ -20,12 +20,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    const { ism, rol, parol, faol, telefon, filialId: reqFilialId } = await req.json()
+    const { ism, rol, parol, faol, telefon, login, filialId: reqFilialId } = await req.json()
     const filialId = ownFilialId || reqFilialId
     if (rol !== 'ADMIN' && !filialId) {
       return NextResponse.json({ xato: "Filial tanlang" }, { status: 400 })
     }
     const updateData: any = { ism, rol, faol, telefon: telefon || null, filialId: rol === 'ADMIN' ? (filialId || null) : filialId }
+    if (login) {
+      const bandmi = await prisma.foydalanuvchi.findFirst({ where: { login, NOT: { id } } })
+      if (bandmi) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
+      updateData.login = login
+    }
     if (parol) updateData.parolHash = await bcrypt.hash(parol, 10)
     const user = await prisma.foydalanuvchi.update({
       where: { id },
