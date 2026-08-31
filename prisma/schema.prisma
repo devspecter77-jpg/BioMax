@@ -24,6 +24,7 @@ model Filial {
   mijozlar      Mijoz[]
   taminotchilar Taminotchi[]
   sotuvlar      Sotuv[]
+  xarajatlar    Xarajat[]
 
   @@map("filiallar")
 }
@@ -55,6 +56,10 @@ model Foydalanuvchi {
   ulashilganAdminlar Foydalanuvchi[] @relation("EgaUlashish")
   ozTovarlari  Tovar[]  @relation("TovarEgasi")
   ozMijozlari  Mijoz[]  @relation("MijozEgasi")
+  ozKategoriyalari Kategoriya[] @relation("KategoriyaEgasi")
+  ozTaminotchilari Taminotchi[] @relation("TaminotchiEgasi")
+  ozSotuvlari  Sotuv[]  @relation("SotuvEgasi")
+  ozXarajatlari Xarajat[] @relation("XarajatEgasi")
   sotuvlar     Sotuv[]
   omborlar     OmborHarakati[]
   xarajatlar   Xarajat[]
@@ -102,13 +107,16 @@ model Kategoriya {
   nomi        String
   tavsif      String?
   filialId    String?
+  egaId       String?
   yaratilgan  DateTime @default(now())
 
   filial      Filial?  @relation(fields: [filialId], references: [id])
+  ega         Foydalanuvchi? @relation("KategoriyaEgasi", fields: [egaId], references: [id])
   tovarlar    Tovar[]
 
-  @@unique([nomi, filialId])
+  @@unique([nomi, filialId, egaId])
   @@index([filialId])
+  @@index([egaId])
   @@map("kategoriyalar")
 }
 
@@ -287,11 +295,13 @@ model Sotuv {
 
   sherikDokonId  String?
   filialId       String?
+  egaId          String?
 
   mijoz          Mijoz?          @relation(fields: [mijozId], references: [id])
   kassir         Foydalanuvchi   @relation(fields: [kassirId], references: [id])
   sherikDokon    SherikDokon?    @relation(fields: [sherikDokonId], references: [id])
   filial         Filial?         @relation(fields: [filialId], references: [id])
+  ega            Foydalanuvchi?  @relation("SotuvEgasi", fields: [egaId], references: [id])
   tarkiblar      SotuvTarkibi[]
   nasiya         Nasiya?
   omborHarakati  OmborHarakati[]
@@ -299,6 +309,7 @@ model Sotuv {
   sherikdanOlishlar  SherikdanOlish[]
 
   @@index([filialId])
+  @@index([egaId])
   @@map("sotuvlar")
 }
 
@@ -409,15 +420,18 @@ model Taminotchi {
   manzil        String?
   izoh          String?
   filialId      String?
+  egaId         String?
   yaratilgan    DateTime @default(now())
 
   filial        Filial?  @relation(fields: [filialId], references: [id])
+  ega           Foydalanuvchi? @relation("TaminotchiEgasi", fields: [egaId], references: [id])
   xaridlar      Xarid[]
   omborHarakati OmborHarakati[]
   sherikdanOlishlar      SherikdanOlish[]
   sherikdanOlishTolovlar SherikdanOlishTolov[]
 
   @@index([filialId])
+  @@index([egaId])
   @@map("taminotchilar")
 }
 
@@ -505,9 +519,15 @@ model Xarajat {
   izoh            String?
   sana            DateTime         @default(now())
   foydalanuvchiId String
+  filialId        String?
+  egaId           String?
 
   foydalanuvchi   Foydalanuvchi    @relation(fields: [foydalanuvchiId], references: [id])
+  filial          Filial?          @relation(fields: [filialId], references: [id])
+  ega             Foydalanuvchi?   @relation("XarajatEgasi", fields: [egaId], references: [id])
 
+  @@index([filialId])
+  @@index([egaId])
   @@map("xarajatlar")
 }
 

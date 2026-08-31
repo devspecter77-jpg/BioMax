@@ -3,22 +3,19 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 import { tolovQilindiXabar } from '@/lib/telegram'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const data = await req.json()
     const foydalanuvchiId = (session.user as any).id
 
-    if (filialId) {
-      const egalik = await prisma.nasiya.findFirst({ where: { id, mijoz: { filialId } }, select: { id: true } })
-      if (!egalik) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
-    }
+    const egalik = await prisma.nasiya.findFirst({ where: { id, mijoz: egaFilialWhere(session) }, select: { id: true } })
+    if (!egalik) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
 
     // tolovUsuli validatsiya
     const USULLAR = ['NAQD', 'KARTA'] as const

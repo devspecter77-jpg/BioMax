@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(_req: NextRequest) {
   const session = await auth()
@@ -10,6 +11,7 @@ export async function GET(_req: NextRequest) {
   if (rol === 'KASSIR') return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
 
   const xaridlar = await prisma.xarid.findMany({
+    where: { taminotchi: egaFilialWhere(session) },
     include: {
       taminotchi: {
         select: { id: true, nomi: true, kontaktShaxs: true, telefon: true },

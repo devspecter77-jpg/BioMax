@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 // Barcha mahsulotlarga birdan kirim qilish
 export async function POST(req: NextRequest) {
@@ -15,9 +16,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ xato: 'Miqdor noto\'g\'ri' }, { status: 400 })
     }
 
-    // Barcha faol mahsulotlarni olish
+    // Barcha faol mahsulotlarni olish — faqat o'zining (yoki ulashgan) katalogidan
     const tovarlar = await prisma.tovar.findMany({
-      where: { holati: 'FAOL' },
+      where: { holati: 'FAOL', ...egaFilialWhere(session) },
       select: { id: true },
     })
 

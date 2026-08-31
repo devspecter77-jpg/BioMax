@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const rol = (session.user as { rol?: string })?.rol
   if (rol === 'KASSIR') return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
-  const filialId = sessionFilialId(session)
+  const egaScope = egaFilialWhere(session)
 
   const { searchParams } = new URL(req.url)
   const tur = (searchParams.get('tur') || 'oylik') as ReportTur
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   const [sotuvlar, xarajatlar, qaytarishSum] = await Promise.all([
     prisma.sotuv.findMany({
-      where: baseSotuvFilter(d, g, undefined, filialId),
+      where: baseSotuvFilter(d, g, undefined, egaScope),
       include: {
         tarkiblar: {
           include: {
@@ -38,9 +38,9 @@ export async function GET(req: NextRequest) {
         kassir: { select: { ism: true } },
       },
     }),
-    prisma.xarajat.findMany({ where: { sana: { gte: d, lt: g } } }),
+    prisma.xarajat.findMany({ where: { sana: { gte: d, lt: g }, ...egaScope } }),
     prisma.qaytarish.aggregate({
-      where: { yaratilgan: { gte: d, lt: g }, ...(filialId ? { aslSotuv: { filialId } } : {}) },
+      where: { yaratilgan: { gte: d, lt: g }, aslSotuv: egaScope },
       _sum: { jamiSumma: true },
     }),
   ])

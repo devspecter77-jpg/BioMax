@@ -75,7 +75,7 @@ async function main() {
 
   const kategoriyalar: any[] = []
   for (const k of kategoriyalarData) {
-    const kat = await prisma.kategoriya.upsert({ where: { nomi_filialId: { nomi: k.nomi, filialId: null as any } }, update: {}, create: k })
+    const kat = await prisma.kategoriya.upsert({ where: { nomi_filialId_egaId: { nomi: k.nomi, filialId: null as any, egaId: null as any } }, update: {}, create: k })
     kategoriyalar.push(kat)
   }
   const katMap: Record<string, string> = {}

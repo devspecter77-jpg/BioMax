@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest) {
     if (!tovarId || yangiQoldiq === undefined || yangiQoldiq === null) {
       return NextResponse.json({ xato: "tovarId va yangiQoldiq majburiy" }, { status: 400 })
     }
+
+    const egalik = await prisma.tovar.findFirst({ where: { id: tovarId, ...egaFilialWhere(session) }, select: { id: true } })
+    if (!egalik) return NextResponse.json({ xato: 'Tovar topilmadi' }, { status: 404 })
 
     const yangi = parseFloat(yangiQoldiq)
     if (isNaN(yangi) || yangi < 0) {

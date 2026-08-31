@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -36,15 +35,15 @@ export async function POST(req: NextRequest) {
         let mijoz = null
         if (manzil) {
           const nomzodlar = await prisma.mijoz.findMany({
-            where: { ism: { equals: ism, mode: 'insensitive' }, ...(filialId ? { filialId } : {}) },
+            where: { ism: { equals: ism, mode: 'insensitive' }, ...egaFilialWhere(session) },
           })
           mijoz = nomzodlar.find(c => c.manzil && normalizeManzil(c.manzil) === normalizeManzil(manzil)) || null
         }
         if (!mijoz && finalPhone) {
-          mijoz = await prisma.mijoz.findFirst({ where: { telefon: finalPhone, ...(filialId ? { filialId } : {}) } })
+          mijoz = await prisma.mijoz.findFirst({ where: { telefon: finalPhone, ...egaFilialWhere(session) } })
         }
         if (!mijoz) {
-          mijoz = await prisma.mijoz.create({ data: { ism, manzil, telefon: finalPhone, filialId } })
+          mijoz = await prisma.mijoz.create({ data: { ism, manzil, telefon: finalPhone, ...egaFilialWhere(session) } })
         }
 
         const muddatQiymati = row['Muddat'] ? new Date(row['Muddat']) : null

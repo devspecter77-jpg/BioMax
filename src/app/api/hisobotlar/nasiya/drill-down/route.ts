@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { agingBucket, type AgingBucket } from '@/lib/hisobotlar'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-  const filialId = sessionFilialId(session)
 
   const { searchParams } = new URL(req.url)
   const bucket = (searchParams.get('bucket') || 'b_0_30') as AgingBucket
@@ -17,7 +16,7 @@ export async function GET(req: NextRequest) {
       ochirilgan: false,
       holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] },
       qoldiq: { gt: 0 },
-      ...(filialId ? { mijoz: { filialId } } : {}),
+      mijoz: egaFilialWhere(session),
     },
     include: {
       mijoz: { select: { id: true, ism: true, telefon: true, manzil: true } },

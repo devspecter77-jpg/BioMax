@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
     const gacha = searchParams.get('gacha')
     const kategoriya = searchParams.get('kategoriya')
 
-    const where: any = {}
+    const where: any = { ...egaFilialWhere(session) }
     if (kategoriya) where.kategoriya = kategoriya
     if (dan || gacha) {
       where.sana = {}
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
         izoh: data.izoh,
         sana: data.sana ? new Date(data.sana) : new Date(),
         foydalanuvchiId,
+        ...egaFilialWhere(session),
       },
     })
     return NextResponse.json(xarajat, { status: 201 })

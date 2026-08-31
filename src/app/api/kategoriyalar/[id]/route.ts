@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { id } = await params
-    const mavjud = await prisma.kategoriya.findFirst({ where: { id, ...(filialId ? { filialId } : {}) }, select: { id: true } })
+    const mavjud = await prisma.kategoriya.findFirst({ where: { id, ...egaFilialWhere(session) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
     const { nomi, tavsif } = await req.json()
@@ -32,10 +31,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { id } = await params
-    const mavjud = await prisma.kategoriya.findFirst({ where: { id, ...(filialId ? { filialId } : {}) }, select: { id: true } })
+    const mavjud = await prisma.kategoriya.findFirst({ where: { id, ...egaFilialWhere(session) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
     // Check if any products use this category

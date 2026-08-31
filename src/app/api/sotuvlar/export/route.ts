@@ -3,13 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { searchParams } = new URL(req.url)
     const dan = searchParams.get('dan')
@@ -18,7 +17,7 @@ export async function GET(req: NextRequest) {
     const mijozId = searchParams.get('mijozId') || undefined
     const tolovUsuli = searchParams.get('tolovUsuli') || undefined
 
-    const where: Record<string, unknown> = { holati: 'YAKUNLANGAN', ...(filialId ? { filialId } : {}) }
+    const where: Record<string, unknown> = { holati: 'YAKUNLANGAN', ...egaFilialWhere(session) }
     if (dan || gacha) {
       const sana: { gte?: Date; lte?: Date } = {}
       if (dan) sana.gte = new Date(dan)

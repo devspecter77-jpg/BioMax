@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { searchParams } = new URL(req.url)
     const holati = searchParams.get('holati') || ''
     const mijozId = searchParams.get('mijozId') || ''
 
-    const where: any = { ochirilgan: false }
+    const where: any = { ochirilgan: false, mijoz: egaFilialWhere(session) }
     if (holati) where.holati = holati
     if (mijozId) where.mijozId = mijozId
-    if (filialId) where.mijoz = { filialId }
 
     const nasiyalar = await prisma.nasiya.findMany({
       where,
@@ -40,7 +38,6 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const body = await req.json()
     const { ism, manzil, telefon, qarz, muddat, sana } = body
@@ -59,7 +56,7 @@ export async function POST(req: NextRequest) {
     let mijoz = null
     if (manzil) {
       const candidates = await prisma.mijoz.findMany({
-        where: { ism: { equals: ism, mode: 'insensitive' }, ...(filialId ? { filialId } : {}) },
+        where: { ism: { equals: ism, mode: 'insensitive' }, ...egaFilialWhere(session) },
       })
       mijoz = candidates.find(c =>
         c.manzil && normalizeManzil(c.manzil) === normalizeManzil(manzil)
@@ -70,7 +67,7 @@ export async function POST(req: NextRequest) {
       // Agar telefon bor bo'lsa, telefon bo'yicha ham tekshirish
       if (finalPhone) {
         mijoz = await prisma.mijoz.findFirst({
-          where: { telefon: finalPhone, ...(filialId ? { filialId } : {}) },
+          where: { telefon: finalPhone, ...egaFilialWhere(session) },
         })
       }
     }
@@ -81,7 +78,7 @@ export async function POST(req: NextRequest) {
           ism,
           manzil: manzil || null,
           telefon: finalPhone,
-          filialId,
+          ...egaFilialWhere(session),
         },
       })
     } else {

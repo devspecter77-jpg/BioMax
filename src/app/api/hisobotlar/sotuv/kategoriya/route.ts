@@ -6,7 +6,7 @@ import {
   baseSotuvFilter,
   type ReportTur,
 } from '@/lib/hisobotlar'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,11 +19,11 @@ export async function GET(req: NextRequest) {
     const gacha = searchParams.get('gacha') || undefined
 
     const { dan: d, gacha: g } = getReportDateRange(tur, dan, gacha)
-    const filialId = sessionFilialId(session)
+    const egaScope = egaFilialWhere(session)
 
     async function computeKategoriya(from: Date, to: Date) {
       const tarkiblar = await prisma.sotuvTarkibi.findMany({
-        where: { sotuv: baseSotuvFilter(from, to, undefined, filialId) },
+        where: { sotuv: baseSotuvFilter(from, to, undefined, egaScope) },
         include: {
           tovar: { include: { kategoriya: true } },
         },

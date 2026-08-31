@@ -6,7 +6,7 @@ import {
   baseSotuvFilter,
   type ReportTur,
 } from '@/lib/hisobotlar'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,23 +23,23 @@ export async function GET(req: NextRequest) {
     const gacha = searchParams.get('gacha') || undefined
 
     const { dan: danSana, gacha: gachaSana } = getReportDateRange(tur, dan, gacha)
-    const filialId = sessionFilialId(session)
+    const egaScope = egaFilialWhere(session)
 
     // Helper: compute P&L for a given date range
     async function computePL(from: Date, to: Date) {
       const [sotuvlar, qaytarishSum, xarajatlar] = await Promise.all([
         prisma.sotuv.findMany({
-          where: baseSotuvFilter(from, to, undefined, filialId),
+          where: baseSotuvFilter(from, to, undefined, egaScope),
           include: {
             tarkiblar: { include: { tovar: { select: { kelishNarxi: true } } } },
           },
         }),
         prisma.qaytarish.aggregate({
-          where: { yaratilgan: { gte: from, lt: to }, ...(filialId ? { aslSotuv: { filialId } } : {}) },
+          where: { yaratilgan: { gte: from, lt: to }, aslSotuv: egaScope },
           _sum: { jamiSumma: true },
         }),
         prisma.xarajat.findMany({
-          where: { sana: { gte: from, lt: to } },
+          where: { sana: { gte: from, lt: to }, ...egaScope },
           select: { kategoriya: true, summa: true, sana: true },
         }),
       ])

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
-import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId, sessionIsRealEga, egaFilialWhere } from '@/lib/filial-scope'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
 export async function GET(req: NextRequest) {
@@ -84,6 +84,9 @@ export async function POST(req: NextRequest) {
 
     const data = await req.json()
     const foydalanuvchiId = (session.user as any).id
+
+    const egalik = await prisma.tovar.findFirst({ where: { id: data.tovarId, ...egaFilialWhere(session) }, select: { id: true } })
+    if (!egalik) return NextResponse.json({ xato: 'Tovar topilmadi' }, { status: 404 })
 
     const harakat = await prisma.omborHarakati.create({
       data: {

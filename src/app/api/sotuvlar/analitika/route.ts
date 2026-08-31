@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { hisoblaOrtachaChek, soatTaqsimoti } from '@/lib/analitika'
 import type { TolovUsuli } from '@prisma/client'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 const TOP_N = 20
 
@@ -18,7 +18,6 @@ export async function GET(req: NextRequest) {
     const kassirId = searchParams.get('kassirId') || undefined
     const mijozId = searchParams.get('mijozId') || undefined
     const tolovUsuli = (searchParams.get('tolovUsuli') as TolovUsuli | null) || undefined
-    const filialId = sessionFilialId(session)
 
     const bugun = new Date()
     bugun.setHours(23, 59, 59, 999)
@@ -36,7 +35,7 @@ export async function GET(req: NextRequest) {
       tolovUsuli: tolovUsuli ?? { not: 'SHERIK' as const },
       ...(kassirId ? { kassirId } : {}),
       ...(mijozId ? { mijozId } : {}),
-      ...(filialId ? { filialId } : {}),
+      ...egaFilialWhere(session),
     }
 
     const [joriySotuvlar, qaytarishSum, topTarkiblar] = await Promise.all([
@@ -52,8 +51,7 @@ export async function GET(req: NextRequest) {
         where: {
           yaratilgan: { gte: danSana, lte: gachaSana },
           ...(kassirId ? { kassirId } : {}),
-          ...(mijozId ? { aslSotuv: { mijozId } } : {}),
-          ...(filialId ? { aslSotuv: { filialId } } : {}),
+          aslSotuv: { ...(mijozId ? { mijozId } : {}), ...egaFilialWhere(session) },
         },
         _sum: { jamiSumma: true },
       }),
@@ -136,7 +134,7 @@ export async function GET(req: NextRequest) {
       _count: true,
       where: {
         yaratilgan: { gte: danSana, lte: gachaSana },
-        ...(filialId ? { aslSotuv: { filialId } } : {}),
+        aslSotuv: egaFilialWhere(session),
       },
     })
     for (const q of qaytarishlar) {

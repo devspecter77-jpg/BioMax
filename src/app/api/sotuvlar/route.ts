@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { generateChekRaqami } from '@/lib/utils'
 import { nasiyaYaratildiXabarToliq, sotuvChekiXabar } from '@/lib/telegram'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,12 +22,11 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get('q')
     const sort = searchParams.get('sort')
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
-    const filialId = sessionFilialId(session)
 
     // Chek raqami bo'yicha qidirish (qaytarish uchun)
     if (chekRaqami) {
       const sotuv = await prisma.sotuv.findFirst({
-        where: { chekRaqami, ...(filialId ? { filialId } : {}) },
+        where: { chekRaqami, ...egaFilialWhere(session) },
         include: {
           mijoz: { select: { ism: true, telefon: true } },
           kassir: { select: { ism: true } },
@@ -38,8 +37,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(sotuv ? { sotuvlar: [sotuv], jami: 1 } : { sotuvlar: [], jami: 0 })
     }
 
-    const where: any = {}
-    if (filialId) where.filialId = filialId
+    const where: any = { ...egaFilialWhere(session) }
     if (dan || gacha) {
       where.sana = {}
       if (dan) where.sana.gte = new Date(dan)
@@ -104,7 +102,6 @@ export async function POST(req: NextRequest) {
 
     const data = await req.json()
     const kassirId = (session.user as any).id
-    const filialId = sessionFilialId(session)
 
     // Tranzaksiya: sotuv + ombor harakati + nasiya
     const sotuv = await prisma.$transaction(async (tx) => {
@@ -121,7 +118,7 @@ export async function POST(req: NextRequest) {
           naqdTolangan: parseFloat(data.naqdTolangan || 0),
           kartaTolangan: parseFloat(data.kartaTolangan || 0),
           kassirId,
-          filialId,
+          ...egaFilialWhere(session),
         },
       })
 

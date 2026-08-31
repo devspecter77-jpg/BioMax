@@ -2,16 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
-    const nasiya = await prisma.nasiya.findFirst({ where: { id, ...(filialId ? { mijoz: { filialId } } : {}) } })
+    const nasiya = await prisma.nasiya.findFirst({ where: { id, mijoz: egaFilialWhere(session) } })
     if (!nasiya) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
 
     const { ism, manzil, telefon, muddat, qarz, sana } = await req.json()
@@ -64,9 +63,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
-    const nasiya = await prisma.nasiya.findFirst({ where: { id, ...(filialId ? { mijoz: { filialId } } : {}) } })
+    const nasiya = await prisma.nasiya.findFirst({ where: { id, mijoz: egaFilialWhere(session) } })
     if (!nasiya) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
 
     // Soft delete — ma'lumotlar saqlanadi, faqat yashiriladi

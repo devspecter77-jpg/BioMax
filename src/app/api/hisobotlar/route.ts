@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const rol = (session?.user as any)?.rol
     const kassirId = rol === 'KASSIR' ? session?.user?.id : null
@@ -45,13 +44,13 @@ export async function GET(req: NextRequest) {
       sana: { gte: danSana, lt: gachaSana },
       tolovUsuli: { not: 'SHERIK' as const },
       ...(kassirId ? { kassirId } : {}),
-      ...(filialId ? { filialId } : {}),
+      ...egaFilialWhere(session),
     }
 
     const qaytarishSumma = await prisma.qaytarish.aggregate({
       where: {
         yaratilgan: { gte: danSana, lt: gachaSana },
-        ...(filialId ? { aslSotuv: { filialId } } : {}),
+        aslSotuv: egaFilialWhere(session),
       },
       _sum: { jamiSumma: true },
     })
@@ -67,13 +66,13 @@ export async function GET(req: NextRequest) {
         },
       }),
       prisma.xarajat.findMany({
-        where: { sana: { gte: danSana, lt: gachaSana } },
+        where: { sana: { gte: danSana, lt: gachaSana }, ...egaFilialWhere(session) },
         select: { summa: true, kategoriya: true },
       }),
       prisma.nasiya.findMany({
         where: {
           holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] },
-          ...(filialId ? { mijoz: { filialId } } : {}),
+          mijoz: egaFilialWhere(session),
         },
         select: { qoldiq: true, holati: true },
       }),
