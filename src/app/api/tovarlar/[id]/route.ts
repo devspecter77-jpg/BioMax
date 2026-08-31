@@ -52,6 +52,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         birlik: data.birlik,
         minimalQoldiq: parseInt(data.minimalQoldiq),
         rasmlar,
+        yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
       },
       include: { kategoriya: true },
     })

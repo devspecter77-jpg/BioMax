@@ -113,6 +113,7 @@ model Tovar {
   birlik        Birlik    @default(DONA)
   minimalQoldiq Int       @default(5)
   rasmlar       String[]  @default([])
+  yaroqlilikMuddati DateTime?
   holati        TovarHolati @default(FAOL)
   yaratilgan    DateTime  @default(now())
   yangilangan   DateTime  @updatedAt

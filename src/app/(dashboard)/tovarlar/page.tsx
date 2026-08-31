@@ -17,6 +17,7 @@ interface Tovar {
   kelishNarxi: number; sotishNarxi: number
   birlik: string; minimalQoldiq: number; shtrixKod: string | null
   holati: string; qoldiq: number; rasmlar: string[]
+  yaroqlilikMuddati: string | null
 }
 
 const MAX_RASM = 3
@@ -51,7 +52,7 @@ export default function TovarlarPage() {
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
     sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
-    rasmlar: [] as string[],
+    rasmlar: [] as string[], yaroqlilikMuddati: '',
   })
 
   // Render limit
@@ -94,12 +95,13 @@ export default function TovarlarPage() {
         sotishNarxi: String(tovar.sotishNarxi), birlik: tovar.birlik,
         minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: tovar.rasmlar || [],
+        yaroqlilikMuddati: tovar.yaroqlilikMuddati ? tovar.yaroqlilikMuddati.slice(0, 10) : '',
       })
     } else {
       setTahrirlash(null)
       setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
         kelishNarxi: '', sotishNarxi: '', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
-        rasmlar: [] })
+        rasmlar: [], yaroqlilikMuddati: '' })
     }
     setModal(true)
   }
@@ -523,6 +525,17 @@ export default function TovarlarPage() {
                     </label>
                   )}
                 </div>
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Yaroqlilik muddati <span className="text-gray-400 dark:text-gray-600 font-normal">(ixtiyoriy)</span>
+                </label>
+                <input
+                  type="date"
+                  value={form.yaroqlilikMuddati}
+                  onChange={e => setForm(f => ({ ...f, yaroqlilikMuddati: e.target.value }))}
+                  className={inputCls}
+                />
               </div>
               {!tahrirlash ? (
                 <div>

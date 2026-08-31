@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
         birlik: data.birlik || 'DONA',
         minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
         rasmlar,
+        yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
       },
       include: { kategoriya: true },
     })

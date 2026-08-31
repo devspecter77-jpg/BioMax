@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
-import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -15,6 +15,7 @@ interface QoldiqItem {
   birlik: string; sotishNarxi: number; kelishNarxi: number
   minimalQoldiq: number; qoldiq: number; omborQoldiq: number; dokonQoldiq: number; kamQolgan: boolean
   rasmlar?: string[]
+  yaroqlilikMuddati: string | null; kunQoldi: number | null; muddatiYaqin: boolean
 }
 interface Taminotchi { id: string; nomi: string; manzil?: string | null }
 interface Kategoriya { id: string; nomi: string }
@@ -35,6 +36,7 @@ export default function OmborPage() {
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
   const [kamQolganFilter, setKamQolganFilter] = useState(false)
+  const [muddatiYaqinFilter, setMuddatiYaqinFilter] = useState(false)
   const [view, setView] = useState<'table' | 'card'>('table')
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [tarix, setTarix] = useState(false)
@@ -58,7 +60,7 @@ export default function OmborPage() {
   const [tahrirTovar, setTahrirTovar] = useState<QoldiqItem | null>(null)
   const [tahrirForm, setTahrirForm] = useState({
     nomi: '', kategoriyaId: '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA',
-    minimalQoldiq: '5', shtrixKod: ''
+    minimalQoldiq: '5', shtrixKod: '', yaroqlilikMuddati: ''
   })
   const [otkazmaSaqlanmoqda, setOtkazmaSaqlanmoqda] = useState(false)
   const [yangiSaqlanmoqda, setYangiSaqlanmoqda] = useState(false)
@@ -77,7 +79,7 @@ export default function OmborPage() {
   async function yuklash() {
     setYuklanmoqda(true)
     const [qd, tm, kt] = await Promise.all([
-      fetch(`/api/ombor?q=${qidiruv}&kamQolgan=${kamQolganFilter}`).then(r => r.json()),
+      fetch(`/api/ombor?q=${qidiruv}&kamQolgan=${kamQolganFilter}&muddatiYaqin=${muddatiYaqinFilter}`).then(r => r.json()),
       fetch('/api/taminotchilar').then(r => r.json()),
       fetch('/api/kategoriyalar').then(r => r.json()),
     ])
@@ -87,7 +89,7 @@ export default function OmborPage() {
     setYuklanmoqda(false)
   }
 
-  useEffect(() => { yuklash() }, [qidiruv, kamQolganFilter])
+  useEffect(() => { yuklash() }, [qidiruv, kamQolganFilter, muddatiYaqinFilter])
 
   async function harakatlarYuklash() {
     setHarakatYuklanmoqda(true)
@@ -165,7 +167,7 @@ export default function OmborPage() {
     setTahrirForm({
       nomi: q.nomi, kategoriyaId: q.kategoriyaId || '', kelishNarxi: String(q.kelishNarxi),
       sotishNarxi: String(q.sotishNarxi), birlik: q.birlik, minimalQoldiq: String(q.minimalQoldiq),
-      shtrixKod: q.shtrixKod || ''
+      shtrixKod: q.shtrixKod || '', yaroqlilikMuddati: q.yaroqlilikMuddati ? q.yaroqlilikMuddati.slice(0, 10) : ''
     })
     setTahrirModal(true)
   }
@@ -208,9 +210,10 @@ export default function OmborPage() {
   }
 
   const [renderLimit, setRenderLimit] = useState(50)
-  useEffect(() => { setRenderLimit(50) }, [qidiruv, kamQolganFilter])
+  useEffect(() => { setRenderLimit(50) }, [qidiruv, kamQolganFilter, muddatiYaqinFilter])
 
   const kamQolganSoni = qoldiqlar.filter(q => q.kamQolgan).length
+  const muddatiYaqinSoni = qoldiqlar.filter(q => q.muddatiYaqin).length
   const korsatiladiganQoldiqlar = qoldiqlar.slice(0, renderLimit)
 
   // Build combobox options from loaded data
@@ -231,6 +234,13 @@ export default function OmborPage() {
         >
           <AlertTriangle size={16} />
           Kam qolgan ({kamQolganSoni})
+        </button>
+        <button
+          onClick={() => setMuddatiYaqinFilter(!muddatiYaqinFilter)}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap ${muddatiYaqinFilter ? 'bg-amber-600 text-white' : 'bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800'}`}
+        >
+          <CalendarClock size={16} />
+          Yaroqlilik muddati yaqin ({muddatiYaqinSoni})
         </button>
         <button
           onClick={() => setTarix(!tarix)}
@@ -269,6 +279,12 @@ export default function OmborPage() {
                   <tr key={q.id} className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition ${q.kamQolgan ? 'bg-red-50/50 dark:bg-red-950/20' : idx % 2 === 1 ? 'bg-gray-50/40 dark:bg-neutral-800/40' : ''}`}>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{q.nomi}</p>
+                      {q.muddatiYaqin && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-medium mt-0.5">
+                          <CalendarClock size={11} />
+                          {q.kunQoldi !== null && q.kunQoldi < 0 ? 'Muddati o\'tgan' : q.kunQoldi === 0 ? 'Bugun tugaydi' : `${q.kunQoldi} kun qoldi`}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell whitespace-nowrap">
                       <span className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-lg font-medium">{q.kategoriya.nomi}</span>
@@ -350,6 +366,12 @@ export default function OmborPage() {
               <div className="p-4">
                 <p className="text-gray-900 dark:text-gray-100 font-bold text-base truncate" title={q.nomi}>{q.nomi}</p>
                 <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">Mahsulot kodi: #{(q.shtrixKod || '').padStart(3, '0') || '—'}</p>
+                {q.muddatiYaqin && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-semibold mt-1.5 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 rounded-lg">
+                    <CalendarClock size={11} />
+                    {q.kunQoldi !== null && q.kunQoldi < 0 ? 'Muddati o\'tgan' : q.kunQoldi === 0 ? 'Bugun tugaydi' : `${q.kunQoldi} kun qoldi`}
+                  </span>
+                )}
 
                 <div className="mt-3 grid grid-cols-3 gap-2 text-center bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-3">
                   <div>
@@ -640,6 +662,17 @@ export default function OmborPage() {
                   <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Shtrix-kod</label>
                   <input value={tahrirForm.shtrixKod} onChange={e => setTahrirForm(f => ({ ...f, shtrixKod: e.target.value }))} className={inputCls} />
                 </div>
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Yaroqlilik muddati <span className="text-gray-400 dark:text-gray-600 font-normal">(ixtiyoriy)</span>
+                </label>
+                <input
+                  type="date"
+                  value={tahrirForm.yaroqlilikMuddati}
+                  onChange={e => setTahrirForm(f => ({ ...f, yaroqlilikMuddati: e.target.value }))}
+                  className={inputCls}
+                />
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>

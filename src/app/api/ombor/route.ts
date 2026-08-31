@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const kamQolgan = searchParams.get('kamQolgan') === 'true'
+    const muddatiYaqin = searchParams.get('muddatiYaqin') === 'true'
     const qidiruv = searchParams.get('q') || ''
     const filialId = sessionFilialId(session)
 
@@ -29,9 +30,12 @@ export async function GET(req: NextRequest) {
     const stockMap = await getStockMap()
 
     // 3. Natijani birlashtirish
+    const besh_kun_ms = 5 * 24 * 60 * 60 * 1000
+    const hozir = Date.now()
     const qoldiqlar = tovarlar.map((t) => {
       const stock = stockMap.get(t.id) || { omborQoldiq: 0, dokonQoldiq: 0 }
       const jami = stock.omborQoldiq + stock.dokonQoldiq
+      const kunQoldi = t.yaroqlilikMuddati ? Math.ceil((t.yaroqlilikMuddati.getTime() - hozir) / (24 * 60 * 60 * 1000)) : null
       return {
         id: t.id,
         nomi: t.nomi,
@@ -47,10 +51,15 @@ export async function GET(req: NextRequest) {
         dokonQoldiq: stock.dokonQoldiq,
         qoldiq: Math.max(0, jami),
         kamQolgan: jami <= t.minimalQoldiq,
+        yaroqlilikMuddati: t.yaroqlilikMuddati,
+        kunQoldi,
+        muddatiYaqin: t.yaroqlilikMuddati ? t.yaroqlilikMuddati.getTime() - hozir <= besh_kun_ms : false,
       }
     })
 
-    const natija = kamQolgan ? qoldiqlar.filter((q) => q.kamQolgan) : qoldiqlar
+    const natija = qoldiqlar
+      .filter((q) => !kamQolgan || q.kamQolgan)
+      .filter((q) => !muddatiYaqin || q.muddatiYaqin)
 
     return NextResponse.json(natija)
   } catch (e) {
