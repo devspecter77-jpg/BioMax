@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, ism: true, login: true, rol: true, faol: true, telefon: true, yaratilgan: true,
         filialId: true, filial: { select: { id: true, nomi: true } },
+        ulashilganEgaId: true, tovarTahrirlashMumkin: true, tovarOchirishMumkin: true,
       },
       orderBy: { yaratilgan: 'asc' },
     })
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
     const ownFilialId = sessionFilialId(session)
 
-    const { ism, login, parol, rol, telefon, filialId: reqFilialId } = await req.json()
+    const { ism, login, parol, rol, telefon, filialId: reqFilialId, ulashilganEgaId: reqUlashilganEgaId } = await req.json()
 
     // Filial egasi faqat o'z filialiga xodim qo'sha oladi — boshqa filial yoki
     // global (Ega darajasidagi) hisob yarata olmaydi.
@@ -45,12 +46,17 @@ export async function POST(req: NextRequest) {
     if (rol !== 'ADMIN' && !filialId) {
       return NextResponse.json({ xato: "Filial tanlang" }, { status: 400 })
     }
+    // Ega o'z mahsulotlar katalogini yangi Admin bilan ulashishi — faqat
+    // filialsiz Admin uchun ma'noli, va faqat SO'ROVCHINING o'z id'siga
+    // (boshqa Eganing nomidan ulasha olmaydi).
+    const ulashilganEgaId = rol === 'ADMIN' && !filialId && reqUlashilganEgaId ? (session.user as any).id : null
+
     const mavjud = await prisma.foydalanuvchi.findUnique({ where: { login } })
     if (mavjud) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
     const parolHash = await bcrypt.hash(parol, 10)
     const user = await prisma.foydalanuvchi.create({
-      data: { ism, login, parolHash, rol, telefon: telefon || null, filialId: rol === 'ADMIN' ? (filialId || null) : filialId },
-      select: { id: true, ism: true, login: true, rol: true, faol: true, telefon: true, filialId: true },
+      data: { ism, login, parolHash, rol, telefon: telefon || null, filialId: rol === 'ADMIN' ? (filialId || null) : filialId, ulashilganEgaId },
+      select: { id: true, ism: true, login: true, rol: true, faol: true, telefon: true, filialId: true, ulashilganEgaId: true },
     })
     return NextResponse.json(user)
   } catch {

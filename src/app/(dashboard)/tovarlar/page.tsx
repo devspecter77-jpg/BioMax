@@ -49,11 +49,19 @@ export default function TovarlarPage() {
   const confirm = useConfirm()
   const { data: session } = useSession()
   const egaMi = !(session?.user as any)?.filialId
+  // Haqiqiy Ega — ulashilgan admin emas. Faqat haqiqiy Ega boshqa filial
+  // tanlashi va ulashish sozlamalarini boshqarishi mumkin.
+  const haqiqiyEga = egaMi && !(session?.user as any)?.ulashilganEgaId
+  // Ulashilgan admin uchun — Ega tomonidan berilgan tahrirlash/o'chirish ruxsati.
+  const tahrirRuxsat = haqiqiyEga || !!(session?.user as any)?.tovarTahrirlashMumkin
+  const ochirishRuxsat = haqiqiyEga || !!(session?.user as any)?.tovarOchirishMumkin
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
   const [korinishModal, setKorinishModal] = useState(false)
   const [adminlar, setAdminlar] = useState<AdminHisob[]>([])
   const [tanlanganAdmin, setTanlanganAdmin] = useState('')
   const [yashirilganMaydonlar, setYashirilganMaydonlar] = useState<Set<string>>(new Set())
+  const [korinishTahrirlashMumkin, setKorinishTahrirlashMumkin] = useState(true)
+  const [korinishOchirishMumkin, setKorinishOchirishMumkin] = useState(true)
   const [korinishYuklanmoqda, setKorinishYuklanmoqda] = useState(false)
   const [korinishSaqlanmoqda, setKorinishSaqlanmoqda] = useState(false)
   // Ega uchun — Tovarlar sahifasida qaysi filialni ko'rish tanlanadi
@@ -134,12 +142,12 @@ export default function TovarlarPage() {
 
   useEffect(() => { yuklash() }, [qidiruv, aktifKategoriya, tanlanganFilial])
 
-  // Ega — Tovarlar sahifasida qaysi filialni ko'rish uchun tanlash imkoniyati
+  // Haqiqiy Ega — Tovarlar sahifasida qaysi filialni ko'rish uchun tanlash imkoniyati
   useEffect(() => {
-    if (!egaMi) return
+    if (!haqiqiyEga) return
     fetch('/api/filiallar').then(r => r.json()).then(d => setFiliallar(Array.isArray(d) ? d : [])).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [egaMi])
+  }, [haqiqiyEga])
 
   useEffect(() => {
     fetch('/api/kurs').then(r => r.json()).then(d => { if (d.kursi) { setKursi(d.kursi); setKursSana(d.sana) } })
@@ -164,26 +172,32 @@ export default function TovarlarPage() {
     }
   }
 
-  // Ko'rinish sozlamalari — Ega tomonidan bog'langan admin hisobidan
-  // ayrim MAYDONLARNI (masalan kelish narxi) yashirish, hamma
-  // mahsulotlariga bir xilda tegishli (faqat filialsiz Ega uchun ko'rinadi).
+  // Ko'rinish sozlamalari — Ega o'zi ulashgan admin hisobidan ayrim
+  // MAYDONLARNI (masalan kelish narxi) yashirish va tahrirlash/o'chirish
+  // ruxsatini boshqarish (faqat haqiqiy Ega uchun ko'rinadi).
   async function korinishModalniOchish() {
     setKorinishModal(true)
     setTanlanganAdmin('')
     setYashirilganMaydonlar(new Set())
+    setKorinishTahrirlashMumkin(true)
+    setKorinishOchirishMumkin(true)
     const data = await fetch('/api/foydalanuvchilar').then(r => r.json()).catch(() => [])
     const meId = (session?.user as any)?.id
-    setAdminlar(Array.isArray(data) ? data.filter((u: any) => u.rol === 'ADMIN' && u.id !== meId) : [])
+    setAdminlar(Array.isArray(data) ? data.filter((u: any) => u.rol === 'ADMIN' && u.ulashilganEgaId === meId) : [])
   }
 
   async function adminTanlash(id: string) {
     setTanlanganAdmin(id)
     setYashirilganMaydonlar(new Set())
+    setKorinishTahrirlashMumkin(true)
+    setKorinishOchirishMumkin(true)
     if (!id) return
     setKorinishYuklanmoqda(true)
     try {
-      const maydonlar: string[] = await fetch(`/api/foydalanuvchilar/${id}/yashirilgan-tovarlar`).then(r => r.json())
-      setYashirilganMaydonlar(new Set(Array.isArray(maydonlar) ? maydonlar : []))
+      const data = await fetch(`/api/foydalanuvchilar/${id}/yashirilgan-tovarlar`).then(r => r.json())
+      setYashirilganMaydonlar(new Set(Array.isArray(data?.maydonlar) ? data.maydonlar : []))
+      setKorinishTahrirlashMumkin(data?.tahrirlashMumkin ?? true)
+      setKorinishOchirishMumkin(data?.ochirishMumkin ?? true)
     } finally {
       setKorinishYuklanmoqda(false)
     }
@@ -205,7 +219,11 @@ export default function TovarlarPage() {
       const res = await fetch(`/api/foydalanuvchilar/${tanlanganAdmin}/yashirilgan-tovarlar`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maydonlar: Array.from(yashirilganMaydonlar) }),
+        body: JSON.stringify({
+          maydonlar: Array.from(yashirilganMaydonlar),
+          tahrirlashMumkin: korinishTahrirlashMumkin,
+          ochirishMumkin: korinishOchirishMumkin,
+        }),
       })
       if (res.ok) {
         toast.success('Ko\'rinish sozlamalari saqlandi')
@@ -372,7 +390,7 @@ export default function TovarlarPage() {
           placeholder="Tovar nomi yoki shtrix-kod..."
           className="flex-1"
         />
-        {egaMi && filiallar.length > 0 && (
+        {haqiqiyEga && filiallar.length > 0 && (
           <select
             value={tanlanganFilial}
             onChange={e => setTanlanganFilial(e.target.value)}
@@ -395,10 +413,10 @@ export default function TovarlarPage() {
             {kursYangilanmoqda ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
             {kursi ? formatSum(kursi) : '...'}
           </button>
-          {egaMi && (
+          {haqiqiyEga && (
             <button
               onClick={korinishModalniOchish}
-              title="Bog'langan adminlardan mahsulot yashirish"
+              title="Ulashilgan adminlar uchun ko'rinish va ruxsatlar"
               className="p-2.5 rounded-xl border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 transition"
             >
               <EyeOff size={16} />
@@ -416,21 +434,25 @@ export default function TovarlarPage() {
             <span className="hidden sm:inline">Excel export</span>
           </a>
           {/* Excel import */}
-          <label title="Excel import" className={`flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
-            {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-            <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              disabled={importYuklanmoqda}
-              onChange={excelTanlash}
-            />
-          </label>
-          <button onClick={() => ochModal()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
-            <Plus size={16} />
-            <span className="hidden sm:inline">Tovar qo&apos;shish</span>
-          </button>
+          {tahrirRuxsat && (
+            <label title="Excel import" className={`flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+              {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                disabled={importYuklanmoqda}
+                onChange={excelTanlash}
+              />
+            </label>
+          )}
+          {tahrirRuxsat && (
+            <button onClick={() => ochModal()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
+              <Plus size={16} />
+              <span className="hidden sm:inline">Tovar qo&apos;shish</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -517,12 +539,16 @@ export default function TovarlarPage() {
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => ochModal(t)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
-                          <Pencil size={15} />
-                        </button>
-                        <button onClick={() => ochirish(t.id)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
-                          <Trash2 size={15} />
-                        </button>
+                        {tahrirRuxsat && (
+                          <button onClick={() => ochModal(t)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
+                            <Pencil size={15} />
+                          </button>
+                        )}
+                        {ochirishRuxsat && (
+                          <button onClick={() => ochirish(t.id)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -594,16 +620,20 @@ export default function TovarlarPage() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3">
+              <div className={`border-t border-gray-100 dark:border-neutral-800 grid ${{ 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' }[1 + (tahrirRuxsat ? 1 : 0) + (ochirishRuxsat ? 1 : 0)]}`}>
                 <button onClick={() => setDetailTovar(t)} title="Batafsil" className="flex items-center justify-center py-2.5 sm:py-3 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800 transition border-r border-gray-100 dark:border-neutral-800">
                   <Eye size={16} />
                 </button>
-                <button onClick={() => ochModal(t)} title="Tahrirlash" className="flex items-center justify-center py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800">
-                  <Pencil size={16} />
-                </button>
-                <button onClick={() => ochirish(t.id)} title="O'chirish" className="flex items-center justify-center py-2.5 sm:py-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition">
-                  <Trash2 size={16} />
-                </button>
+                {tahrirRuxsat && (
+                  <button onClick={() => ochModal(t)} title="Tahrirlash" className="flex items-center justify-center py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800">
+                    <Pencil size={16} />
+                  </button>
+                )}
+                {ochirishRuxsat && (
+                  <button onClick={() => ochirish(t.id)} title="O'chirish" className="flex items-center justify-center py-2.5 sm:py-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition">
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -905,7 +935,7 @@ export default function TovarlarPage() {
                   value={tanlanganAdmin}
                   onChange={adminTanlash}
                   placeholder="Admin tanlang"
-                  emptyMessage="Bog'langan admin topilmadi"
+                  emptyMessage="Ulashilgan admin topilmadi"
                 />
               </div>
 
@@ -931,6 +961,30 @@ export default function TovarlarPage() {
                           <span className="text-sm text-gray-900 dark:text-gray-100 flex-1">{m.label}</span>
                         </label>
                       ))}
+                    </div>
+
+                    <p className="text-gray-400 dark:text-gray-600 text-xs mb-2 mt-4">
+                      Ushbu admin ulashilgan mahsulotlar ustida qanday amallarni bajara oladi.
+                    </p>
+                    <div className="border border-gray-200 dark:border-neutral-700 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800">
+                      <label className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition">
+                        <input
+                          type="checkbox"
+                          checked={korinishTahrirlashMumkin}
+                          onChange={() => setKorinishTahrirlashMumkin(v => !v)}
+                          className="w-4 h-4 rounded accent-primary shrink-0"
+                        />
+                        <span className="text-sm text-gray-900 dark:text-gray-100 flex-1">Mahsulot qo&apos;shish / tahrirlash mumkin</span>
+                      </label>
+                      <label className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition">
+                        <input
+                          type="checkbox"
+                          checked={korinishOchirishMumkin}
+                          onChange={() => setKorinishOchirishMumkin(v => !v)}
+                          className="w-4 h-4 rounded accent-primary shrink-0"
+                        />
+                        <span className="text-sm text-gray-900 dark:text-gray-100 flex-1">Mahsulot o&apos;chirish mumkin</span>
+                      </label>
                     </div>
                   </div>
                 )
@@ -1021,9 +1075,11 @@ export default function TovarlarPage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button onClick={() => { setDetailTovar(null); ochModal(detailTovar) }} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  <Pencil size={15} /> Tahrirlash
-                </button>
+                {tahrirRuxsat && (
+                  <button onClick={() => { setDetailTovar(null); ochModal(detailTovar) }} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                    <Pencil size={15} /> Tahrirlash
+                  </button>
+                )}
                 <button onClick={() => setDetailTovar(null)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
                   Yopish
                 </button>

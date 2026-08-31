@@ -57,6 +57,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           rol: foydalanuvchi.rol,
           filialId: foydalanuvchi.filialId,
           filialNomi: foydalanuvchi.filial?.nomi ?? null,
+          ulashilganEgaId: foydalanuvchi.ulashilganEgaId,
+          tovarTahrirlashMumkin: foydalanuvchi.tovarTahrirlashMumkin,
+          tovarOchirishMumkin: foydalanuvchi.tovarOchirishMumkin,
           ruxsatlar,
         }
       },
@@ -69,6 +72,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.rol = (user as any).rol
         token.filialId = (user as any).filialId
         token.filialNomi = (user as any).filialNomi
+        token.ulashilganEgaId = (user as any).ulashilganEgaId
+        token.tovarTahrirlashMumkin = (user as any).tovarTahrirlashMumkin
+        token.tovarOchirishMumkin = (user as any).tovarOchirishMumkin
         token.ruxsatlar = (user as any).ruxsatlar
       }
       return token
@@ -79,6 +85,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         ;(session.user as any).rol = token.rol
         ;(session.user as any).filialId = token.filialId
         ;(session.user as any).filialNomi = token.filialNomi
+        ;(session.user as any).ulashilganEgaId = token.ulashilganEgaId
+        ;(session.user as any).tovarTahrirlashMumkin = token.tovarTahrirlashMumkin
+        ;(session.user as any).tovarOchirishMumkin = token.tovarOchirishMumkin
         ;(session.user as any).ruxsatlar = token.ruxsatlar
       }
       return session

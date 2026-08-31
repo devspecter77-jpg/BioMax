@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatPhone } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Phone, MapPin, Building, X, Users, Check, UserPlus, Eye, EyeOff, Pencil, Trash2, Loader2, ToggleLeft, ToggleRight, Save, Link2, ShieldCheck } from 'lucide-react'
+import { Phone, MapPin, Building, X, Users, Check, UserPlus, Eye, EyeOff, Pencil, Trash2, Loader2, ToggleLeft, ToggleRight, Save, ShieldCheck } from 'lucide-react'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
-import Combobox from '@/components/ui/combobox'
 import { useConfirm } from '@/components/ConfirmProvider'
 import TelegramUlash from '@/components/TelegramUlash'
 
@@ -46,8 +45,7 @@ export default function FiliallarPage() {
   const emptyForm = { nomi: '', manzil: '', telefon: '', egaIsm: '', egaLogin: '', egaParol: '' }
   const [form, setForm] = useState(emptyForm)
   const [egaTuri, setEgaTuri] = useState<'FILIALCHI' | 'EGA' | 'ADMIN'>('FILIALCHI')
-  const [boglashOchiq, setBoglashOchiq] = useState(false)
-  const [boglanganFilialId, setBoglanganFilialId] = useState('')
+  const [ulashishYoqilgan, setUlashishYoqilgan] = useState(false)
   const [qidiruv, setQidiruv] = useState('')
   const [ochirilayotganId, setOchirilayotganId] = useState<string | null>(null)
 
@@ -80,8 +78,7 @@ export default function FiliallarPage() {
   function modalniOchish() {
     setForm(emptyForm)
     setEgaTuri('FILIALCHI')
-    setBoglashOchiq(false)
-    setBoglanganFilialId('')
+    setUlashishYoqilgan(false)
     setModal(true)
   }
 
@@ -137,13 +134,14 @@ export default function FiliallarPage() {
         }
         toast.success('Yangi ega qo\'shildi')
       } else {
-        // Admin — yangi filial yaratilmaydi, ixtiyoriy ravishda mavjud filialga bog'lanadi
+        // Admin — yangi filial yaratilmaydi, ixtiyoriy ravishda mening mahsulotlar
+        // katalogim shu admin bilan ulashiladi.
         const egaRes = await fetch('/api/foydalanuvchilar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ism: form.egaIsm, login: form.egaLogin, parol: form.egaParol,
-            rol: 'ADMIN', filialId: boglashOchiq && boglanganFilialId ? boglanganFilialId : null,
+            rol: 'ADMIN', filialId: null, ulashilganEgaId: ulashishYoqilgan,
           }),
         })
         if (!egaRes.ok) {
@@ -460,34 +458,20 @@ export default function FiliallarPage() {
                 </>
               ) : egaTuri === 'ADMIN' ? (
                 <div className="pt-2 border-t border-gray-100 dark:border-neutral-800">
-                  {!boglashOchiq ? (
-                    <button
-                      type="button"
-                      onClick={() => setBoglashOchiq(true)}
-                      className="flex items-center gap-2 text-sm text-primary hover:underline font-medium"
-                    >
-                      <Link2 size={14} />
-                      Ma&apos;lumot o&apos;tkazish (ixtiyoriy)
-                    </button>
-                  ) : (
-                    <div>
-                      <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 flex items-center justify-between font-medium">
-                        <span>Qaysi filial ma&apos;lumotlariga ulansin?</span>
-                        <button type="button" onClick={() => { setBoglashOchiq(false); setBoglanganFilialId('') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs font-normal">
-                          Bekor qilish
-                        </button>
-                      </label>
-                      <Combobox
-                        options={filiallar.map(f => ({ value: f.id, label: f.nomi }))}
-                        value={boglanganFilialId}
-                        onChange={setBoglanganFilialId}
-                        placeholder="Filial tanlang"
-                      />
-                      <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5">
-                        Bu admin tanlangan filialning barcha ma&apos;lumotlarini (tovarlar, sotuvlar va h.k.) o&apos;z login-paroli bilan ko&apos;radi.
-                      </p>
-                    </div>
-                  )}
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ulashishYoqilgan}
+                      onChange={e => setUlashishYoqilgan(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded accent-primary shrink-0"
+                    />
+                    <span>
+                      <span className="text-sm text-gray-900 dark:text-gray-100 font-medium block">Mening mahsulotlarimni ulashish</span>
+                      <span className="text-gray-400 dark:text-gray-600 text-xs">
+                        Bu admin mening (hozirgi hisobim) tovarlar katalogimni o&apos;zining login-paroli bilan ko&apos;radi. Qaysi maydonlarni ko&apos;ra olishi va tahrirlash/o&apos;chirish ruxsatini keyinroq Tovarlar sahifasidagi &quot;Ko&apos;rinish sozlamalari&quot;dan belgilaysiz.
+                      </span>
+                    </span>
+                  </label>
                 </div>
               ) : null}
 

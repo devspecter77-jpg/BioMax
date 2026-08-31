@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
 import { getStockMap } from '@/lib/stock'
 import { foydalanuvchiYashirilganMaydonlari } from '@/lib/maydon-yashirish'
 
@@ -13,11 +13,12 @@ export async function GET(req: NextRequest) {
     const ownFilialId = sessionFilialId(session)
     const foydalanuvchiId = (session.user as any).id
     const { searchParams } = new URL(req.url)
-    const filialId = ownFilialId || searchParams.get('filialId') || null
+    const isRealEga = sessionIsRealEga(session)
+    const filialId = ownFilialId || (isRealEga ? searchParams.get('filialId') : null) || null
 
     const [tovarlar, yashirilganMaydonlar] = await Promise.all([
       prisma.tovar.findMany({
-        where: { filialId },
+        where: { filialId, ...(filialId ? {} : { egaId: sessionEgaId(session) }) },
         include: { kategoriya: true },
         orderBy: { nomi: 'asc' },
       }),

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
 
 const BIRLIKLAR = new Set(['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI'])
 const HOLATLAR = new Set(['FAOL', 'ARXIVLANGAN'])
@@ -12,13 +12,20 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
     const ownFilialId = sessionFilialId(session)
+    const isRealEga = sessionIsRealEga(session)
+
+    if (!ownFilialId && (session.user as any).ulashilganEgaId && !(session.user as any).tovarTahrirlashMumkin) {
+      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    }
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     if (!file) return NextResponse.json({ xato: 'Fayl topilmadi' }, { status: 400 })
-    // Faqat Ega (filialsiz) ixtiyoriy ravishda muayyan filialga import qila oladi —
-    // filialga bog'langan foydalanuvchi har doim faqat o'z filialiga qulflangan.
-    const filialId = ownFilialId || (formData.get('filialId') as string | null) || null
+    // Faqat haqiqiy Ega (filialsiz, ulashilgan admin emas) ixtiyoriy ravishda
+    // muayyan filialga import qila oladi — filialga bog'langan foydalanuvchi
+    // har doim faqat o'z filialiga qulflangan.
+    const filialId = ownFilialId || (isRealEga ? (formData.get('filialId') as string | null) : null) || null
+    const egaId = filialId ? null : sessionEgaId(session)
 
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
@@ -68,7 +75,7 @@ export async function POST(req: NextRequest) {
         }
 
         const mavjud = await prisma.tovar.findFirst({
-          where: { nomi: { equals: nomi, mode: 'insensitive' }, filialId },
+          where: { nomi: { equals: nomi, mode: 'insensitive' }, filialId, ...(filialId ? {} : { egaId }) },
         })
 
         if (mavjud) {
@@ -98,7 +105,7 @@ export async function POST(req: NextRequest) {
           yangilandi++
         } else {
           const yangiTovar = await prisma.tovar.create({
-            data: { nomi, kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, filialId, yaroqlilikMuddati },
+            data: { nomi, kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, filialId, egaId, yaroqlilikMuddati },
           })
           if (qoldiq > 0) {
             await prisma.omborHarakati.create({

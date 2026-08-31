@@ -17,31 +17,36 @@ async function ruxsatniTekshirish(id: string) {
   return session
 }
 
-// Ushbu foydalanuvchidan yashirilgan maydonlar (masalan kelishNarxi) ro'yxati
+// Ushbu foydalanuvchidan yashirilgan maydonlar (masalan kelishNarxi) va
+// tahrirlash/o'chirish ruxsatlari (faqat ulashilgan admin uchun ma'noli)
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const session = await ruxsatniTekshirish(id)
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
 
-    const yozuvlar = await prisma.maydonYashirish.findMany({
-      where: { foydalanuvchiId: id },
-      select: { maydon: true },
+    const [yozuvlar, foydalanuvchi] = await Promise.all([
+      prisma.maydonYashirish.findMany({ where: { foydalanuvchiId: id }, select: { maydon: true } }),
+      prisma.foydalanuvchi.findUnique({ where: { id }, select: { tovarTahrirlashMumkin: true, tovarOchirishMumkin: true } }),
+    ])
+    return NextResponse.json({
+      maydonlar: yozuvlar.map(y => y.maydon),
+      tahrirlashMumkin: foydalanuvchi?.tovarTahrirlashMumkin ?? true,
+      ochirishMumkin: foydalanuvchi?.tovarOchirishMumkin ?? true,
     })
-    return NextResponse.json(yozuvlar.map(y => y.maydon))
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
 }
 
-// To'liq ro'yxatni almashtirish — { maydonlar: string[] } yashirilishi kerak bo'lganlar
+// To'liq ro'yxatni almashtirish — { maydonlar: string[], tahrirlashMumkin, ochirishMumkin }
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const session = await ruxsatniTekshirish(id)
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
 
-    const { maydonlar } = await req.json()
+    const { maydonlar, tahrirlashMumkin, ochirishMumkin } = await req.json()
     if (!Array.isArray(maydonlar)) {
       return NextResponse.json({ xato: "Noto'g'ri ma'lumot" }, { status: 400 })
     }
@@ -55,6 +60,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             skipDuplicates: true,
           })]
         : []),
+      prisma.foydalanuvchi.update({
+        where: { id },
+        data: {
+          tovarTahrirlashMumkin: typeof tahrirlashMumkin === 'boolean' ? tahrirlashMumkin : true,
+          tovarOchirishMumkin: typeof ochirishMumkin === 'boolean' ? ochirishMumkin : true,
+        },
+      }),
     ])
 
     return NextResponse.json({ ok: true, soni: toza.length })

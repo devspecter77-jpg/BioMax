@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { normalizeUzbek, toKirill, toLotin } from '@/lib/utils'
 import { getStockMap } from '@/lib/stock'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
 import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
@@ -23,10 +23,17 @@ export async function GET(req: NextRequest) {
     const ownFilialId = sessionFilialId(session)
     const foydalanuvchiId = (session.user as any).id
     // Ega (filialsiz) — standart holatda faqat OZINING mahsulotlarini ko'radi.
-    // ?filialId= bilan ixtiyoriy ravishda boshqa bitta filialni tanlab ko'rishi mumkin.
+    // ?filialId= bilan ixtiyoriy ravishda boshqa bitta filialni tanlab ko'rishi mumkin
+    // (faqat haqiqiy Ega uchun — ulashilgan admin bunday tanlov qila olmaydi).
     // Filialga bog'langan foydalanuvchi esa har doim faqat o'z filialiga qulflangan.
-    const filialId = ownFilialId || searchParams.get('filialId') || null
+    const isRealEga = sessionIsRealEga(session)
+    const filialId = ownFilialId || (isRealEga ? searchParams.get('filialId') : null) || null
     const where: any = { filialId }
+    if (!filialId) {
+      // Filialsiz katalog — Ega o'zi yoki u ulashgan admin bo'lsa, faqat
+      // o'sha Eganing mahsulotlari (jonli, nusxasiz — egaId orqali).
+      where.egaId = sessionEgaId(session)
+    }
     if (holati !== 'BARCHASI') where.holati = holati
     if (kategoriyaId) where.kategoriyaId = kategoriyaId
     if (qidiruv) {
@@ -94,6 +101,13 @@ export async function POST(req: NextRequest) {
 
     const data = await req.json()
     const filialId = sessionFilialId(session)
+    const egaId = filialId ? null : sessionEgaId(session)
+
+    // Ulashilgan admin — tahrirlash ruxsati bo'lmasa, yangi mahsulot ham
+    // qo'sha olmaydi (yozish huquqi bir xil belgi bilan boshqariladi).
+    if (!filialId && (session.user as any).ulashilganEgaId && !(session.user as any).tovarTahrirlashMumkin) {
+      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    }
 
     // Shtrix kod yo'q bo'lsa ketma-ketlikdagi bo'sh raqamni topib berish
     const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod(filialId)
@@ -105,6 +119,7 @@ export async function POST(req: NextRequest) {
         kategoriyaId: data.kategoriyaId,
         shtrixKod: autoShtrixKod,
         filialId,
+        egaId,
         kelishNarxi: parseFloat(data.kelishNarxi),
         sotishNarxi: parseFloat(data.sotishNarxi),
         valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',

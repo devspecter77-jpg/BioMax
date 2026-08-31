@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
 export async function GET(req: NextRequest) {
@@ -17,13 +17,15 @@ export async function GET(req: NextRequest) {
     const ownFilialId = sessionFilialId(session)
     const foydalanuvchiId = (session.user as any).id
     // Ega (filialsiz) — standart holatda faqat OZINING mahsulotlarini ko'radi.
-    const filialId = ownFilialId || searchParams.get('filialId') || null
+    const isRealEga = sessionIsRealEga(session)
+    const filialId = ownFilialId || (isRealEga ? searchParams.get('filialId') : null) || null
 
     // 1. Faqat tovar ma'lumotlarini olish (omborHarakati YUKLANMAYDI)
     const tovarlar = await prisma.tovar.findMany({
       where: {
         holati: 'FAOL',
         filialId,
+        ...(filialId ? {} : { egaId: sessionEgaId(session) }),
         ...(qidiruv ? { nomi: { contains: qidiruv, mode: 'insensitive' } } : {}),
       },
       include: { kategoriya: true },

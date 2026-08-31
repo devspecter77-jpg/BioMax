@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
@@ -14,7 +14,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     const foydalanuvchiId = (session.user as any).id
 
     const tovar = await prisma.tovar.findFirst({
-      where: { id, ...(filialId ? { filialId } : {}) },
+      where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
       include: {
         kategoriya: true,
         omborHarakati: {
@@ -39,9 +39,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
     const filialId = sessionFilialId(session)
+    const sess = session.user as any
 
-    const mavjud = await prisma.tovar.findFirst({ where: { id, ...(filialId ? { filialId } : {}) }, select: { id: true } })
+    const mavjud = await prisma.tovar.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
+
+    if (!filialId && sess.ulashilganEgaId && !sess.tovarTahrirlashMumkin) {
+      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    }
 
     const data = await req.json()
     const rasmlar = await rasmlarniSiqish(data.rasmlar)
@@ -97,9 +102,14 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
     const filialId = sessionFilialId(session)
+    const sess = session.user as any
 
-    const mavjud = await prisma.tovar.findFirst({ where: { id, ...(filialId ? { filialId } : {}) }, select: { id: true } })
+    const mavjud = await prisma.tovar.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
+
+    if (!filialId && sess.ulashilganEgaId && !sess.tovarOchirishMumkin) {
+      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    }
 
     const tovar = await prisma.tovar.update({
       where: { id },

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 
 // Shtrix-kod bo'yicha bitta tovarni topish — skaner uchun.
 // Bir nechta variantni sinaydi: aynan, trim, leading-zero olib/qo'yib.
@@ -19,8 +19,10 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ kod: s
     const nNoZero = n.replace(/^0+/, '')
     const variantlar = Array.from(new Set([n, nNoZero, '0' + n, '00' + n]))
 
+    const egaScope = filialId ? {} : { egaId: sessionEgaId(session) }
+
     let tovar = await prisma.tovar.findFirst({
-      where: { holati: 'FAOL', shtrixKod: { in: variantlar }, ...(filialId ? { filialId } : {}) },
+      where: { holati: 'FAOL', shtrixKod: { in: variantlar }, ...(filialId ? { filialId } : {}), ...egaScope },
       include: { kategoriya: true },
     })
 
@@ -31,6 +33,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ kod: s
           holati: 'FAOL',
           OR: variantlar.map(v => ({ shtrixKod: { contains: v } })),
           ...(filialId ? { filialId } : {}),
+          ...egaScope,
         },
         include: { kategoriya: true },
       })
