@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/nasiya-eslatma",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

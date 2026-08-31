@@ -471,8 +471,9 @@ export async function nasiyaEslatmalarYuborish() {
     })
     if (allaqachon) continue
 
-    // Xabar yuborish (markazlashtirilgan log bilan)
-    const natija = await xabarYuborVaSaqla({
+    // Xabar yuborish — darhol (queue'siz), Vercel'da doimiy fon jarayoni yo'q
+    // (avval navbatga qo'yib, hech kim o'qimaydigan fon workerini kutar edi).
+    const natija = await xabarDarholYuborVaSaqla({
       nasiyaId: nasiya.id,
       mijozId: nasiya.mijozId,
       xabarTuri,
@@ -482,10 +483,10 @@ export async function nasiyaEslatmalarYuborish() {
 
     if (natija.ok) {
       yuborilgan++
-      console.log(`[Scheduler] Queue'ga qo'shildi: ${nasiya.mijoz.ism} (${xabarTuri})`)
+      console.log(`[Scheduler] Yuborildi: ${nasiya.mijoz.ism} (${xabarTuri})`)
     } else {
       xatolik++
-      console.error(`[Scheduler] Queue xatosi: ${nasiya.mijoz.ism} — ${natija.xato}`)
+      console.error(`[Scheduler] Yuborish xatosi: ${nasiya.mijoz.ism} — ${natija.xato}`)
     }
 
     // Muddati o'tganlarni yangilash
@@ -692,39 +693,6 @@ async function getMahsulotlarMatni(sotuvId: string | null, maxQator: number = 10
     qatorlar.push(`  ... va yana ${tarkiblar.length - maxQator} ta mahsulot`)
   }
   return '\n📦 Mahsulotlar:\n' + qatorlar.join('\n')
-}
-
-// ─── Markazlashtirilgan log: queue'ga qo'yish (yuborish darhol emas) ─────────
-//
-// Eski versiya darhol API'ga uradi → bir vaqtda ko'p sotuv bo'lsa burst yuboriladi.
-// Yangi versiya faqat DB log yaratadi — queue worker har 5s'da 1 ta yuboradi.
-// Bu shaxsiy MTProto akkaunt uchun yagona barqaror yondashuv.
-
-async function xabarYuborVaSaqla(params: {
-  nasiyaId: string | null
-  mijozId: string
-  xabarTuri: string
-  xabar: string
-  telefon: string
-}): Promise<{ ok: boolean; xato?: string; logId?: string }> {
-  const log = await prisma.bildirishnomLog.create({
-    data: {
-      nasiyaId: params.nasiyaId,
-      mijozId: params.mijozId,
-      xabarTuri: params.xabarTuri,
-      xabarMatni: params.xabar,
-      telegramTarget: params.telefon,
-      status: 'pending',
-      urinishSoni: 0,
-      keyingiUrinish: new Date(), // darhol jo'natilishga tayyor
-    },
-  }).catch((e) => {
-    console.error('[Telegram] Log yaratish xatosi:', e)
-    return null
-  })
-
-  if (!log) return { ok: false, xato: 'Log yaratib bo\'lmadi' }
-  return { ok: true, logId: log.id }
 }
 
 // ─── Darhol yuborish (queue'siz) — bitta hodisali xabarlar uchun ────────────
@@ -1156,7 +1124,7 @@ export async function qolbolaXabarYuborish(mijozId: string, matn: string): Promi
   const mijoz = await prisma.mijoz.findUnique({ where: { id: mijozId } })
   if (!mijoz?.telefon) return { ok: false, xato: "Mijozda telefon raqam yo'q" }
 
-  return xabarYuborVaSaqla({
+  return xabarDarholYuborVaSaqla({
     nasiyaId: null,
     mijozId,
     xabarTuri: 'qolbola',
