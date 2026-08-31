@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { toKirill, toLotin } from '@/lib/utils'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 
 async function generateUniqueKod(): Promise<string> {
   while (true) {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     const mijozlar = await prisma.mijoz.findMany({
       where: {
-        ...(filialId ? { filialId } : {}),
+        ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }),
         ...(qidiruv ? {
             OR: [
               { ism: { contains: qidiruv, mode: 'insensitive' as const } },
@@ -70,13 +70,14 @@ export async function POST(req: NextRequest) {
 
     const data = await req.json()
     const filialId = sessionFilialId(session)
+    const egaId = filialId ? null : sessionEgaId(session)
 
     // Telefon raqam bo'yicha — bir xil mijoz qayta-qayta yaratilmasin.
     // Serverda tekshiriladi (client'dagi eskirgan ro'yxatga tayanmaydi).
     const telefonToza = (data.telefon || '').replace(/\D/g, '')
     if (telefonToza) {
       const mavjudMijoz = await prisma.mijoz.findFirst({
-        where: { telefon: { endsWith: telefonToza.slice(-9) }, ...(filialId ? { filialId } : {}) },
+        where: { telefon: { endsWith: telefonToza.slice(-9) }, ...(filialId ? { filialId } : { egaId }) },
       })
       if (mavjudMijoz) {
         return NextResponse.json({ ...mavjudMijoz, mavjud: true }, { status: 200 })
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
     const maxsus_kod = await generateUniqueKod()
     const mijoz = await prisma.mijoz.create({
       data: {
-        ism: data.ism, telefon: data.telefon, manzil: data.manzil, izoh: data.izoh, maxsus_kod, filialId,
+        ism: data.ism, telefon: data.telefon, manzil: data.manzil, izoh: data.izoh, maxsus_kod, filialId, egaId,
         lokatsiyaLat: typeof data.lokatsiyaLat === 'number' ? data.lokatsiyaLat : null,
         lokatsiyaLng: typeof data.lokatsiyaLng === 'number' ? data.lokatsiyaLng : null,
       },

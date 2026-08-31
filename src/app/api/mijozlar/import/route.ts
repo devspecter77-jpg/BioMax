@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 
 async function generateUniqueKod(): Promise<string> {
   while (true) {
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
     const filialId = sessionFilialId(session)
+    const egaId = filialId ? null : sessionEgaId(session)
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
       try {
         let mavjud = telefonToza
           ? await prisma.mijoz.findFirst({
-              where: { telefon: { endsWith: telefonToza.slice(-9) }, ...(filialId ? { filialId } : {}) },
+              where: { telefon: { endsWith: telefonToza.slice(-9) }, ...(filialId ? { filialId } : { egaId }) },
             })
           : null
 
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
         } else {
           const maxsus_kod = await generateUniqueKod()
           await prisma.mijoz.create({
-            data: { ism, telefon: telefonToza || null, manzil, maxsus_kod, filialId },
+            data: { ism, telefon: telefonToza || null, manzil, maxsus_kod, filialId, egaId },
           })
           qoshildi++
         }

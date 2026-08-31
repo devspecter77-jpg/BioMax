@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 import { formatPhone } from '@/lib/utils'
 
 export async function GET(_req: NextRequest) {
@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest) {
     const filialId = sessionFilialId(session)
 
     const mijozlar = await prisma.mijoz.findMany({
-      where: filialId ? { filialId } : {},
+      where: filialId ? { filialId } : { egaId: sessionEgaId(session) },
       include: {
         _count: { select: { sotuvlar: true } },
         nasiyalar: { where: { holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] } }, select: { qoldiq: true } },

@@ -54,6 +54,7 @@ model Foydalanuvchi {
   ulashganEga  Foydalanuvchi?  @relation("EgaUlashish", fields: [ulashilganEgaId], references: [id])
   ulashilganAdminlar Foydalanuvchi[] @relation("EgaUlashish")
   ozTovarlari  Tovar[]  @relation("TovarEgasi")
+  ozMijozlari  Mijoz[]  @relation("MijozEgasi")
   sotuvlar     Sotuv[]
   omborlar     OmborHarakati[]
   xarajatlar   Xarajat[]
@@ -249,15 +250,21 @@ model Mijoz {
   // Admin qo'lda false qilib qaytarishi mumkin (mijoz Telegram qo'shsa).
   telegramYoq   Boolean  @default(false)
   filialId      String?
+  // Filialsiz (filialId=null) mijoz kimning katalogiga tegishli ekanini
+  // belgilaydi — Tovar.egaId bilan bir xil naqsh (ulashilgan adminlar
+  // xuddi shu qatorlarni jonli ko'radi, nusxa emas).
+  egaId         String?
   yaratilgan    DateTime @default(now())
 
   filial          Filial?  @relation(fields: [filialId], references: [id])
+  ega             Foydalanuvchi?    @relation("MijozEgasi", fields: [egaId], references: [id])
   sotuvlar        Sotuv[]
   nasiyalar       Nasiya[]
   bildirishnomlar BildirishnomLog[]
   buyurtmalar     Buyurtma[]
 
   @@index([filialId])
+  @@index([egaId])
   @@map("mijozlar")
 }
 

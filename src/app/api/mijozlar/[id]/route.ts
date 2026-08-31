@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const { id } = await params
     const mijoz = await prisma.mijoz.findFirst({
-      where: { id, ...(filialId ? { filialId } : {}) },
+      where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
       include: {
         sotuvlar: {
           orderBy: { sana: 'desc' },
@@ -37,7 +37,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const { id } = await params
 
-    const mijoz = await prisma.mijoz.findFirst({ where: { id, ...(filialId ? { filialId } : {}) }, select: { id: true } })
+    const mijoz = await prisma.mijoz.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
     if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
 
     const nasiyalar = await prisma.nasiya.findMany({ where: { mijozId: id }, select: { id: true } })
@@ -67,7 +67,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const filialId = sessionFilialId(session)
 
     const { id } = await params
-    const mavjud = await prisma.mijoz.findFirst({ where: { id, ...(filialId ? { filialId } : {}) }, select: { id: true } })
+    const mavjud = await prisma.mijoz.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
 
     const data = await req.json()
