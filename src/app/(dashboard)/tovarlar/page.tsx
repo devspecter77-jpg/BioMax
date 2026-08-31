@@ -519,17 +519,34 @@ export default function TovarlarPage() {
           Barchasi
         </button>
         {kategoriyalar.map(k => (
-          <button
+          <div
             key={k.id}
-            onClick={() => setAktifKategoriya(k.id)}
-            className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+            className={`shrink-0 flex items-center rounded-full text-sm font-medium transition whitespace-nowrap ${
               aktifKategoriya === k.id
                 ? 'bg-red-600 text-white'
                 : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
             }`}
           >
-            {k.nomi}
-          </button>
+            <button onClick={() => setAktifKategoriya(k.id)} className="pl-4 pr-1 py-1.5">
+              {k.nomi}
+            </button>
+            {/* Chip'ning o'zida — modalni ochmasdan darhol tahrirlash/o'chirish */}
+            <button
+              onClick={e => { e.stopPropagation(); kategoriyaTahrirBoshlash(k); setKatModal(true) }}
+              title="Tahrirlash"
+              className={`p-1.5 rounded-full transition ${aktifKategoriya === k.id ? 'hover:bg-white/20' : 'hover:bg-gray-300 dark:hover:bg-neutral-700'}`}
+            >
+              <Pencil size={11} />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); kategoriyaOchirish(k) }}
+              disabled={katOchirilayotganId === k.id}
+              title="O'chirish"
+              className={`p-1.5 mr-1 rounded-full transition disabled:opacity-50 ${aktifKategoriya === k.id ? 'hover:bg-white/20' : 'hover:bg-gray-300 dark:hover:bg-neutral-700'}`}
+            >
+              {katOchirilayotganId === k.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+            </button>
+          </div>
         ))}
         <button
           onClick={() => { setKatNomi(''); setKatTahrirId(null); setKatModal(true) }}
