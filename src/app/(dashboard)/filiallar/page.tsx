@@ -215,12 +215,18 @@ export default function FiliallarPage() {
   }
 
   async function ochirish(f: Filial) {
-    if (!(await confirm(`"${f.nomi}" filialni o'chirasizmi?`))) return
+    const savol = f.faol
+      ? `"${f.nomi}" filialni nofaol qilasizmi? (Qayta bossangiz butunlay o'chiriladi)`
+      : `"${f.nomi}" filial butunlay o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi!`
+    if (!(await confirm(savol))) return
     setOchirilayotganId(f.id)
     try {
       const res = await fetch(`/api/filiallar/${f.id}`, { method: 'DELETE' })
-      if (res.ok) { toast.success("Filial o'chirildi"); yuklash() }
-      else {
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(data.holat === 'ochirildi' ? "Filial butunlay o'chirildi" : 'Filial nofaol qilindi')
+        yuklash()
+      } else {
         const err = await res.json()
         toast.error(err.xato || "O'chirishda xatolik")
       }

@@ -462,13 +462,14 @@ export default function SotuvPage() {
     setMijozModal(true)
   }
 
-  // Telefon yoki ism bo'yicha mavjud mijozlarni filtrlab, tanlash uchun taklif ro'yxati
+  // Telefon yoki ism bo'yicha mavjud mijozlarni filtrlab, tanlash uchun taklif ro'yxati.
+  // Hech narsa kiritilmagan bo'lsa ham (default holat) mavjud mijozlar ko'rsatiladi.
   const telefonTaklifi = mijozTelefon.length >= 2
     ? mijozlar.filter(m => m.telefon && m.telefon.replace(/\D/g, '').includes(mijozTelefon)).slice(0, 5)
-    : []
+    : mijozlar.slice(0, 8)
   const ismTaklifi = mijozIsmi.trim().length >= 1
     ? mijozlar.filter(m => uzSearch(m.ism, mijozIsmi)).slice(0, 5)
-    : []
+    : mijozlar.slice(0, 8)
 
   function mijozTanlash(m: Mijoz) {
     const digits = (m.telefon || '').replace(/\D/g, '')
