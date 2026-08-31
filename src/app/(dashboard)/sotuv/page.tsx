@@ -28,7 +28,7 @@ interface Tovar {
 function sotishNarxiSomda(tovar: Tovar, kursi: number): number {
   return tovar.valyuta === 'USD' ? Math.round(tovar.sotishNarxi * kursi) : tovar.sotishNarxi
 }
-interface Mijoz { id: string; ism: string; telefon: string | null }
+interface Mijoz { id: string; ism: string; telefon: string | null; manzil?: string | null }
 interface SavatItem {
   tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number
 }
@@ -131,6 +131,8 @@ export default function SotuvPage() {
   const [mijozIsmi, setMijozIsmi] = useState('')
   const [mijozManzil, setMijozManzil] = useState('')
   const [mijozAniqlanmoqda, setMijozAniqlanmoqda] = useState(false)
+  const [telefonTaklifOchiq, setTelefonTaklifOchiq] = useState(false)
+  const [ismTaklifOchiq, setIsmTaklifOchiq] = useState(false)
 
   // Qaytarish
   const [qaytarishModal, setQaytarishModal] = useState(false)
@@ -458,6 +460,23 @@ export default function SotuvPage() {
     setMijozIsmi('')
     setMijozManzil('')
     setMijozModal(true)
+  }
+
+  // Telefon yoki ism bo'yicha mavjud mijozlarni filtrlab, tanlash uchun taklif ro'yxati
+  const telefonTaklifi = mijozTelefon.length >= 2
+    ? mijozlar.filter(m => m.telefon && m.telefon.replace(/\D/g, '').includes(mijozTelefon)).slice(0, 5)
+    : []
+  const ismTaklifi = mijozIsmi.trim().length >= 1
+    ? mijozlar.filter(m => uzSearch(m.ism, mijozIsmi)).slice(0, 5)
+    : []
+
+  function mijozTanlash(m: Mijoz) {
+    const digits = (m.telefon || '').replace(/\D/g, '')
+    setMijozTelefon(digits.length === 12 && digits.startsWith('998') ? digits.slice(3) : digits.slice(0, 9))
+    setMijozIsmi(m.ism)
+    setMijozManzil(m.manzil || '')
+    setTelefonTaklifOchiq(false)
+    setIsmTaklifOchiq(false)
   }
 
   async function mijozTasdiqlaVaYubor(e: React.FormEvent) {
@@ -1171,13 +1190,57 @@ export default function SotuvPage() {
               </button>
             </div>
             <form onSubmit={mijozTasdiqlaVaYubor} className="p-5 space-y-4">
-              <div>
+              <div className="relative">
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Telefon raqam *</label>
-                <PhoneInput value={mijozTelefon} onChange={setMijozTelefon} required />
+                <PhoneInput
+                  value={mijozTelefon}
+                  onChange={v => { setMijozTelefon(v); setTelefonTaklifOchiq(true) }}
+                  onFocus={() => setTelefonTaklifOchiq(true)}
+                  onBlur={() => setTimeout(() => setTelefonTaklifOchiq(false), 150)}
+                  required
+                />
+                {telefonTaklifOchiq && telefonTaklifi.length > 0 && (
+                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg overflow-hidden">
+                    {telefonTaklifi.map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onMouseDown={() => mijozTanlash(m)}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-neutral-700 transition flex items-center justify-between gap-2"
+                      >
+                        <span className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{m.ism}</span>
+                        <span className="text-gray-400 dark:text-gray-500 text-xs shrink-0">{m.telefon}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
+              <div className="relative">
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
-                <input value={mijozIsmi} onChange={e => setMijozIsmi(e.target.value)} required autoFocus={false} className={inputCls} />
+                <input
+                  value={mijozIsmi}
+                  onChange={e => { setMijozIsmi(e.target.value); setIsmTaklifOchiq(true) }}
+                  onFocus={() => setIsmTaklifOchiq(true)}
+                  onBlur={() => setTimeout(() => setIsmTaklifOchiq(false), 150)}
+                  required
+                  autoFocus={false}
+                  className={inputCls}
+                />
+                {ismTaklifOchiq && ismTaklifi.length > 0 && (
+                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg overflow-hidden">
+                    {ismTaklifi.map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onMouseDown={() => mijozTanlash(m)}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-neutral-700 transition flex items-center justify-between gap-2"
+                      >
+                        <span className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{m.ism}</span>
+                        <span className="text-gray-400 dark:text-gray-500 text-xs shrink-0">{m.telefon}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Manzil</label>

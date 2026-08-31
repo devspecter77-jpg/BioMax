@@ -22,12 +22,6 @@ function normalizePhone(telefon: string): string {
   return digits.length === 9 ? '998' + digits : digits
 }
 
-const SITE_URL = process.env.NEXTAUTH_URL || 'https://qaqnus222.biznesjon.uz'
-
-function chekLinki(chekRaqami: string): string {
-  return `${SITE_URL}/chek/${encodeURIComponent(chekRaqami)}`
-}
-
 // ─── Sozlamalar yuklash ──────────────────────────────────────────────────────
 
 async function getSozlama(kalit: string): Promise<string | null> {
@@ -415,7 +409,6 @@ export async function nasiyaEslatmalarYuborish() {
 
     let xabarTuri: string | null = null
     let xabarMatni: string | null = null
-    const chekLink = nasiya.sotuv?.chekRaqami ? `\n🔗 Chek: ${chekLinki(nasiya.sotuv.chekRaqami)}` : ''
 
     if (kunFarq === 3) {
       xabarTuri = '3_kun'
@@ -426,7 +419,6 @@ export async function nasiyaEslatmalarYuborish() {
         `🧾 ${nasiya.sotuv?.chekRaqami || 'Nasiya'}\n` +
         `💰 Qoldiq qarz: ${formatSum(Number(nasiya.qoldiq))}\n` +
         `📅 Muddat: ${formatSana(muddat)} (3 kun qoldi)` +
-        chekLink +
         `\n\nIltimos, o'z vaqtida to'lang.`
     } else if (kunFarq === 2) {
       xabarTuri = '2_kun'
@@ -437,7 +429,6 @@ export async function nasiyaEslatmalarYuborish() {
         `🧾 ${nasiya.sotuv?.chekRaqami || 'Nasiya'}\n` +
         `💰 Qoldiq qarz: ${formatSum(Number(nasiya.qoldiq))}\n` +
         `📅 Muddat: ${formatSana(muddat)} (2 kun qoldi)` +
-        chekLink +
         `\n\nIltimos, o'z vaqtida to'lang.`
     } else if (kunFarq === 1) {
       xabarTuri = '1_kun'
@@ -448,7 +439,6 @@ export async function nasiyaEslatmalarYuborish() {
         `🧾 ${nasiya.sotuv?.chekRaqami || 'Nasiya'}\n` +
         `💰 Qoldiq qarz: ${formatSum(Number(nasiya.qoldiq))}\n` +
         `📅 Muddat: ${formatSana(muddat)} (ertaga!)` +
-        chekLink +
         `\n\nIltimos, bugun to'lang!`
     } else if (kunFarq <= 0 && nasiya.holati !== 'YOPILGAN') {
       xabarTuri = 'muddati_otgan'
@@ -460,7 +450,6 @@ export async function nasiyaEslatmalarYuborish() {
         `🧾 ${nasiya.sotuv?.chekRaqami || 'Nasiya'}\n` +
         `💰 Qoldiq qarz: ${formatSum(Number(nasiya.qoldiq))}\n` +
         `📅 Muddat: ${formatSana(muddat)} (${otganKun} kun o'tdi)` +
-        chekLink +
         `\n\nIltimos, tezroq to'lang.`
     }
 
@@ -1032,7 +1021,6 @@ export async function nasiyaYaratildiXabarToliq(
     `\n💰 Summa: ${formatSum(data.summasi)}\n` +
     `📊 Qoldiq qarz: ${formatSum(data.qoldiqQarz)}\n` +
     (data.muddat ? `📅 Muddat: ${formatSana(data.muddat)}\n` : '') +
-    `\n🔗 Chek: ${chekLinki(data.chekRaqami)}\n` +
     `\nIltimos, o'z vaqtida to'lang.`
 
   return xabarDarholYuborVaSaqla({
@@ -1047,14 +1035,10 @@ export async function nasiyaYaratildiXabarToliq(
 export async function qarzQoshildiXabar(nasiyaId: string, mijozId: string, summasi: number, yangiQoldiq: number) {
   if (!(await isTelegramEnabled())) return
 
-  const [mijoz, nasiya] = await Promise.all([
-    prisma.mijoz.findUnique({ where: { id: mijozId } }),
-    prisma.nasiya.findUnique({ where: { id: nasiyaId }, include: { sotuv: { select: { chekRaqami: true } } } }),
-  ])
+  const mijoz = await prisma.mijoz.findUnique({ where: { id: mijozId } })
   if (!mijoz?.telefon) return
 
   const dokonNomi = (await getSozlama('dokon_nomi')) || "Do'kon"
-  const chekLink = nasiya?.sotuv?.chekRaqami ? `\n🔗 Chek: ${chekLinki(nasiya.sotuv.chekRaqami)}` : ''
 
   const xabar =
     `📦 Yangi qarz qo'shildi\n\n` +
@@ -1062,7 +1046,6 @@ export async function qarzQoshildiXabar(nasiyaId: string, mijozId: string, summa
     `👤 Mijoz: ${mijoz.ism}\n` +
     `💰 Qo'shilgan summa: ${formatSum(summasi)}\n` +
     `📊 Jami qoldiq qarz: ${formatSum(yangiQoldiq)}\n` +
-    chekLink +
     `\nIltimos, o'z vaqtida to'lang.`
 
   return xabarDarholYuborVaSaqla({
@@ -1077,19 +1060,15 @@ export async function qarzQoshildiXabar(nasiyaId: string, mijozId: string, summa
 export async function tolovQilindiXabar(nasiyaId: string, mijozId: string, tolovSummasi: number, qoldiq: number) {
   if (!(await isTelegramEnabled())) return
 
-  const [mijoz, nasiya] = await Promise.all([
-    prisma.mijoz.findUnique({ where: { id: mijozId } }),
-    prisma.nasiya.findUnique({ where: { id: nasiyaId }, include: { sotuv: { select: { chekRaqami: true } } } }),
-  ])
+  const mijoz = await prisma.mijoz.findUnique({ where: { id: mijozId } })
   if (!mijoz?.telefon) return
 
   const dokonNomi = (await getSozlama('dokon_nomi')) || "Do'kon"
   const yopildi = qoldiq <= 0
-  const chekLink = nasiya?.sotuv?.chekRaqami ? `\n🔗 Chek: ${chekLinki(nasiya.sotuv.chekRaqami)}` : ''
 
   const xabar = yopildi
-    ? `✅ Nasiya to'liq to'landi!\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq: 0 UZS${chekLink}\n\nRahmat, nasiyangiz yopildi! ✅`
-    : `💳 To'lov qabul qilindi\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq qarz: ${formatSum(qoldiq)}${chekLink}\n\nRahmat!`
+    ? `✅ Nasiya to'liq to'landi!\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq: 0 UZS\n\nRahmat, nasiyangiz yopildi! ✅`
+    : `💳 To'lov qabul qilindi\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq qarz: ${formatSum(qoldiq)}\n\nRahmat!`
 
   return xabarDarholYuborVaSaqla({
     nasiyaId,
@@ -1125,7 +1104,6 @@ export async function sotuvChekiXabar(
     mahsulotlarMatni +
     `\n💰 Jami: ${formatSum(data.summasi)}\n` +
     `💳 To'lov: ${TOLOV_LABEL[data.tolovUsuli] || data.tolovUsuli}\n` +
-    `\n🔗 Chek: ${chekLinki(data.chekRaqami)}\n` +
     `\nBizni tanlaganingiz uchun rahmat! 🙏`
 
   return xabarDarholYuborVaSaqla({

@@ -11,6 +11,8 @@ interface PhoneInputProps {
   required?: boolean
   disabled?: boolean
   className?: string
+  onFocus?: () => void
+  onBlur?: () => void
 }
 
 // Format 9 digits into: (XX) XXX-XX-XX
@@ -28,7 +30,9 @@ export default function PhoneInput({
   placeholder = "+998 (__) ___-__-__",
   required = false,
   disabled = false,
-  className
+  className,
+  onFocus,
+  onBlur,
 }: PhoneInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -73,6 +77,8 @@ export default function PhoneInput({
         value={displayValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
         required={required}
         disabled={disabled}
