@@ -10,6 +10,17 @@ export function formatSum(summa: number | string) {
   return new Intl.NumberFormat('uz-UZ').format(n) + " so'm"
 }
 
+// Mahsulot o'z valyutasida (UZS/USD) ko'rsatiladi — masalan katalog/POS
+// kartochkalarida. Sotuvga qo'shilganda esa har doim so'mga o'girilgan
+// summa ishlatiladi (formatSum bilan), chunki chek/hisobotlar faqat so'mda.
+export function formatNarx(narx: number | string, valyuta?: string) {
+  const n = typeof narx === 'string' ? parseFloat(narx) : narx
+  if (valyuta === 'USD') {
+    return '$' + new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+  }
+  return formatSum(n)
+}
+
 export function formatSana(sana: Date | string) {
   const d = typeof sana === 'string' ? new Date(sana) : sana
   const kun = String(d.getDate()).padStart(2, '0')

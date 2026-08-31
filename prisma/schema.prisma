@@ -114,6 +114,7 @@ model Tovar {
   minimalQoldiq Int       @default(5)
   rasmlar       String[]  @default([])
   yaroqlilikMuddati DateTime?
+  valyuta       Valyuta   @default(UZS)
   holati        TovarHolati @default(FAOL)
   yaratilgan    DateTime  @default(now())
   yangilangan   DateTime  @updatedAt
@@ -146,6 +147,11 @@ enum Birlik {
 enum TovarHolati {
   FAOL
   ARXIVLANGAN
+}
+
+enum Valyuta {
+  UZS
+  USD
 }
 
 // ========================

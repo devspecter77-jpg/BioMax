@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { formatSum } from '@/lib/utils'
+import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -15,7 +15,7 @@ import { useConfirm } from '@/components/ConfirmProvider'
 interface Kategoriya { id: string; nomi: string }
 interface Tovar {
   id: string; nomi: string; kategoriya: Kategoriya
-  kelishNarxi: number; sotishNarxi: number
+  kelishNarxi: number; sotishNarxi: number; valyuta: string
   birlik: string; minimalQoldiq: number; shtrixKod: string | null
   holati: string; qoldiq: number; rasmlar: string[]
   yaroqlilikMuddati: string | null
@@ -50,9 +50,13 @@ export default function TovarlarPage() {
   const [katNomi, setKatNomi] = useState('')
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
+  const [kursi, setKursi] = useState<number | null>(null)
+  const [kursModal, setKursModal] = useState(false)
+  const [kursForm, setKursForm] = useState('')
+  const [kursSaqlanmoqda, setKursSaqlanmoqda] = useState(false)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
-    sotishNarxi: '', foiz: '15', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+    sotishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
     rasmlar: [] as string[], yaroqlilikMuddati: '',
   })
 
@@ -107,6 +111,37 @@ export default function TovarlarPage() {
 
   useEffect(() => { yuklash() }, [qidiruv, aktifKategoriya])
 
+  useEffect(() => {
+    fetch('/api/kurs').then(r => r.json()).then(d => { if (d.kursi) setKursi(d.kursi) })
+  }, [])
+
+  function kursModalniOchish() {
+    setKursForm(kursi ? String(kursi) : '')
+    setKursModal(true)
+  }
+
+  async function kursSaqlash(e: React.FormEvent) {
+    e.preventDefault()
+    setKursSaqlanmoqda(true)
+    try {
+      const res = await fetch('/api/kurs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kursi: kursForm }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setKursi(data.kursi)
+        toast.success("Dollar kursi yangilandi")
+        setKursModal(false)
+      } else {
+        toast.error(data.xato || 'Xatolik')
+      }
+    } finally {
+      setKursSaqlanmoqda(false)
+    }
+  }
+
   function ochModal(tovar?: Tovar) {
     if (tovar) {
       setTahrirlash(tovar)
@@ -115,7 +150,7 @@ export default function TovarlarPage() {
       setForm({
         nomi: tovar.nomi, kategoriyaId: tovar.kategoriya.id,
         shtrixKod: tovar.shtrixKod || '', kelishNarxi: String(tovar.kelishNarxi),
-        sotishNarxi: String(tovar.sotishNarxi), foiz: String(foiz), birlik: tovar.birlik,
+        sotishNarxi: String(tovar.sotishNarxi), foiz: String(foiz), valyuta: tovar.valyuta || 'UZS', birlik: tovar.birlik,
         minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: tovar.rasmlar || [],
         yaroqlilikMuddati: tovar.yaroqlilikMuddati ? tovar.yaroqlilikMuddati.slice(0, 10) : '',
@@ -123,7 +158,7 @@ export default function TovarlarPage() {
     } else {
       setTahrirlash(null)
       setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
-        kelishNarxi: '', sotishNarxi: '', foiz: '15', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+        kelishNarxi: '', sotishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: [], yaroqlilikMuddati: '' })
     }
     setModal(true)
@@ -228,6 +263,14 @@ export default function TovarlarPage() {
           className="flex-1"
         />
         <BarcodeScanner onScan={setQidiruv} title="Mahsulotni qidirish uchun skanerlang" />
+        <button
+          onClick={kursModalniOchish}
+          title="Dollar kursini o'zgartirish"
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+        >
+          <DollarSign size={16} />
+          {kursi ? formatSum(kursi) : '...'}
+        </button>
         <ViewToggle view={view} onChange={changeView} />
         <a
           href="/api/tovarlar/export"
@@ -323,10 +366,10 @@ export default function TovarlarPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 text-sm whitespace-nowrap">
-                      {formatSum(t.kelishNarxi)}
+                      {formatNarx(t.kelishNarxi, t.valyuta)}
                     </td>
                     <td className="px-4 py-3 text-right text-green-600 text-sm font-semibold whitespace-nowrap">
-                      {formatSum(t.sotishNarxi)}
+                      {formatNarx(t.sotishNarxi, t.valyuta)}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <span className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-lg font-medium" title={t.kategoriya.nomi}>{t.kategoriya.nomi}</span>
@@ -398,11 +441,11 @@ export default function TovarlarPage() {
                   </div>
                   <div className="border-x border-gray-200 dark:border-neutral-700">
                     <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Kelish</p>
-                    <p className="text-gray-700 dark:text-gray-300 font-medium text-xs sm:text-sm mt-0.5">{formatSum(t.kelishNarxi)}</p>
+                    <p className="text-gray-700 dark:text-gray-300 font-medium text-xs sm:text-sm mt-0.5">{formatNarx(t.kelishNarxi, t.valyuta)}</p>
                   </div>
                   <div>
                     <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Sotish</p>
-                    <p className="text-green-600 font-semibold text-xs sm:text-sm mt-0.5">{formatSum(t.sotishNarxi)}</p>
+                    <p className="text-green-600 font-semibold text-xs sm:text-sm mt-0.5">{formatNarx(t.sotishNarxi, t.valyuta)}</p>
                   </div>
                 </div>
               </div>
@@ -421,6 +464,42 @@ export default function TovarlarPage() {
       )}
 
       </>)})()}
+
+      {/* Dollar kursi modali */}
+      {kursModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
+            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
+                <DollarSign size={18} className="text-primary" />
+                Dollar kursi
+              </h3>
+              <button onClick={() => setKursModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={kursSaqlash} className="p-5 space-y-4">
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">1 dollar necha so&apos;m?</label>
+                <MoneyInput value={kursForm} onChange={setKursForm} required placeholder="12700" />
+                <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5">
+                  Dollarda narxlangan mahsulotlar sotuvda shu kurs bo&apos;yicha so&apos;mga o&apos;giriladi.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setKursModal(false)}
+                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+                  Bekor qilish
+                </button>
+                <button type="submit" disabled={kursSaqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  {kursSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
+                  {kursSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Kategoriya qo'shish modali — tovar modali ustida chiqishi uchun yuqoriroq z-index */}
       {katModal && (
@@ -508,6 +587,25 @@ export default function TovarlarPage() {
                   />
                 )}
               </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Valyuta</label>
+                <div className="flex items-center bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 gap-1 w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, valyuta: 'UZS' }))}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${form.valyuta === 'UZS' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                  >
+                    UZS (so&apos;m)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, valyuta: 'USD' }))}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${form.valyuta === 'USD' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                  >
+                    USD ($)
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kelish narxi *</label>
@@ -517,6 +615,7 @@ export default function TovarlarPage() {
                     onChange={kelishNarxiOzgardi}
                     required
                     placeholder="0"
+                    suffix={form.valyuta === 'USD' ? '$' : "so'm"}
                   />
                 </div>
                 <div>
@@ -541,7 +640,13 @@ export default function TovarlarPage() {
                   onChange={sotishNarxiOzgardi}
                   required
                   placeholder="0"
+                  suffix={form.valyuta === 'USD' ? '$' : "so'm"}
                 />
+                {form.valyuta === 'USD' && kursi && form.sotishNarxi && (
+                  <p className="text-gray-400 dark:text-gray-600 text-xs mt-1">
+                    ≈ {formatSum(Math.round((parseFloat(form.sotishNarxi) || 0) * kursi))} (joriy kurs: {formatSum(kursi)}/$)
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { formatSum, formatSanaVaVaqt, playBeep, uzSearch } from '@/lib/utils'
+import { formatSum, formatNarx, formatSanaVaVaqt, playBeep, uzSearch } from '@/lib/utils'
 import { buildChekHtml, chekChopEtish as printChek } from '@/lib/chek-print'
 import { toast } from 'sonner'
 import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2, Package } from 'lucide-react'
@@ -12,7 +12,13 @@ import PhoneInput from '@/components/ui/phone-input'
 
 interface Tovar {
   id: string; nomi: string; sotishNarxi: number; kelishNarxi: number; birlik: string; qoldiq: number; shtrixKod: string | null
-  rasmlar?: string[]
+  rasmlar?: string[]; valyuta?: string
+}
+
+// Mahsulot USD'da narxlangan bo'lsa, savatga qo'shishda joriy kurs bo'yicha
+// so'mga o'giriladi — chek/hisobotlar hammasi so'mda bo'lishi shart.
+function sotishNarxiSomda(tovar: Tovar, kursi: number): number {
+  return tovar.valyuta === 'USD' ? Math.round(tovar.sotishNarxi * kursi) : tovar.sotishNarxi
 }
 interface Mijoz { id: string; ism: string; telefon: string | null }
 interface SavatItem {
@@ -93,6 +99,7 @@ function kirill(text: string): string {
 
 export default function SotuvPage() {
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
+  const [kursi, setKursi] = useState<number>(12700)
   const [tovarlarYuklanmoqda, setTovarlarYuklanmoqda] = useState(true)
   const [tovarlarXato, setTovarlarXato] = useState<string | null>(null)
   const [mijozlar, setMijozlar] = useState<Mijoz[]>([])
@@ -191,6 +198,7 @@ export default function SotuvPage() {
         qoldiq: Number(data.qoldiq ?? 0),
         shtrixKod: data.shtrixKod ?? null,
         rasmlar: data.rasmlar ?? [],
+        valyuta: data.valyuta,
       }
       // Topilgan tovarni local cache'ga qo'shamiz — keyingi skanlar tezlashadi
       setTovarlar(prev => prev.some(t => t.id === tovar.id) ? prev : [tovar, ...prev])
@@ -279,6 +287,8 @@ export default function SotuvPage() {
         ])
         setMijozlar(Array.isArray(mj) ? mj : [])
         setDokonInfo(sz && typeof sz === 'object' ? sz : {})
+        const kursQiymat = sz && typeof sz === 'object' ? parseFloat(sz.usd_kursi) : NaN
+        if (Number.isFinite(kursQiymat) && kursQiymat > 0) setKursi(kursQiymat)
       } catch {
         // qo'shimcha ma'lumotlar muhim emas — sotuv ishlay beradi
       }
@@ -371,6 +381,7 @@ export default function SotuvPage() {
       toast.error(`${tovar.nomi}: qoldiq yo'q`)
       return
     }
+    const narxSomda = sotishNarxiSomda(tovar, kursi)
     setSavat(prev => {
       const mavjud = prev.find(s => s.tovarId === tovar.id)
       if (mavjud) {
@@ -382,9 +393,9 @@ export default function SotuvPage() {
         return [yangilangan, ...prev.filter(s => s.tovarId !== tovar.id)]
       }
       return [{
-        tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: tovar.sotishNarxi,
+        tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
         miqdor: 1, birlik: tovar.birlik, chegirma: 0,
-        jami: tovar.sotishNarxi, mavjudQoldiq: tovar.qoldiq
+        jami: narxSomda, mavjudQoldiq: tovar.qoldiq
       }, ...prev]
     })
   }
@@ -932,7 +943,7 @@ export default function SotuvPage() {
                   </div>
                   <div className="p-4">
                     <p className="text-gray-900 dark:text-gray-100 text-lg font-semibold leading-tight line-clamp-2 min-h-[2.6em]">{t.nomi}</p>
-                    <p className="text-pos text-xl font-bold font-mono tabular-nums mt-2">{formatSum(t.sotishNarxi)}</p>
+                    <p className="text-pos text-xl font-bold font-mono tabular-nums mt-2">{formatNarx(t.sotishNarxi, t.valyuta)}</p>
                   </div>
                 </button>
               )

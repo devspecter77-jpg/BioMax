@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { formatSum, formatSana } from '@/lib/utils'
+import { formatSum, formatNarx, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
 import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
@@ -12,7 +12,7 @@ import { useConfirm } from '@/components/ConfirmProvider'
 
 interface QoldiqItem {
   id: string; nomi: string; kategoriya: { id: string; nomi: string }; kategoriyaId: string; shtrixKod: string | null
-  birlik: string; sotishNarxi: number; kelishNarxi: number
+  birlik: string; sotishNarxi: number; kelishNarxi: number; valyuta: string
   minimalQoldiq: number; qoldiq: number; omborQoldiq: number; dokonQoldiq: number; kamQolgan: boolean
   rasmlar?: string[]
   yaroqlilikMuddati: string | null; kunQoldi: number | null; muddatiYaqin: boolean
@@ -256,7 +256,7 @@ export default function OmborPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-gray-400 dark:text-gray-600 text-sm hidden md:table-cell whitespace-nowrap">
-                      {formatSum(q.kelishNarxi)}
+                      {formatNarx(q.kelishNarxi, q.valyuta)}
                     </td>
                     <td className="px-4 py-3 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
@@ -340,7 +340,7 @@ export default function OmborPage() {
                   </div>
                   <div>
                     <p className="text-gray-400 dark:text-gray-600 text-[11px]">Kelish</p>
-                    <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">{formatSum(q.kelishNarxi)}</p>
+                    <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">{formatNarx(q.kelishNarxi, q.valyuta)}</p>
                   </div>
                 </div>
 

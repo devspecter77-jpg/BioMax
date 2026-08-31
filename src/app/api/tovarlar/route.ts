@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
         filialId,
         kelishNarxi: parseFloat(data.kelishNarxi),
         sotishNarxi: parseFloat(data.sotishNarxi),
+        valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
         birlik: data.birlik || 'DONA',
         minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
         rasmlar,

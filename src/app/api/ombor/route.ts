@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
         birlik: t.birlik,
         sotishNarxi: t.sotishNarxi,
         kelishNarxi: t.kelishNarxi,
+        valyuta: t.valyuta,
         minimalQoldiq: t.minimalQoldiq,
         omborQoldiq: stock.omborQoldiq,
         dokonQoldiq: stock.dokonQoldiq,

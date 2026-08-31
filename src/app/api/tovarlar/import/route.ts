@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         }
 
         const shtrixKod = String(row['Shtrix-kod'] || '').trim() || null
+        const valyuta = String(row['Valyuta'] || 'UZS').trim().toUpperCase() === 'USD' ? 'USD' : 'UZS'
         const kelishNarxi = parseFloat(String(row['Kelish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
         const sotishNarxi = parseFloat(String(row['Sotish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
         const birlikRaw = String(row['Birlik'] || 'DONA').trim().toUpperCase()
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
         if (mavjud) {
           await prisma.tovar.update({
             where: { id: mavjud.id },
-            data: { kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, holati },
+            data: { kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati },
           })
 
           // Miqdorini faylga moslash — farqni ombor harakati bilan tuzatish (do'kon zaxirasi)
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
           yangilandi++
         } else {
           const yangiTovar = await prisma.tovar.create({
-            data: { nomi, kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, holati, filialId },
+            data: { nomi, kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, filialId },
           })
           if (qoldiq > 0) {
             await prisma.omborHarakati.create({

@@ -49,6 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         shtrixKod: data.shtrixKod || null,
         kelishNarxi: parseFloat(data.kelishNarxi),
         sotishNarxi: parseFloat(data.sotishNarxi),
+        valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
         birlik: data.birlik,
         minimalQoldiq: parseInt(data.minimalQoldiq),
         rasmlar,
