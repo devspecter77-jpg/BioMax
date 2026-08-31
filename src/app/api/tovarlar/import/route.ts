@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         const birlik = (BIRLIKLAR.has(birlikRaw) ? birlikRaw : 'DONA') as any
         const holatiRaw = String(row['Holati'] || 'FAOL').trim().toUpperCase()
         const holati = (HOLATLAR.has(holatiRaw) ? holatiRaw : 'FAOL') as any
-        const qoldiq = parseFloat(String(row['Ombordagi soni'] || '0').replace(/[^\d.]/g, '')) || 0
+        const qoldiq = parseFloat(String(row['Miqdori'] || '0').replace(/[^\d.]/g, '')) || 0
 
         const mavjud = await prisma.tovar.findFirst({
           where: { nomi: { equals: nomi, mode: 'insensitive' }, ...(filialId ? { filialId } : {}) },
