@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { normalizeUzbek, toKirill, toLotin } from '@/lib/utils'
 import { getStockMap } from '@/lib/stock'
 import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
+import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
@@ -105,7 +106,10 @@ export async function POST(req: NextRequest) {
 
     // Ulashilgan admin — tahrirlash ruxsati bo'lmasa, yangi mahsulot ham
     // qo'sha olmaydi (yozish huquqi bir xil belgi bilan boshqariladi).
-    if (!filialId && (session.user as any).ulashilganEgaId && !(session.user as any).tovarTahrirlashMumkin) {
+    // Bazadan jonli o'qiladi — Ega ruxsatni o'zgartirsa, qayta login
+    // qilinmasdan darhol kuchga kiradi.
+    const { tahrirlashMumkin } = await tovarYozishRuxsatlari(session)
+    if (!filialId && !tahrirlashMumkin) {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 

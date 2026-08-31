@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
 import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
+import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 
 const BIRLIKLAR = new Set(['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI'])
 const HOLATLAR = new Set(['FAOL', 'ARXIVLANGAN'])
@@ -14,7 +15,8 @@ export async function POST(req: NextRequest) {
     const ownFilialId = sessionFilialId(session)
     const isRealEga = sessionIsRealEga(session)
 
-    if (!ownFilialId && (session.user as any).ulashilganEgaId && !(session.user as any).tovarTahrirlashMumkin) {
+    const { tahrirlashMumkin } = await tovarYozishRuxsatlari(session)
+    if (!ownFilialId && !tahrirlashMumkin) {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 

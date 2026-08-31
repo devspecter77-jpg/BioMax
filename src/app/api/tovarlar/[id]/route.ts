@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
@@ -39,12 +40,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
     const filialId = sessionFilialId(session)
-    const sess = session.user as any
 
     const mavjud = await prisma.tovar.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
-    if (!filialId && sess.ulashilganEgaId && !sess.tovarTahrirlashMumkin) {
+    const { tahrirlashMumkin } = await tovarYozishRuxsatlari(session)
+    if (!filialId && !tahrirlashMumkin) {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 
@@ -102,12 +103,12 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
     const filialId = sessionFilialId(session)
-    const sess = session.user as any
 
     const mavjud = await prisma.tovar.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
-    if (!filialId && sess.ulashilganEgaId && !sess.tovarOchirishMumkin) {
+    const { ochirishMumkin } = await tovarYozishRuxsatlari(session)
+    if (!filialId && !ochirishMumkin) {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 
