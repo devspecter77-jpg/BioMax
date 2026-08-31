@@ -10,6 +10,14 @@ import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
 import PhoneInput from '@/components/ui/phone-input'
 
+const TOLOV_USULI_BADGE: Record<string, { label: string; cls: string }> = {
+  NAQD: { label: 'Naqd', cls: 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400' },
+  KARTA: { label: 'Karta', cls: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400' },
+  ARALASH: { label: 'Aralash', cls: 'bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400' },
+  NASIYA: { label: 'Nasiya', cls: 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 font-semibold' },
+  SHERIK: { label: 'Sherik', cls: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400' },
+}
+
 interface Tovar {
   id: string; nomi: string; sotishNarxi: number; kelishNarxi: number; birlik: string; qoldiq: number; shtrixKod: string | null
   rasmlar?: string[]; valyuta?: string
@@ -1433,13 +1441,20 @@ export default function SotuvPage() {
                           onClick={() => sotuvTanlash(s)}
                           className="w-full text-left px-3 py-2.5 rounded-xl border border-gray-200 dark:border-neutral-700 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition"
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-900 dark:text-gray-100 text-sm font-medium">{s.chekRaqami}</span>
-                            <span className="text-green-600 text-sm font-bold">{formatSum(s.yakuniySumma)}</span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{s.chekRaqami}</span>
+                            <span className="text-green-600 text-sm font-bold shrink-0">{formatSum(s.yakuniySumma)}</span>
                           </div>
-                          <div className="flex items-center justify-between mt-0.5">
-                            <span className="text-gray-400 dark:text-gray-600 text-xs">{formatSanaVaVaqt(s.sana)}</span>
-                            {s.mijoz && <span className="text-gray-500 dark:text-gray-500 text-xs">{s.mijoz.ism}</span>}
+                          <div className="flex items-center justify-between mt-1 gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-gray-400 dark:text-gray-600 text-xs truncate">{formatSanaVaVaqt(s.sana)}</span>
+                              {s.mijoz && <span className="text-gray-500 dark:text-gray-500 text-xs truncate">• {s.mijoz.ism}</span>}
+                            </div>
+                            {TOLOV_USULI_BADGE[s.tolovUsuli] && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md shrink-0 ${TOLOV_USULI_BADGE[s.tolovUsuli].cls}`}>
+                                {TOLOV_USULI_BADGE[s.tolovUsuli].label}
+                              </span>
+                            )}
                           </div>
                         </button>
                       ))
@@ -1455,11 +1470,18 @@ export default function SotuvPage() {
               {qaytarishSotuv && (
                 <>
                   <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 text-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{qaytarishSotuv.chekRaqami}</span>
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100 truncate">{qaytarishSotuv.chekRaqami}</span>
+                        {TOLOV_USULI_BADGE[qaytarishSotuv.tolovUsuli] && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md shrink-0 ${TOLOV_USULI_BADGE[qaytarishSotuv.tolovUsuli].cls}`}>
+                            {TOLOV_USULI_BADGE[qaytarishSotuv.tolovUsuli].label}
+                          </span>
+                        )}
+                      </div>
                       <button
                         onClick={() => setQaytarishSotuv(null)}
-                        className="text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 hover:underline"
+                        className="text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 hover:underline shrink-0"
                       >
                         ← Orqaga
                       </button>
@@ -1470,6 +1492,11 @@ export default function SotuvPage() {
                     <div className="flex justify-between text-gray-500 dark:text-gray-400">
                       <span>Jami:</span><span className="text-green-600 font-bold">{formatSum(qaytarishSotuv.yakuniySumma)}</span>
                     </div>
+                    {qaytarishSotuv.tolovUsuli === 'NASIYA' && qaytarishSotuv.mijoz && (
+                      <div className="mt-1.5 pt-1.5 border-t border-amber-200 dark:border-amber-800/40 text-red-700 dark:text-red-400 text-xs font-medium">
+                        Nasiyaga olingan — mijoz: {qaytarishSotuv.mijoz.ism}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">

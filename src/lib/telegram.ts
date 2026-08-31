@@ -6,7 +6,7 @@ import { prisma } from './prisma'
 // ─── Yordamchi funksiyalar ───────────────────────────────────────────────────
 
 function formatSum(sum: number) {
-  return new Intl.NumberFormat('uz-UZ').format(Math.round(sum)) + " so'm"
+  return new Intl.NumberFormat('uz-UZ').format(Math.round(sum)) + ' UZS'
 }
 
 function formatSana(d: Date) {
@@ -1088,7 +1088,7 @@ export async function tolovQilindiXabar(nasiyaId: string, mijozId: string, tolov
   const chekLink = nasiya?.sotuv?.chekRaqami ? `\n🔗 Chek: ${chekLinki(nasiya.sotuv.chekRaqami)}` : ''
 
   const xabar = yopildi
-    ? `✅ Nasiya to'liq to'landi!\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq: 0 so'm${chekLink}\n\nRahmat, nasiyangiz yopildi! ✅`
+    ? `✅ Nasiya to'liq to'landi!\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq: 0 UZS${chekLink}\n\nRahmat, nasiyangiz yopildi! ✅`
     : `💳 To'lov qabul qilindi\n\n🏪 ${dokonNomi}\n👤 Mijoz: ${mijoz.ism}\n💳 To'langan: ${formatSum(tolovSummasi)}\n📊 Qoldiq qarz: ${formatSum(qoldiq)}${chekLink}\n\nRahmat!`
 
   return xabarDarholYuborVaSaqla({

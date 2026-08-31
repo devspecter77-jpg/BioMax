@@ -578,7 +578,7 @@ export default function TovarlarPage() {
                     onChange={kelishNarxiOzgardi}
                     required
                     placeholder="0"
-                    suffix={form.valyuta === 'USD' ? '$' : "so'm"}
+                    suffix={form.valyuta === 'USD' ? '$' : 'UZS'}
                   />
                 </div>
                 <div>
@@ -603,7 +603,7 @@ export default function TovarlarPage() {
                   onChange={sotishNarxiOzgardi}
                   required
                   placeholder="0"
-                  suffix={form.valyuta === 'USD' ? '$' : "so'm"}
+                  suffix={form.valyuta === 'USD' ? '$' : 'UZS'}
                 />
                 {form.valyuta === 'USD' && kursi && form.sotishNarxi && (
                   <p className="text-gray-400 dark:text-gray-600 text-xs mt-1">

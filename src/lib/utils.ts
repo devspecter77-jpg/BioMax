@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatSum(summa: number | string) {
   const n = typeof summa === 'string' ? parseFloat(summa) : summa
-  return new Intl.NumberFormat('uz-UZ').format(n) + " so'm"
+  return new Intl.NumberFormat('uz-UZ').format(n) + ' UZS'
 }
 
 // Mahsulot o'z valyutasida (UZS/USD) ko'rsatiladi — masalan katalog/POS
@@ -49,11 +49,11 @@ export function generateChekRaqami(): string {
   return `CHK-${yil}${oy}${kun}-${tasodifiy}`
 }
 
-// Format a number as Uzbek currency with so'm suffix using ru-RU locale (space-separated thousands)
+// Format a number as Uzbek currency with UZS suffix using ru-RU locale (space-separated thousands)
 export function formatMoney(amount: number | string): string {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount
-  if (isNaN(n)) return "0 so'm"
-  return new Intl.NumberFormat('ru-RU').format(Math.round(n)) + " so'm"
+  if (isNaN(n)) return '0 UZS'
+  return new Intl.NumberFormat('ru-RU').format(Math.round(n)) + ' UZS'
 }
 
 // Format a number in short human-readable form (mln, mlrd, ming)

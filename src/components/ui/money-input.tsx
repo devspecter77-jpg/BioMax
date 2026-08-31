@@ -12,7 +12,7 @@ interface MoneyInputProps {
   required?: boolean
   disabled?: boolean
   className?: string
-  suffix?: string  // e.g. "so'm"
+  suffix?: string  // e.g. "UZS"
 }
 
 // Format a numeric string with comma separators (e.g. "1500000" -> "1,500,000")
@@ -30,7 +30,7 @@ export default function MoneyInput({
   required = false,
   disabled = false,
   className,
-  suffix = "so'm"
+  suffix = 'UZS'
 }: MoneyInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 

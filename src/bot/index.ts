@@ -16,7 +16,7 @@ const bot = new Bot(BOT_TOKEN)
 // ─── Yordamchi funksiyalar ───────────────────────────────────────────────────
 
 function formatSum(sum: number) {
-  return new Intl.NumberFormat('uz-UZ').format(Math.round(sum)) + " so'm"
+  return new Intl.NumberFormat('uz-UZ').format(Math.round(sum)) + ' UZS'
 }
 
 function formatSana(d: Date) {

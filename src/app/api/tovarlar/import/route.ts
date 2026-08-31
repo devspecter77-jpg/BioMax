@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ xato: 'Fayl topilmadi' }, { status: 400 })
 
     const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array' })
+    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
@@ -55,6 +55,14 @@ export async function POST(req: NextRequest) {
         const holatiRaw = String(row['Holati'] || 'FAOL').trim().toUpperCase()
         const holati = (HOLATLAR.has(holatiRaw) ? holatiRaw : 'FAOL') as any
         const qoldiq = parseFloat(String(row['Miqdori'] || '0').replace(/[^\d.]/g, '')) || 0
+        const muddatRaw = row['Yaroqlilik muddati']
+        let yaroqlilikMuddati: Date | null = null
+        if (muddatRaw instanceof Date && !isNaN(muddatRaw.getTime())) {
+          yaroqlilikMuddati = muddatRaw
+        } else if (typeof muddatRaw === 'string' && muddatRaw.trim()) {
+          const parsed = new Date(muddatRaw.trim())
+          if (!isNaN(parsed.getTime())) yaroqlilikMuddati = parsed
+        }
 
         const mavjud = await prisma.tovar.findFirst({
           where: { nomi: { equals: nomi, mode: 'insensitive' }, ...(filialId ? { filialId } : {}) },
@@ -63,7 +71,7 @@ export async function POST(req: NextRequest) {
         if (mavjud) {
           await prisma.tovar.update({
             where: { id: mavjud.id },
-            data: { kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati },
+            data: { kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, yaroqlilikMuddati },
           })
 
           // Miqdorini faylga moslash — farqni ombor harakati bilan tuzatish (do'kon zaxirasi)
@@ -87,7 +95,7 @@ export async function POST(req: NextRequest) {
           yangilandi++
         } else {
           const yangiTovar = await prisma.tovar.create({
-            data: { nomi, kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, filialId },
+            data: { nomi, kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, filialId, yaroqlilikMuddati },
           })
           if (qoldiq > 0) {
             await prisma.omborHarakati.create({

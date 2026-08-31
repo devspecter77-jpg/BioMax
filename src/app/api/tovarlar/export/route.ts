@@ -29,13 +29,14 @@ export async function GET(_req: NextRequest) {
         'Sotish narxi': Number(t.sotishNarxi),
         'Birlik': t.birlik,
         'Miqdori': stock?.dokonQoldiq ?? 0,
+        'Yaroqlilik muddati': t.yaroqlilikMuddati ? t.yaroqlilikMuddati.toISOString().slice(0, 10) : '',
         'Holati': t.holati,
       }
     })
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 14 }, { wch: 12 }]
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Tovarlar')
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 

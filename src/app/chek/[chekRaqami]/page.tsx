@@ -43,7 +43,7 @@ interface ChekData {
 
 function fSum(n: number | string) {
   const v = typeof n === 'string' ? parseFloat(n) : n
-  return new Intl.NumberFormat('ru-RU').format(Math.round(v)) + " so'm"
+  return new Intl.NumberFormat('ru-RU').format(Math.round(v)) + ' UZS'
 }
 
 function fSana(s: string) {
