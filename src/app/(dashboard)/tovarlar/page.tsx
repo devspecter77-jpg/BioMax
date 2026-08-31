@@ -53,8 +53,13 @@ export default function TovarlarPage() {
   // tanlashi va ulashish sozlamalarini boshqarishi mumkin.
   const haqiqiyEga = egaMi && !(session?.user as any)?.ulashilganEgaId
   // Ulashilgan admin uchun — Ega tomonidan berilgan tahrirlash/o'chirish ruxsati.
-  const tahrirRuxsat = haqiqiyEga || !!(session?.user as any)?.tovarTahrirlashMumkin
-  const ochirishRuxsat = haqiqiyEga || !!(session?.user as any)?.tovarOchirishMumkin
+  // Sessiya (JWT) faqat login vaqtida to'ldiriladi — Ega ruxsatni keyin
+  // o'zgartirsa, allaqachon login qilgan admin sessiyasi eskirib qoladi.
+  // Shuning uchun ulashilgan admin uchun joriy ruxsatni bazadan jonli
+  // qayta so'raymiz (server ham xuddi shunday tekshiradi — tovar-ruxsat.ts).
+  const [ulashilganRuxsat, setUlashilganRuxsat] = useState<{ tahrirlashMumkin: boolean; ochirishMumkin: boolean } | null>(null)
+  const tahrirRuxsat = haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.tahrirlashMumkin : !!(session?.user as any)?.tovarTahrirlashMumkin)
+  const ochirishRuxsat = haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.ochirishMumkin : !!(session?.user as any)?.tovarOchirishMumkin)
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
   const [korinishModal, setKorinishModal] = useState(false)
   const [adminlar, setAdminlar] = useState<AdminHisob[]>([])
@@ -152,6 +157,18 @@ export default function TovarlarPage() {
     fetch('/api/filiallar').then(r => r.json()).then(d => setFiliallar(Array.isArray(d) ? d : [])).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [haqiqiyEga])
+
+  // Ulashilgan admin — tahrirlash/o'chirish ruxsatini bazadan jonli olish
+  // (sessiya eskirgan bo'lishi mumkin, tugmalar shunga qarab yashirinadi).
+  useEffect(() => {
+    const meId = (session?.user as any)?.id
+    const ulashilganEgaId = (session?.user as any)?.ulashilganEgaId
+    if (!meId || !ulashilganEgaId) return
+    fetch(`/api/foydalanuvchilar/${meId}/yashirilgan-tovarlar`)
+      .then(r => r.json())
+      .then(d => setUlashilganRuxsat({ tahrirlashMumkin: d?.tahrirlashMumkin ?? true, ochirishMumkin: d?.ochirishMumkin ?? true }))
+      .catch(() => {})
+  }, [session])
 
   useEffect(() => {
     fetch('/api/kurs').then(r => r.json()).then(d => { if (d.kursi) { setKursi(d.kursi); setKursSana(d.sana) } })
