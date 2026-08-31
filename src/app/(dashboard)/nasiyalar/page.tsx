@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatSana, uzSearch } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown } from 'lucide-react'
+import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown, Download, Upload, Loader2 } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import MoneyInput from '@/components/ui/money-input'
 import DateInput from '@/components/ui/date-input'
@@ -77,6 +77,30 @@ export default function NasiyalarPage() {
   const [tahrirlashModal, setTahrirlashModal] = useState<Nasiya | null>(null)
   const [tahrirlashForm, setTahrirlashForm] = useState({ ism: '', manzil: '', telefon: '', qarz: '', muddat: '', sana: '' })
   const [tahrirlashYuklash, setTahrirlashYuklash] = useState(false)
+  const [importYuklanmoqda, setImportYuklanmoqda] = useState(false)
+
+  async function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImportYuklanmoqda(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await fetch('/api/nasiyalar/import', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Import tugadi: ${data.qoshildi} ta qo'shildi`)
+        yuklash()
+      } else {
+        toast.error(data.xato || 'Import xatoligi')
+      }
+    } catch {
+      toast.error('Import amalga oshmadi')
+    } finally {
+      setImportYuklanmoqda(false)
+    }
+  }
 
   async function yuklash() {
     setYuklanmoqda(true)
@@ -321,6 +345,18 @@ export default function NasiyalarPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1" />
         <ViewToggle view={view} onChange={changeView} />
+        <a
+          href="/api/nasiyalar/export"
+          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+        >
+          <Download size={16} />
+          <span className="hidden sm:inline">Excel export</span>
+        </a>
+        <label className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+          {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+          <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
+          <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
+        </label>
         <button
           onClick={() => setQoshishModal(true)}
           className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition">

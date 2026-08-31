@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
-import { Receipt, Phone, User, Calendar, Search } from 'lucide-react'
+import { Receipt, Phone, User, Calendar, Search, Download } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
 
 interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
@@ -74,6 +74,13 @@ export default function XaridlarPage() {
           className="px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
           placeholder="Gacha"
         />
+        <a
+          href={`/api/sotuvlar/export${danFilter || gachaFilter ? `?${new URLSearchParams({ ...(danFilter ? { dan: danFilter } : {}), ...(gachaFilter ? { gacha: gachaFilter } : {}) })}` : ''}`}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 text-sm shrink-0"
+        >
+          <Download size={16} />
+          Excel export
+        </a>
       </div>
 
       {/* KPI */}

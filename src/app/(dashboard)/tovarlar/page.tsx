@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Loader2, Package } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package } from 'lucide-react'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -41,8 +41,6 @@ export default function TovarlarPage() {
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
   const [tahrirlash, setTahrirlash] = useState<Tovar | null>(null)
   const [importYuklanmoqda, setImportYuklanmoqda] = useState(false)
-  const [importModal, setImportModal] = useState(false)
-  const [kutayotganFayl, setKutayotganFayl] = useState<File | null>(null)
   const [view, setView] = useState<'table' | 'card'>('table')
   const [aktifKategoriya, setAktifKategoriya] = useState<string | null>(null)
   const [katModal, setKatModal] = useState(false)
@@ -150,30 +148,18 @@ export default function TovarlarPage() {
     else toast.error('Xatolik yuz berdi')
   }
 
-  function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
+  async function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    setKutayotganFayl(file)
-    setImportModal(true)
-  }
-
-  async function excelImport(rejim: 'tozalash' | 'ustiga') {
-    if (!kutayotganFayl) return
-    setImportModal(false)
     setImportYuklanmoqda(true)
     const fd = new FormData()
-    fd.append('file', kutayotganFayl)
-    fd.append('rejim', rejim)
-    setKutayotganFayl(null)
+    fd.append('file', file)
     try {
       const res = await fetch('/api/tovarlar/import', { method: 'POST', body: fd })
       const data = await res.json()
       if (res.ok) {
-        const msg = rejim === 'tozalash'
-          ? `Import tugadi: ${data.qoshildi} ta tovar qo'shildi`
-          : `Import tugadi: ${data.qoshildi} ta yangi, ${data.duplikat ?? 0} ta takror o'tkazildi`
-        toast.success(msg)
+        toast.success(`Import tugadi: ${data.qoshildi} ta qo'shildi, ${data.yangilandi} ta yangilandi`)
         yuklash()
       } else {
         toast.error(data.xato || 'Import xatoligi')
@@ -196,6 +182,13 @@ export default function TovarlarPage() {
           className="flex-1"
         />
         <ViewToggle view={view} onChange={changeView} />
+        <a
+          href="/api/tovarlar/export"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+        >
+          <Download size={16} />
+          Excel export
+        </a>
         {/* Excel import */}
         <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
           {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
@@ -368,57 +361,6 @@ export default function TovarlarPage() {
       )}
 
       </>)})()}
-
-      {/* Import rejimi tanlash modali */}
-      {importModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-amber-100 dark:bg-amber-950/40 rounded-full mx-auto mb-4">
-                <Upload size={22} className="text-amber-600 dark:text-amber-400" />
-              </div>
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold text-center text-lg mb-2">
-                Excel import
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 text-sm text-center mb-6">
-                <span className="font-medium text-gray-700 dark:text-gray-300">{kutayotganFayl?.name}</span>
-                <br />
-                Mavjud tovarlar bilan nima qilish?
-              </p>
-              <div className="space-y-3">
-                <button
-                  onClick={() => excelImport('ustiga')}
-                  className="w-full flex flex-col items-start px-4 py-3 border-2 border-gray-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-xl transition group"
-                >
-                  <span className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-400 text-sm">
-                    Ustiga qo&apos;shish
-                  </span>
-                  <span className="text-gray-400 dark:text-gray-500 text-xs mt-0.5">
-                    Mavjud tovarlar saqlanadi. Bir xil nomli tovarlar ikkinchi marta qo&apos;shilmaydi
-                  </span>
-                </button>
-                <button
-                  onClick={() => excelImport('tozalash')}
-                  className="w-full flex flex-col items-start px-4 py-3 border-2 border-gray-200 dark:border-neutral-700 hover:border-red-500 dark:hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition group"
-                >
-                  <span className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-red-700 dark:group-hover:text-red-400 text-sm">
-                    Eski tovarlarni arxivlab yangisini qo&apos;shish
-                  </span>
-                  <span className="text-gray-400 dark:text-gray-500 text-xs mt-0.5">
-                    Barcha faol tovarlar arxivga o&apos;tkaziladi, keyin yangilari qo&apos;shiladi
-                  </span>
-                </button>
-              </div>
-              <button
-                onClick={() => { setImportModal(false); setKutayotganFayl(null) }}
-                className="w-full mt-3 py-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-sm font-medium transition"
-              >
-                Bekor qilish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Kategoriya qo'shish modali — tovar modali ustida chiqishi uchun yuqoriroq z-index */}
       {katModal && (

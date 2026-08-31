@@ -4,6 +4,9 @@ import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
 import { sessionFilialId } from '@/lib/filial-scope'
 
+const BIRLIKLAR = new Set(['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI'])
+const HOLATLAR = new Set(['FAOL', 'ARXIVLANGAN'])
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
@@ -12,114 +15,101 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
-    // rejim: 'tozalash' (arxivlab ustiga) | 'ustiga' (dublikat o'tkazib)
-    const rejim = (formData.get('rejim') as string) || 'tozalash'
-
     if (!file) return NextResponse.json({ xato: 'Fayl topilmadi' }, { status: 400 })
 
-    // Excel faylni o'qish
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
-    // Sarlavha qatorini topish
-    let dataStartIndex = 0
-    for (let i = 0; i < Math.min(rows.length, 5); i++) {
-      const row = rows[i]
-      const hasHeader = row.some(
-        (cell: any) =>
-          typeof cell === 'string' &&
-          (cell.toLowerCase().includes('mahsulot') || cell.toLowerCase().includes('nomi'))
-      )
-      if (hasHeader) { dataStartIndex = i + 1; break }
-    }
-
-    const dataRows = rows.slice(dataStartIndex).filter((row) => {
-      const nomi = String(row[1] || '').trim()
-      return nomi.length > 0
-    })
-
-    if (dataRows.length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json({ xato: "Faylda mahsulot ma'lumoti topilmadi" }, { status: 400 })
     }
 
-    // Kategoriyalarni yuklash (faqat shu filialga tegishli)
-    const mavjudKategoriyalar = await prisma.kategoriya.findMany({
-      where: { filialId },
-      select: { id: true, nomi: true },
-    })
     const kategoriyaMap = new Map<string, string>()
-    for (const k of mavjudKategoriyalar) {
-      kategoriyaMap.set(k.nomi.toLowerCase().trim(), k.id)
-    }
+    const mavjudKategoriyalar = await prisma.kategoriya.findMany({ where: { filialId }, select: { id: true, nomi: true } })
+    for (const k of mavjudKategoriyalar) kategoriyaMap.set(k.nomi.toLowerCase().trim(), k.id)
 
-    // Rejim: tozalash — mavjud FAOL tovarlarni arxivlash (faqat shu filialda)
-    if (rejim === 'tozalash') {
-      await prisma.tovar.updateMany({
-        where: { holati: 'FAOL', filialId },
-        data: { holati: 'ARXIVLANGAN' },
-      })
-    }
+    let qoshildi = 0, yangilandi = 0, xatolar = 0
 
-    // Rejim: ustiga — mavjud tovar nomlarini map ga olish (deduplication uchun)
-    const mavjudNomlar = new Set<string>()
-    if (rejim === 'ustiga') {
-      const faolTovarlar = await prisma.tovar.findMany({
-        where: { holati: 'FAOL', filialId },
-        select: { nomi: true },
-      })
-      for (const t of faolTovarlar) {
-        mavjudNomlar.add(t.nomi.toLowerCase().trim())
-      }
-    }
-
-    let qoshildi = 0
-    let duplikat = 0
-    let xatolar = 0
-
-    for (const row of dataRows) {
-      const nomi = String(row[1] || '').trim()
-      const kategoriyaNomi = String(row[2] || '').trim()
+    for (const row of rows) {
+      const nomi = String(row['Nomi'] || '').trim()
       if (!nomi) continue
 
-      // Ustiga rejimda: bir xil nom bo'lsa o'tkazib yuborish
-      if (rejim === 'ustiga' && mavjudNomlar.has(nomi.toLowerCase().trim())) {
-        duplikat++
-        continue
-      }
-
-      // Kategoriyani topish yoki yaratish
-      let kategoriyaId: string
-      const normalKey = kategoriyaNomi.toLowerCase().trim()
-      if (normalKey && kategoriyaMap.has(normalKey)) {
-        kategoriyaId = kategoriyaMap.get(normalKey)!
-      } else if (normalKey) {
-        const yangiKat = await prisma.kategoriya.create({ data: { nomi: kategoriyaNomi, filialId } })
-        kategoriyaId = yangiKat.id
-        kategoriyaMap.set(normalKey, kategoriyaId)
-      } else {
-        // Umumiy kategoriya
-        if (!kategoriyaMap.has('__umumiy__')) {
-          const umumiy = await prisma.kategoriya.findFirst({ where: { nomi: 'Umumiy', filialId } })
-            ?? await prisma.kategoriya.create({ data: { nomi: 'Umumiy', filialId } })
-          kategoriyaMap.set('__umumiy__', umumiy.id)
-        }
-        kategoriyaId = kategoriyaMap.get('__umumiy__')!
-      }
-
       try {
-        await prisma.tovar.create({
-          data: { nomi, kategoriyaId, filialId, kelishNarxi: 0, sotishNarxi: 0, birlik: 'DONA', minimalQoldiq: 5 },
+        const kategoriyaNomi = String(row['Kategoriya'] || '').trim() || 'Umumiy'
+        const kategoriyaKalit = kategoriyaNomi.toLowerCase()
+        let kategoriyaId = kategoriyaMap.get(kategoriyaKalit)
+        if (!kategoriyaId) {
+          const yangiKat = await prisma.kategoriya.create({ data: { nomi: kategoriyaNomi, filialId } })
+          kategoriyaId = yangiKat.id
+          kategoriyaMap.set(kategoriyaKalit, kategoriyaId)
+        }
+
+        const shtrixKod = String(row['Shtrix-kod'] || '').trim() || null
+        const kelishNarxi = parseFloat(String(row['Kelish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
+        const sotishNarxi = parseFloat(String(row['Sotish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
+        const birlikRaw = String(row['Birlik'] || 'DONA').trim().toUpperCase()
+        const birlik = (BIRLIKLAR.has(birlikRaw) ? birlikRaw : 'DONA') as any
+        const minimalQoldiq = parseInt(String(row['Minimal qoldiq'] || '5')) || 5
+        const holatiRaw = String(row['Holati'] || 'FAOL').trim().toUpperCase()
+        const holati = (HOLATLAR.has(holatiRaw) ? holatiRaw : 'FAOL') as any
+        const qoldiq = parseFloat(String(row['Qoldiq'] || '0').replace(/[^\d.]/g, '')) || 0
+
+        const mavjud = await prisma.tovar.findFirst({
+          where: { nomi: { equals: nomi, mode: 'insensitive' }, ...(filialId ? { filialId } : {}) },
         })
-        if (rejim === 'ustiga') mavjudNomlar.add(nomi.toLowerCase().trim())
-        qoshildi++
+
+        if (mavjud) {
+          await prisma.tovar.update({
+            where: { id: mavjud.id },
+            data: { kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, minimalQoldiq, holati },
+          })
+
+          // Qoldiqni faylga moslash — farqni ombor harakati bilan tuzatish
+          const { getStockMap } = await import('@/lib/stock')
+          const stockMap = await getStockMap([mavjud.id])
+          const hozirgiQoldiq = stockMap.get(mavjud.id)?.dokonQoldiq ?? 0
+          const farq = qoldiq - hozirgiQoldiq
+          if (Math.abs(farq) > 0.0001) {
+            await prisma.omborHarakati.create({
+              data: {
+                tovarId: mavjud.id,
+                turi: farq > 0 ? 'KIRIM' : 'CHIQIM',
+                joy: 'DOKON',
+                miqdor: Math.abs(farq),
+                narx: kelishNarxi,
+                izoh: 'Excel import orqali qoldiq moslashtirildi',
+                foydalanuvchiId: (session.user as any).id,
+              },
+            })
+          }
+          yangilandi++
+        } else {
+          const yangiTovar = await prisma.tovar.create({
+            data: { nomi, kategoriyaId, shtrixKod, kelishNarxi, sotishNarxi, birlik, minimalQoldiq, holati, filialId },
+          })
+          if (qoldiq > 0) {
+            await prisma.omborHarakati.create({
+              data: {
+                tovarId: yangiTovar.id,
+                turi: 'KIRIM',
+                joy: 'DOKON',
+                miqdor: qoldiq,
+                narx: kelishNarxi,
+                izoh: 'Excel import',
+                foydalanuvchiId: (session.user as any).id,
+              },
+            })
+          }
+          qoshildi++
+        }
       } catch {
         xatolar++
       }
     }
 
-    return NextResponse.json({ muvaffaqiyat: true, qoshildi, duplikat, xatolar, jami: dataRows.length })
+    return NextResponse.json({ muvaffaqiyat: true, qoshildi, yangilandi, xatolar, jami: rows.length })
   } catch (e) {
     console.error('Import xatosi:', e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })

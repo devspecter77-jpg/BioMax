@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users, Download, Upload } from 'lucide-react'
 import ViewToggle from '@/components/ViewToggle'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
@@ -35,6 +35,7 @@ export default function MijozlarPage() {
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
   const [ochirilayotganId, setOchirilayotganId] = useState<string | null>(null)
   const [kategoriya, setKategoriya] = useState<'barchasi' | 'top'>('barchasi')
+  const [importYuklanmoqda, setImportYuklanmoqda] = useState(false)
 
   // Mijoz tafsilotlari (xaridlar tarixi)
   const [detailModal, setDetailModal] = useState(false)
@@ -68,6 +69,29 @@ export default function MijozlarPage() {
   function changeView(v: 'table' | 'card') {
     setView(v)
     localStorage.setItem('mijozlar-view', v)
+  }
+
+  async function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImportYuklanmoqda(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await fetch('/api/mijozlar/import', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Import tugadi: ${data.qoshildi} ta qo'shildi, ${data.yangilandi} ta yangilandi`)
+        yuklash()
+      } else {
+        toast.error(data.xato || 'Import xatoligi')
+      }
+    } catch {
+      toast.error('Import amalga oshmadi')
+    } finally {
+      setImportYuklanmoqda(false)
+    }
   }
 
   async function ochirish(m: Mijoz) {
@@ -118,6 +142,18 @@ export default function MijozlarPage() {
         />
         {/* View toggle placed between search and add button */}
         <ViewToggle view={view} onChange={changeView} />
+        <a
+          href="/api/mijozlar/export"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
+        >
+          <Download size={16} />
+          Excel export
+        </a>
+        <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+          {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+          {importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}
+          <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
+        </label>
         <button onClick={() => setModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
           <UserPlus size={16} />
           Mijoz qo&apos;shish
