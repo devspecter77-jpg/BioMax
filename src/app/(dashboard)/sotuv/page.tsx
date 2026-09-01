@@ -396,8 +396,21 @@ export default function SotuvPage() {
       return
     }
     if (bonusTanlashRejimi) {
-      if (savat.some(s => s.tovarId === tovar.id)) {
-        toast.error(`${tovar.nomi} allaqachon savatda — bonus uchun boshqa mahsulot tanlang`)
+      // Bonus xuddi shu mahsulotdan ham bo'lishi mumkin (masalan 5ta sotib
+      // olib, 1tasi bonusga xuddi o'shanidan) — shuning uchun tovarId bir xil
+      // bo'lgan oddiy (pullik) qator borligi to'sqinlik qilmaydi, faqat
+      // ALLAQACHON bonus qatori bo'lsa, shunga miqdor qo'shiladi (dublikat
+      // qator ochilmaydi).
+      const mavjudBonus = savat.find(s => s.tovarId === tovar.id && s.bonus)
+      if (mavjudBonus) {
+        if (mavjudBonus.miqdor + 1 > tovar.qoldiq) {
+          toast.error(`${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()}`)
+          return
+        }
+        setSavat(prev => prev.map(s => (s.tovarId === tovar.id && s.bonus) ? { ...s, miqdor: s.miqdor + 1 } : s))
+        setBonusTanlashRejimi(false)
+        setMobileTab('savat')
+        toast.success(`${tovar.nomi} bonus miqdori oshirildi`)
         return
       }
       setSavat(prev => [{
@@ -412,14 +425,16 @@ export default function SotuvPage() {
     }
     const narxSomda = sotishNarxiSomda(tovar, kursi)
     setSavat(prev => {
-      const mavjud = prev.find(s => s.tovarId === tovar.id)
+      // Faqat oddiy (bonus bo'lmagan) qator bilan birlashtiriladi — bonus
+      // qatori (bor bo'lsa) tegilmasdan saqlanib qoladi.
+      const mavjud = prev.find(s => s.tovarId === tovar.id && !s.bonus)
       if (mavjud) {
         if (mavjud.miqdor + 1 > tovar.qoldiq) {
           toast.error(`${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()}`)
           return prev
         }
         const yangilangan = { ...mavjud, miqdor: mavjud.miqdor + 1, jami: (mavjud.miqdor + 1) * mavjud.birlikNarxi }
-        return [yangilangan, ...prev.filter(s => s.tovarId !== tovar.id)]
+        return [yangilangan, ...prev.filter(s => !(s.tovarId === tovar.id && !s.bonus))]
       }
       return [{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
@@ -433,13 +448,16 @@ export default function SotuvPage() {
   useEffect(() => { tovarlarRef.current = tovarlar }, [tovarlar])
   useEffect(() => { savatQoshRef.current = savatQosh })
 
-  function miqdorOzgartir(tovarId: string, yangiMiqdor: number) {
+  // Bitta mahsulotdan bir vaqtda ham oddiy, ham bonus qator bo'lishi mumkin
+  // (tovarId bir xil) — shuning uchun har doim `bonus` bayrog'i bilan birga
+  // aniq qatorni ko'rsatib beriladi, aks holda ikkalasi ham o'zgarib qolardi.
+  function miqdorOzgartir(tovarId: string, bonus: boolean | undefined, yangiMiqdor: number) {
     if (yangiMiqdor <= 0) {
-      setSavat(prev => prev.filter(s => s.tovarId !== tovarId))
+      setSavat(prev => prev.filter(s => !(s.tovarId === tovarId && !!s.bonus === !!bonus)))
       return
     }
     setSavat(prev => prev.map(s => {
-      if (s.tovarId !== tovarId) return s
+      if (!(s.tovarId === tovarId && !!s.bonus === !!bonus)) return s
       const cheklangan = Math.min(yangiMiqdor, s.mavjudQoldiq)
       return { ...s, miqdor: cheklangan, jami: cheklangan * s.birlikNarxi }
     }))
@@ -447,7 +465,7 @@ export default function SotuvPage() {
 
   function narxiOzgartir(tovarId: string, yangiNarx: number) {
     if (yangiNarx <= 0) return
-    setSavat(prev => prev.map(s => s.tovarId === tovarId
+    setSavat(prev => prev.map(s => (s.tovarId === tovarId && !s.bonus)
       ? { ...s, birlikNarxi: yangiNarx, jami: s.miqdor * yangiNarx }
       : s
     ))
@@ -465,14 +483,22 @@ export default function SotuvPage() {
   const yakuniySumma = (!isNaN(qolBilan) && qolBilan >= 0) ? Math.min(jamiSumma, qolBilan) : jamiSumma
   const chegirma = jamiSumma - yakuniySumma
 
-  // Stock yetishmaydigan itemlarni tekshirish
-  const ortiqchaItemlar = savat.filter(s => s.miqdor > s.mavjudQoldiq)
+  // Stock yetishmaydigan itemlarni tekshirish — bitta mahsulotdan oddiy va
+  // bonus qatori bo'lishi mumkin, shuning uchun ikkalasi QO'SHIB tekshiriladi
+  // (har biri alohida qoldiqdan oshmasa ham, birgalikda oshib ketishi mumkin).
+  const jamiTalabMap = new Map<string, number>()
+  for (const s of savat) jamiTalabMap.set(s.tovarId, (jamiTalabMap.get(s.tovarId) || 0) + s.miqdor)
+  const ortiqchaTovarIdlar = new Set(
+    savat.filter(s => (jamiTalabMap.get(s.tovarId) || 0) > s.mavjudQoldiq).map(s => s.tovarId)
+  )
+  const ortiqchaItemlar = savat.filter(s => ortiqchaTovarIdlar.has(s.tovarId))
 
   async function sotuvYakunla() {
     if (savat.length === 0) { toast.error('Savat bo\'sh!'); return }
 
     if (ortiqchaItemlar.length > 0) {
-      toast.error('Zaxira yetarli emas: ' + ortiqchaItemlar.map(i => i.nomi).join(', '))
+      const nomlar = Array.from(new Set(ortiqchaItemlar.map(i => i.nomi)))
+      toast.error('Zaxira yetarli emas: ' + nomlar.join(', '))
       return
     }
 
@@ -979,7 +1005,9 @@ export default function SotuvPage() {
           ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
             {korsatiladiganTovarlar.map(t => {
-              const savatdagi = savat.find(s => s.tovarId === t.id)?.miqdor || 0
+              // Oddiy va bonus qatorlari birga qo'shiladi — bitta mahsulotdan
+              // ikkalasi ham bo'lishi mumkin (masalan 5ta sotuv + 1ta bonus).
+              const savatdagi = savat.filter(s => s.tovarId === t.id).reduce((sum, s) => sum + s.miqdor, 0)
               const tugagan = t.qoldiq <= 0
               const kamQoldi = !tugagan && t.qoldiq <= 5
               return (
@@ -1107,7 +1135,7 @@ export default function SotuvPage() {
                 const isNarxOzgartirilgan = item.birlikNarxi !== tovarlar.find(t => t.id === item.tovarId)?.sotishNarxi
                 const isEditing = editNarx?.tovarId === item.tovarId
                 return (
-                <div key={item.tovarId} className="px-3 py-2.5 border-b border-gray-100 dark:border-neutral-800 last:border-b-0">
+                <div key={item.tovarId + (item.bonus ? '-bonus' : '')} className="px-3 py-2.5 border-b border-gray-100 dark:border-neutral-800 last:border-b-0">
                   {/* Row 1: nomi + delete */}
                   <div className="flex items-center justify-between gap-1 mb-2">
                     <p className="text-gray-900 dark:text-gray-100 text-sm font-medium leading-tight flex-1 truncate flex items-center gap-1.5" title={item.nomi}>
@@ -1118,7 +1146,7 @@ export default function SotuvPage() {
                         </span>
                       )}
                     </p>
-                    <button onClick={() => miqdorOzgartir(item.tovarId, 0)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition shrink-0 ml-1">
+                    <button onClick={() => miqdorOzgartir(item.tovarId, item.bonus, 0)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition shrink-0 ml-1">
                       <X size={13} />
                     </button>
                   </div>
@@ -1150,11 +1178,11 @@ export default function SotuvPage() {
                     </div>
                     )}
                     <span className="text-gray-400 dark:text-gray-600 text-xs shrink-0">×</span>
-                    <MiqdorInput miqdor={item.miqdor} max={item.mavjudQoldiq} onChange={v => miqdorOzgartir(item.tovarId, v)} />
+                    <MiqdorInput miqdor={item.miqdor} max={item.mavjudQoldiq} onChange={v => miqdorOzgartir(item.tovarId, item.bonus, v)} />
                     <span className="text-gray-400 dark:text-gray-600 text-xs shrink-0">=</span>
                     <span className={`text-sm font-bold shrink-0 min-w-[65px] text-right ${item.bonus ? 'text-violet-600 dark:text-violet-400' : 'text-green-600'}`}>{item.bonus ? 'Bepul' : formatSum(item.jami)}</span>
                   </div>
-                  {item.miqdor > item.mavjudQoldiq && (
+                  {ortiqchaTovarIdlar.has(item.tovarId) && (
                     <div className="flex items-center gap-1 mt-1.5 text-amber-600 dark:text-amber-400">
                       <AlertTriangle size={11} />
                       <span className="text-[10px]">Qoldiq: {item.mavjudQoldiq}, yetarli emas!</span>
@@ -1594,7 +1622,7 @@ export default function SotuvPage() {
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {draft.savat.map(item => (
-                          <span key={item.tovarId} className="text-[10px] bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded">
+                          <span key={item.tovarId + (item.bonus ? '-bonus' : '')} className="text-[10px] bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded">
                             {item.nomi} ×{item.miqdor}
                           </span>
                         ))}
