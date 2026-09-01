@@ -113,44 +113,44 @@ export default function XaridlarPage() {
               className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all cursor-pointer">
               <div className="p-4 border-b border-gray-100 dark:border-neutral-800">
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-xs font-mono text-gray-500 dark:text-gray-400">
-                    <Receipt size={13} />{s.chekRaqami}
+                  <span className="flex items-center gap-1.5 text-sm font-mono text-gray-600 dark:text-gray-300">
+                    <Receipt size={15} />{s.chekRaqami}
                   </span>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${TOLOV_RANG[s.tolovUsuli] || 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TOLOV_RANG[s.tolovUsuli] || 'bg-gray-100 text-gray-600'}`}>
                     {TOLOV_LABEL[s.tolovUsuli] || s.tolovUsuli}
                   </span>
                 </div>
-                <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5 flex items-center gap-1">
-                  <Calendar size={11} />{formatSanaVaVaqt(s.sana)}
+                <p className="text-gray-500 dark:text-gray-500 text-sm mt-1.5 flex items-center gap-1">
+                  <Calendar size={13} />{formatSanaVaVaqt(s.sana)}
                 </p>
               </div>
 
-              <div className="p-4 space-y-2">
+              <div className="p-4 space-y-2.5">
                 {s.mijoz && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300 font-medium truncate">
-                      <User size={13} className="text-gray-400 shrink-0" />{s.mijoz.ism}
+                  <div className="flex items-center justify-between text-base">
+                    <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200 font-medium truncate">
+                      <User size={15} className="text-gray-400 shrink-0" />{s.mijoz.ism}
                     </span>
                     {s.mijoz.telefon && (
-                      <a href={`tel:${s.mijoz.telefon}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-blue-500 hover:text-blue-600 text-xs shrink-0">
-                        <Phone size={11} />{formatPhone(s.mijoz.telefon)}
+                      <a href={`tel:${s.mijoz.telefon}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-blue-500 hover:text-blue-600 text-sm shrink-0">
+                        <Phone size={13} />{formatPhone(s.mijoz.telefon)}
                       </a>
                     )}
                   </div>
                 )}
 
-                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 space-y-1 max-h-32 overflow-y-auto">
+                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 space-y-1.5 max-h-32 overflow-y-auto">
                   {s.tarkiblar.map(t => (
-                    <div key={t.id} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                    <div key={t.id} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
                       <span className="truncate">{t.tovar.nomi} × {t.miqdor}</span>
-                      <span className="shrink-0 ml-2 text-gray-500 dark:text-gray-500">{formatSum(t.jami)}</span>
+                      <span className="shrink-0 ml-2 text-gray-600 dark:text-gray-400">{formatSum(t.jami)}</span>
                     </div>
                   ))}
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-gray-400 dark:text-gray-600 text-xs">Kassir: {s.kassir.ism}</span>
-                  <span className="text-green-600 font-bold text-base">{formatSum(s.yakuniySumma)}</span>
+                  <span className="text-gray-500 dark:text-gray-500 text-sm">Kassir: {s.kassir.ism}</span>
+                  <span className="text-green-600 font-bold text-lg">{formatSum(s.yakuniySumma)}</span>
                 </div>
               </div>
             </div>
