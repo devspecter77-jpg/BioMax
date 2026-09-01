@@ -127,6 +127,8 @@ export async function POST(req: NextRequest) {
         egaId,
         kelishNarxi: parseFloat(data.kelishNarxi),
         sotishNarxi: parseFloat(data.sotishNarxi),
+        optomNarxi: data.optomNarxi ? parseFloat(data.optomNarxi) : null,
+        bolishNarxi: data.bolishNarxi ? parseFloat(data.bolishNarxi) : null,
         valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
         birlik: data.birlik || 'DONA',
         minimalQoldiq: parseInt(data.minimalQoldiq) || 5,

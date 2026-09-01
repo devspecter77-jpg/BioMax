@@ -68,6 +68,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     if (!yashirilganMaydonlar.has('kelishNarxi')) updateData.kelishNarxi = parseFloat(data.kelishNarxi)
     if (!yashirilganMaydonlar.has('sotishNarxi')) updateData.sotishNarxi = parseFloat(data.sotishNarxi)
+    updateData.optomNarxi = data.optomNarxi ? parseFloat(data.optomNarxi) : null
+    updateData.bolishNarxi = data.bolishNarxi ? parseFloat(data.bolishNarxi) : null
 
     const tovar = await prisma.tovar.update({
       where: { id },

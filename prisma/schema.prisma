@@ -141,6 +141,9 @@ model Tovar {
   egaId         String?
   kelishNarxi   Decimal   @db.Decimal(12, 2)
   sotishNarxi   Decimal   @db.Decimal(12, 2)
+  // Ikkalasi ham ixtiyoriy — kiritilmasa oddiy sotish narxi ishlatiladi.
+  optomNarxi    Decimal?  @db.Decimal(12, 2)
+  bolishNarxi   Decimal?  @db.Decimal(12, 2)
   birlik        Birlik    @default(DONA)
   minimalQoldiq Int       @default(5)
   rasmlar       String[]  @default([])

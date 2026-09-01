@@ -18,7 +18,8 @@ import { YASHIRILADIGAN_MAYDONLAR } from '@/lib/maydon-katalogi'
 interface Kategoriya { id: string; nomi: string; _count?: { tovarlar: number } }
 interface Tovar {
   id: string; nomi: string; kategoriya: Kategoriya
-  kelishNarxi: number | null; sotishNarxi: number | null; valyuta: string
+  kelishNarxi: number | null; sotishNarxi: number | null
+  optomNarxi: number | null; bolishNarxi: number | null; valyuta: string
   birlik: string; minimalQoldiq: number; shtrixKod: string | null
   holati: string; qoldiq: number | null; rasmlar: string[]
   yaroqlilikMuddati: string | null
@@ -97,7 +98,7 @@ export default function TovarlarPage() {
   const [kursYangilanmoqda, setKursYangilanmoqda] = useState(false)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
-    sotishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+    sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
     rasmlar: [] as string[], yaroqlilikMuddati: '',
   })
 
@@ -268,7 +269,10 @@ export default function TovarlarPage() {
       setForm({
         nomi: tovar.nomi, kategoriyaId: tovar.kategoriya.id,
         shtrixKod: tovar.shtrixKod || '', kelishNarxi: kelish === null ? '' : String(kelish),
-        sotishNarxi: sotish === null ? '' : String(sotish), foiz: String(foiz), valyuta: tovar.valyuta || 'UZS', birlik: tovar.birlik,
+        sotishNarxi: sotish === null ? '' : String(sotish),
+        optomNarxi: tovar.optomNarxi === null ? '' : String(tovar.optomNarxi),
+        bolishNarxi: tovar.bolishNarxi === null ? '' : String(tovar.bolishNarxi),
+        foiz: String(foiz), valyuta: tovar.valyuta || 'UZS', birlik: tovar.birlik,
         minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: tovar.rasmlar || [],
         yaroqlilikMuddati: tovar.yaroqlilikMuddati ? tovar.yaroqlilikMuddati.slice(0, 10) : '',
@@ -276,7 +280,7 @@ export default function TovarlarPage() {
     } else {
       setTahrirlash(null)
       setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
-        kelishNarxi: '', sotishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
+        kelishNarxi: '', sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: [], yaroqlilikMuddati: '' })
     }
     setModal(true)
@@ -309,6 +313,8 @@ export default function TovarlarPage() {
               rasmlar: natija.rasmlar,
               yaroqlilikMuddati: natija.yaroqlilikMuddati,
               sotishNarxi: natija.sotishNarxi,
+              optomNarxi: natija.optomNarxi,
+              bolishNarxi: natija.bolishNarxi,
               // Kelish narxi shu hisobdan yashirilgan bo'lsa (null), API javobi
               // asl qiymatni yashirmasdan qaytaradi — shu sababli uni serverdan
               // olmaymiz, aks holda yashirilgan narx ekranda ko'rinib qolardi.
@@ -913,6 +919,30 @@ export default function TovarlarPage() {
                   </p>
                 )}
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                    Optom narxi <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
+                  </label>
+                  <MoneyInput
+                    value={form.optomNarxi}
+                    onChange={v => setForm(f => ({ ...f, optomNarxi: v }))}
+                    placeholder="0"
+                    suffix={form.valyuta === 'USD' ? '$' : 'UZS'}
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                    Bo&apos;lish narxi <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
+                  </label>
+                  <MoneyInput
+                    value={form.bolishNarxi}
+                    onChange={v => setForm(f => ({ ...f, bolishNarxi: v }))}
+                    placeholder="0"
+                    suffix={form.valyuta === 'USD' ? '$' : 'UZS'}
+                  />
+                </div>
+              </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
                 <select value={form.birlik} onChange={e => setForm(f => ({...f, birlik: e.target.value}))} className={inputCls}>
@@ -1176,6 +1206,18 @@ export default function TovarlarPage() {
                   <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Sotish narxi</p>
                   <p className="text-green-600 font-semibold mt-0.5">{narxKorsat(detailTovar.sotishNarxi, detailTovar.valyuta)}</p>
                 </div>
+                {detailTovar.optomNarxi !== null && (
+                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Optom narxi</p>
+                    <p className="text-blue-600 font-semibold mt-0.5">{narxKorsat(detailTovar.optomNarxi, detailTovar.valyuta)}</p>
+                  </div>
+                )}
+                {detailTovar.bolishNarxi !== null && (
+                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                    <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Bo&apos;lish narxi</p>
+                    <p className="text-amber-600 font-semibold mt-0.5">{narxKorsat(detailTovar.bolishNarxi, detailTovar.valyuta)}</p>
+                  </div>
+                )}
                 <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
                   <p className="text-gray-400 dark:text-gray-600 text-[11px]">Miqdori</p>
                   {detailTovar.qoldiq === null ? (
