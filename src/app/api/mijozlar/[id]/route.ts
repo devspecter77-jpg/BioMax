@@ -18,6 +18,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           include: {
             tarkiblar: { include: { tovar: { select: { nomi: true } } } },
             kassir: { select: { ism: true } },
+            qaytarishlar: {
+              include: {
+                tarkiblar: { include: { tovar: { select: { nomi: true } } } },
+                kassir: { select: { ism: true } },
+              },
+              orderBy: { yaratilgan: 'desc' },
+            },
           },
         },
       },

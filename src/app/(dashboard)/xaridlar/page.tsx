@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
-import { Receipt, Phone, User, Calendar, Search, Download, X, Wallet, CreditCard } from 'lucide-react'
+import { Receipt, Phone, User, Calendar, Search, Download, X, Wallet, CreditCard, RotateCcw } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
+interface QaytarishTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
+interface Qaytarish {
+  id: string; jamiSumma: number; sabab: string | null; yaratilgan: string
+  kassir: { ism: string }
+  tarkiblar: QaytarishTarkibiItem[]
+}
 interface Sotuv {
   id: string
   chekRaqami: string
@@ -20,7 +26,14 @@ interface Sotuv {
   mijoz: { ism: string; telefon: string | null } | null
   kassir: { ism: string }
   tarkiblar: SotuvTarkibiItem[]
+  qaytarishlar: Qaytarish[]
 }
+// Ro'yxatda sotuv va qaytarishlar bitta xronologik oqimda, sana bo'yicha
+// aralashtirib ko'rsatiladi — qaytarish "Vozvrat sotuv" sifatida alohida
+// yozuv bo'lib chiqadi, asl chekka bog'langan holda.
+type Yozuv =
+  | { turi: 'sotuv'; sana: string; sotuv: Sotuv }
+  | { turi: 'qaytarish'; sana: string; qaytarish: Qaytarish; asl: Sotuv }
 
 const TOLOV_LABEL: Record<string, string> = {
   NAQD: 'Naqd', KARTA: 'Karta', ARALASH: 'Aralash', NASIYA: 'Nasiya', SHERIK: 'Sherik',
@@ -60,7 +73,18 @@ export default function XaridlarPage() {
   useEffect(() => { setRenderLimit(30) }, [qidiruv, sanaFilter])
 
   const jamiSumma = sotuvlar.reduce((s, x) => s + Number(x.yakuniySumma), 0)
-  const korsatiladigan = sotuvlar.slice(0, renderLimit)
+
+  // Sotuvlar va ularning qaytarishlarini bitta xronologik ro'yxatga
+  // yig'ib, sana bo'yicha eng yangisidan boshlab tartiblaymiz.
+  const yozuvlar: Yozuv[] = []
+  for (const s of sotuvlar) {
+    yozuvlar.push({ turi: 'sotuv', sana: s.sana, sotuv: s })
+    for (const q of s.qaytarishlar || []) {
+      yozuvlar.push({ turi: 'qaytarish', sana: q.yaratilgan, qaytarish: q, asl: s })
+    }
+  }
+  yozuvlar.sort((a, b) => new Date(b.sana).getTime() - new Date(a.sana).getTime())
+  const korsatiladigan = yozuvlar.slice(0, renderLimit)
 
   return (
     <div className="space-y-4">
@@ -108,41 +132,41 @@ export default function XaridlarPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {korsatiladigan.map(s => (
+          {korsatiladigan.map(y => y.turi === 'sotuv' ? (
             <div
-              key={s.id}
-              onClick={() => setTafsilot(s)}
+              key={y.sotuv.id}
+              onClick={() => setTafsilot(y.sotuv)}
               className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all cursor-pointer">
               <div className="p-4 border-b border-gray-100 dark:border-neutral-800">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-sm font-mono text-gray-600 dark:text-gray-300">
-                    <Receipt size={15} />{s.chekRaqami}
+                    <Receipt size={15} />{y.sotuv.chekRaqami}
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TOLOV_RANG[s.tolovUsuli] || 'bg-gray-100 text-gray-600'}`}>
-                    {TOLOV_LABEL[s.tolovUsuli] || s.tolovUsuli}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TOLOV_RANG[y.sotuv.tolovUsuli] || 'bg-gray-100 text-gray-600'}`}>
+                    {TOLOV_LABEL[y.sotuv.tolovUsuli] || y.sotuv.tolovUsuli}
                   </span>
                 </div>
                 <p className="text-gray-500 dark:text-gray-500 text-sm mt-1.5 flex items-center gap-1">
-                  <Calendar size={13} />{formatSanaVaVaqt(s.sana)}
+                  <Calendar size={13} />{formatSanaVaVaqt(y.sotuv.sana)}
                 </p>
               </div>
 
               <div className="p-4 space-y-2.5">
-                {s.mijoz && (
+                {y.sotuv.mijoz && (
                   <div className="flex items-center justify-between text-base">
                     <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200 font-medium truncate">
-                      <User size={15} className="text-gray-400 shrink-0" />{s.mijoz.ism}
+                      <User size={15} className="text-gray-400 shrink-0" />{y.sotuv.mijoz.ism}
                     </span>
-                    {s.mijoz.telefon && (
-                      <a href={`tel:${s.mijoz.telefon}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-blue-500 hover:text-blue-600 text-sm shrink-0">
-                        <Phone size={13} />{formatPhone(s.mijoz.telefon)}
+                    {y.sotuv.mijoz.telefon && (
+                      <a href={`tel:${y.sotuv.mijoz.telefon}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-blue-500 hover:text-blue-600 text-sm shrink-0">
+                        <Phone size={13} />{formatPhone(y.sotuv.mijoz.telefon)}
                       </a>
                     )}
                   </div>
                 )}
 
                 <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 space-y-1.5 max-h-32 overflow-y-auto">
-                  {s.tarkiblar.map(t => (
+                  {y.sotuv.tarkiblar.map(t => (
                     <div key={t.id} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
                       <span className="truncate">{t.tovar.nomi} × {t.miqdor}</span>
                       <span className="shrink-0 ml-2 text-gray-600 dark:text-gray-400">{formatSum(t.jami)}</span>
@@ -151,8 +175,57 @@ export default function XaridlarPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-gray-500 dark:text-gray-500 text-sm">Kassir: {s.kassir.ism}</span>
-                  <span className="text-green-600 font-bold text-lg">{formatSum(s.yakuniySumma)}</span>
+                  <span className="text-gray-500 dark:text-gray-500 text-sm">Kassir: {y.sotuv.kassir.ism}</span>
+                  <span className="text-green-600 font-bold text-lg">{formatSum(y.sotuv.yakuniySumma)}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              key={y.qaytarish.id}
+              className="bg-white dark:bg-neutral-900 border border-amber-200 dark:border-amber-900/50 rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                    <RotateCcw size={15} /> Vozvrat sotuv
+                  </span>
+                  <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{y.asl.chekRaqami}</span>
+                </div>
+                <p className="text-gray-500 dark:text-gray-500 text-sm mt-1.5 flex items-center gap-1">
+                  <Calendar size={13} />{formatSanaVaVaqt(y.qaytarish.yaratilgan)}
+                </p>
+              </div>
+
+              <div className="p-4 space-y-2.5">
+                {y.asl.mijoz && (
+                  <div className="flex items-center justify-between text-base">
+                    <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200 font-medium truncate">
+                      <User size={15} className="text-gray-400 shrink-0" />{y.asl.mijoz.ism}
+                    </span>
+                    {y.asl.mijoz.telefon && (
+                      <a href={`tel:${y.asl.mijoz.telefon}`} className="flex items-center gap-1 text-blue-500 hover:text-blue-600 text-sm shrink-0">
+                        <Phone size={13} />{formatPhone(y.asl.mijoz.telefon)}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 space-y-1.5 max-h-32 overflow-y-auto">
+                  {y.qaytarish.tarkiblar.map(t => (
+                    <div key={t.id} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
+                      <span className="truncate">{t.tovar.nomi} × {t.miqdor}</span>
+                      <span className="shrink-0 ml-2 text-gray-600 dark:text-gray-400">{formatSum(t.jami)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {y.qaytarish.sabab && (
+                  <p className="text-gray-400 dark:text-gray-600 text-xs">Sabab: {y.qaytarish.sabab}</p>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-gray-500 dark:text-gray-500 text-sm">Kassir: {y.qaytarish.kassir.ism}</span>
+                  <span className="text-amber-600 font-bold text-lg">-{formatSum(y.qaytarish.jamiSumma)}</span>
                 </div>
               </div>
             </div>
@@ -160,9 +233,9 @@ export default function XaridlarPage() {
         </div>
       )}
 
-      {sotuvlar.length > renderLimit && (
+      {yozuvlar.length > renderLimit && (
         <button onClick={() => setRenderLimit(r => r + 30)} className="w-full py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-white dark:hover:bg-neutral-900 transition border border-gray-200 dark:border-neutral-800 rounded-xl">
-          Yana ko&apos;rsatish ({sotuvlar.length - renderLimit} ta qoldi)
+          Yana ko&apos;rsatish ({yozuvlar.length - renderLimit} ta qoldi)
         </button>
       )}
 

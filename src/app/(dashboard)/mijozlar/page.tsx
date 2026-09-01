@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users, Download, Upload, Eye, Pencil, LocateFixed } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Eye, Pencil, LocateFixed, RotateCcw } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import ViewToggle from '@/components/ViewToggle'
 import PhoneInput from '@/components/ui/phone-input'
@@ -18,16 +19,27 @@ interface Mijoz {
 }
 
 interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string } }
+interface QaytarishTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string } }
+interface MijozQaytarish {
+  id: string; jamiSumma: number; sabab: string | null; yaratilgan: string
+  kassir: { ism: string }; tarkiblar: QaytarishTarkibiItem[]
+}
 interface MijozSotuv {
   id: string; chekRaqami: string; sana: string; yakuniySumma: number; tolovUsuli: string
   tarkiblar: SotuvTarkibiItem[]; kassir: { ism: string }
+  qaytarishlar: MijozQaytarish[]
 }
 interface MijozDetail extends Mijoz { sotuvlar: MijozSotuv[] }
+// Xaridlar tarixida sotuv va qaytarishlar bitta xronologik oqimda ko'rsatiladi.
+type TarixYozuvi =
+  | { turi: 'sotuv'; sana: string; sotuv: MijozSotuv }
+  | { turi: 'qaytarish'; sana: string; qaytarish: MijozQaytarish; asl: MijozSotuv }
 
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition'
 
 export default function MijozlarPage() {
   const confirm = useConfirm()
+  const router = useRouter()
   const [mijozlar, setMijozlar] = useState<Mijoz[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
@@ -406,11 +418,18 @@ export default function MijozlarPage() {
                   </p>
                 </div>
               </div>
-              <div className="mt-4 sm:mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2 -mx-5 sm:-mx-4 -mb-5 sm:-mb-4">
+              <div className="mt-4 sm:mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3 -mx-5 sm:-mx-4 -mb-5 sm:-mb-4">
+                <button
+                  onClick={e => { e.stopPropagation(); router.push(`/sotuv?mijozId=${m.id}`) }}
+                  title="Sotuvni boshlash"
+                  className="flex items-center justify-center py-4 sm:py-2.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition border-r border-gray-100 dark:border-neutral-800 rounded-bl-2xl"
+                >
+                  <ShoppingCart size={22} className="sm:hidden" /><ShoppingCart size={16} className="hidden sm:block" />
+                </button>
                 <button
                   onClick={e => { e.stopPropagation(); modalOchish(m) }}
                   title="Tahrirlash"
-                  className="flex items-center justify-center py-4 sm:py-2.5 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800 rounded-bl-2xl"
+                  className="flex items-center justify-center py-4 sm:py-2.5 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800"
                 >
                   <Pencil size={22} className="sm:hidden" /><Pencil size={16} className="hidden sm:block" />
                 </button>
@@ -568,25 +587,56 @@ export default function MijozlarPage() {
                     <p className="text-gray-400 dark:text-gray-600 text-sm text-center py-6">Hali xarid qilmagan</p>
                   ) : (
                     <div className="space-y-2">
-                      {tanlanganMijoz.sotuvlar.map(s => (
-                        <div key={s.id} className="border border-gray-200 dark:border-neutral-700 rounded-xl p-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{s.chekRaqami}</span>
-                            <span className="text-green-600 font-semibold text-sm">{formatSum(s.yakuniySumma)}</span>
+                      {(() => {
+                        // Sotuv va qaytarishlarni bitta xronologik ro'yxatga yig'ish
+                        const tarix: TarixYozuvi[] = []
+                        for (const s of tanlanganMijoz.sotuvlar) {
+                          tarix.push({ turi: 'sotuv', sana: s.sana, sotuv: s })
+                          for (const q of s.qaytarishlar || []) {
+                            tarix.push({ turi: 'qaytarish', sana: q.yaratilgan, qaytarish: q, asl: s })
+                          }
+                        }
+                        tarix.sort((a, b) => new Date(b.sana).getTime() - new Date(a.sana).getTime())
+                        return tarix.map(y => y.turi === 'sotuv' ? (
+                          <div key={y.sotuv.id} className="border border-gray-200 dark:border-neutral-700 rounded-xl p-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{y.sotuv.chekRaqami}</span>
+                              <span className="text-green-600 font-semibold text-sm">{formatSum(y.sotuv.yakuniySumma)}</span>
+                            </div>
+                            <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5 flex items-center gap-1">
+                              <Calendar size={11} />{formatSanaVaVaqt(y.sotuv.sana)}
+                            </p>
+                            <div className="mt-2 pt-2 border-t border-gray-100 dark:border-neutral-800 space-y-1">
+                              {y.sotuv.tarkiblar.map(t => (
+                                <div key={t.id} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                                  <span className="truncate">{t.tovar.nomi} × {t.miqdor}</span>
+                                  <span className="shrink-0 ml-2">{formatSum(t.jami)}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5 flex items-center gap-1">
-                            <Calendar size={11} />{formatSanaVaVaqt(s.sana)}
-                          </p>
-                          <div className="mt-2 pt-2 border-t border-gray-100 dark:border-neutral-800 space-y-1">
-                            {s.tarkiblar.map(t => (
-                              <div key={t.id} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                                <span className="truncate">{t.tovar.nomi} × {t.miqdor}</span>
-                                <span className="shrink-0 ml-2">{formatSum(t.jami)}</span>
-                              </div>
-                            ))}
+                        ) : (
+                          <div key={y.qaytarish.id} className="border border-amber-200 dark:border-amber-900/50 rounded-xl p-3 bg-amber-50/40 dark:bg-amber-950/10">
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                <RotateCcw size={11} /> Vozvrat sotuv
+                              </span>
+                              <span className="text-amber-600 font-semibold text-sm">-{formatSum(y.qaytarish.jamiSumma)}</span>
+                            </div>
+                            <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5 flex items-center gap-1">
+                              <Calendar size={11} />{formatSanaVaVaqt(y.qaytarish.yaratilgan)} &bull; {y.asl.chekRaqami}
+                            </p>
+                            <div className="mt-2 pt-2 border-t border-amber-100 dark:border-amber-900/40 space-y-1">
+                              {y.qaytarish.tarkiblar.map(t => (
+                                <div key={t.id} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                                  <span className="truncate">{t.tovar.nomi} × {t.miqdor}</span>
+                                  <span className="shrink-0 ml-2">{formatSum(t.jami)}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      })()}
                     </div>
                   )}
                 </div>

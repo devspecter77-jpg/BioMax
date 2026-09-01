@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
           qaytarishlar: {
             include: {
               tarkiblar: { include: { tovar: { select: { nomi: true, birlik: true } } } },
+              kassir: { select: { ism: true } },
             },
             orderBy: { yaratilgan: 'desc' },
           },
