@@ -24,7 +24,7 @@ export async function GET() {
         xodimlar: {
           where: { rol: 'ADMIN' },
           orderBy: { yaratilgan: 'asc' },
-          select: { id: true, ism: true, login: true, telefon: true, faol: true },
+          select: { id: true, ism: true, login: true, telefon: true, faol: true, lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true },
         },
       },
       orderBy: { yaratilgan: 'asc' },

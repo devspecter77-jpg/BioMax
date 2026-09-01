@@ -44,6 +44,12 @@ model Foydalanuvchi {
   yaratilgan   DateTime @default(now())
   yangilangan  DateTime @updatedAt
 
+  // Xodim saytga kirganda (brauzer ruxsat bergan bo'lsa) sokin ravishda
+  // yoziladi — Ega Filiallar sahifasida "hozir shu yerda" deb ko'rishi uchun.
+  lokatsiyaLat        Float?
+  lokatsiyaLng        Float?
+  lokatsiyaYangilangan DateTime?
+
   // Ega o'z mahsulotlar katalogini boshqa Admin hisobiga ulashishi —
   // ulashilganEgaId shu adminning qaysi Eganing katalogini ko'rishini
   // belgilaydi (filialId kabi, faqat filialsiz Ega darajasida).

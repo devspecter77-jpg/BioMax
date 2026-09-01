@@ -17,6 +17,9 @@ interface FilialEga {
   login: string
   telefon: string | null
   faol: boolean
+  lokatsiyaLat: number | null
+  lokatsiyaLng: number | null
+  lokatsiyaYangilangan: string | null
 }
 interface Filial {
   id: string
@@ -30,9 +33,20 @@ interface Filial {
 }
 interface EgaHisob {
   id: string; ism: string; login: string; telefon: string | null; faol: boolean; filialId: string | null
+  lokatsiyaLat: number | null; lokatsiyaLng: number | null; lokatsiyaYangilangan: string | null
 }
 
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary transition'
+
+function lokatsiyaVaqti(sana: string | null): string {
+  if (!sana) return ''
+  const daqiqa = Math.round((Date.now() - new Date(sana).getTime()) / 60000)
+  if (daqiqa < 1) return 'hozir'
+  if (daqiqa < 60) return `${daqiqa} daqiqa oldin`
+  const soat = Math.round(daqiqa / 60)
+  if (soat < 24) return `${soat} soat oldin`
+  return `${Math.round(soat / 24)} kun oldin`
+}
 
 export default function FiliallarPage() {
   const confirm = useConfirm()
@@ -339,6 +353,16 @@ export default function FiliallarPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{x.ism}</p>
                       <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(x.login)}</p>
+                      {x.lokatsiyaLat !== null && x.lokatsiyaLng !== null && (
+                        <a
+                          href={`https://www.google.com/maps?q=${x.lokatsiyaLat},${x.lokatsiyaLng}`}
+                          target="_blank" rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline mt-0.5"
+                        >
+                          <MapPin size={10} /> {lokatsiyaVaqti(x.lokatsiyaYangilangan)} shu yerda edi
+                        </a>
+                      )}
                     </div>
                     {i > 0 && (
                       <span className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg font-medium shrink-0" title="Ma'lumotlarga bog'langan qo'shimcha admin">
@@ -379,6 +403,16 @@ export default function FiliallarPage() {
                     )}
                   </div>
                   <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(u.login)}</p>
+                  {u.lokatsiyaLat !== null && u.lokatsiyaLng !== null && (
+                    <a
+                      href={`https://www.google.com/maps?q=${u.lokatsiyaLat},${u.lokatsiyaLng}`}
+                      target="_blank" rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline mt-0.5"
+                    >
+                      <MapPin size={10} /> {lokatsiyaVaqti(u.lokatsiyaYangilangan)} shu yerda edi
+                    </a>
+                  )}
                 </div>
                 <button
                   onClick={() => egaOchirish(u)}

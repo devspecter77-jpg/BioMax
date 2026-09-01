@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
         id: true, ism: true, login: true, rol: true, faol: true, telefon: true, yaratilgan: true,
         filialId: true, filial: { select: { id: true, nomi: true } },
         ulashilganEgaId: true, tovarTahrirlashMumkin: true, tovarOchirishMumkin: true,
+        lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
       },
       orderBy: { yaratilgan: 'asc' },
     })
