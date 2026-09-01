@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { formatSum, formatNarx, formatSanaVaVaqt, playBeep, uzSearch } from '@/lib/utils'
 import { buildChekHtml, chekChopEtish as printChek } from '@/lib/chek-print'
 import { toast } from 'sonner'
-import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2, Package } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2, Package, Plus, Gift, Percent } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -30,7 +30,7 @@ function sotishNarxiSomda(tovar: Tovar, kursi: number): number {
 }
 interface Mijoz { id: string; ism: string; telefon: string | null; manzil?: string | null }
 interface SavatItem {
-  tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number
+  tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number; bonus?: boolean
 }
 interface SaqlanganiSavat {
   id: string; savat: SavatItem[]; sana: string; jami: number
@@ -116,6 +116,9 @@ export default function SotuvPage() {
   const [tolovUsuli, setTolovUsuli] = useState('NAQD')
   const [naqdTolangan, setNaqdTolangan] = useState('')
   const [qolBilanSumma, setQolBilanSumma] = useState('')
+  const [chegirmaFoizOchiq, setChegirmaFoizOchiq] = useState(false)
+  const [chegirmaFoiz, setChegirmaFoiz] = useState('')
+  const [bonusTanlashRejimi, setBonusTanlashRejimi] = useState(false)
   const [mijozId, setMijozId] = useState('')
   const [nasiyaMuddat, setNasiyaMuddat] = useState('')
   const [yuklanmoqda, setYuklanmoqda] = useState(false)
@@ -390,6 +393,21 @@ export default function SotuvPage() {
       toast.error(`${tovar.nomi}: qoldiq yo'q`)
       return
     }
+    if (bonusTanlashRejimi) {
+      if (savat.some(s => s.tovarId === tovar.id)) {
+        toast.error(`${tovar.nomi} allaqachon savatda — bonus uchun boshqa mahsulot tanlang`)
+        return
+      }
+      setSavat(prev => [{
+        tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: 0,
+        miqdor: 1, birlik: tovar.birlik, chegirma: 0,
+        jami: 0, mavjudQoldiq: tovar.qoldiq, bonus: true,
+      }, ...prev])
+      setBonusTanlashRejimi(false)
+      setMobileTab('savat')
+      toast.success(`${tovar.nomi} bonus sifatida qo'shildi`)
+      return
+    }
     const narxSomda = sotishNarxiSomda(tovar, kursi)
     setSavat(prev => {
       const mavjud = prev.find(s => s.tovarId === tovar.id)
@@ -543,6 +561,9 @@ export default function SotuvPage() {
       setMijozId('')
       setNaqdTolangan('')
       setQolBilanSumma('')
+      setChegirmaFoizOchiq(false)
+      setChegirmaFoiz('')
+      setBonusTanlashRejimi(false)
       setTolovUsuli('NAQD')
       toast.success(`Sotuv yakunlandi! Chek: ${sotuv.chekRaqami}`)
       const tv = await fetch('/api/tovarlar').then(r => r.json())
@@ -618,6 +639,9 @@ export default function SotuvPage() {
     setMijozId('')
     setNaqdTolangan('')
     setQolBilanSumma('')
+    setChegirmaFoizOchiq(false)
+    setChegirmaFoiz('')
+    setBonusTanlashRejimi(false)
     setTolovUsuli('NAQD')
     toast.success('Savat saqlandi!')
   }
@@ -895,6 +919,16 @@ export default function SotuvPage() {
             <div id="skaner-reader" style={{ width: '100%' }} />
           </div>
         )}
+        {bonusTanlashRejimi && (
+          <div className="flex items-center justify-between gap-2 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 rounded-xl px-4 py-2.5">
+            <span className="flex items-center gap-2 text-sm text-violet-700 dark:text-violet-400 font-medium">
+              <Gift size={16} /> Bonus uchun mahsulot tanlang
+            </span>
+            <button type="button" onClick={() => setBonusTanlashRejimi(false)} className="text-violet-400 hover:text-violet-600 transition">
+              <X size={16} />
+            </button>
+          </div>
+        )}
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl">
           {tovarlarYuklanmoqda ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3">
@@ -1071,14 +1105,26 @@ export default function SotuvPage() {
                 <div key={item.tovarId} className="px-3 py-2.5 border-b border-gray-100 dark:border-neutral-800 last:border-b-0">
                   {/* Row 1: nomi + delete */}
                   <div className="flex items-center justify-between gap-1 mb-2">
-                    <p className="text-gray-900 dark:text-gray-100 text-sm font-medium leading-tight flex-1 truncate" title={item.nomi}>{item.nomi}</p>
+                    <p className="text-gray-900 dark:text-gray-100 text-sm font-medium leading-tight flex-1 truncate flex items-center gap-1.5" title={item.nomi}>
+                      {item.nomi}
+                      {item.bonus && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-violet-100 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 px-1.5 py-0.5 rounded-full shrink-0">
+                          <Gift size={9} /> Bonus
+                        </span>
+                      )}
+                    </p>
                     <button onClick={() => miqdorOzgartir(item.tovarId, 0)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition shrink-0 ml-1">
                       <X size={13} />
                     </button>
                   </div>
                   {/* Row 2: [narx input] × [miqdor] = [jami] */}
                   <div className="flex items-center gap-1.5">
-                    {/* Narx — always editable input */}
+                    {item.bonus ? (
+                      <span className="flex-1 min-w-0 h-7 flex items-center px-2 text-xs rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 font-medium">
+                        Bepul
+                      </span>
+                    ) : (
+                    /* Narx — always editable input */
                     <div className="relative flex-1 min-w-0">
                       <input
                         type="text"
@@ -1097,10 +1143,11 @@ export default function SotuvPage() {
                       />
                       <Pencil size={9} className={`absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none ${isNarxOzgartirilgan ? 'text-blue-400' : 'text-gray-300 dark:text-gray-600'}`} />
                     </div>
+                    )}
                     <span className="text-gray-400 dark:text-gray-600 text-xs shrink-0">×</span>
                     <MiqdorInput miqdor={item.miqdor} max={item.mavjudQoldiq} onChange={v => miqdorOzgartir(item.tovarId, v)} />
                     <span className="text-gray-400 dark:text-gray-600 text-xs shrink-0">=</span>
-                    <span className="text-green-600 text-sm font-bold shrink-0 min-w-[65px] text-right">{formatSum(item.jami)}</span>
+                    <span className={`text-sm font-bold shrink-0 min-w-[65px] text-right ${item.bonus ? 'text-violet-600 dark:text-violet-400' : 'text-green-600'}`}>{item.bonus ? 'Bepul' : formatSum(item.jami)}</span>
                   </div>
                   {item.miqdor > item.mavjudQoldiq && (
                     <div className="flex items-center gap-1 mt-1.5 text-amber-600 dark:text-amber-400">
@@ -1141,6 +1188,62 @@ export default function SotuvPage() {
                 <span>Chegirma:</span><span>-{formatSum(chegirma)}</span>
               </div>
             )}
+
+            {/* Chegirma foizi va bonus mahsulot */}
+            <div className="flex items-center gap-3">
+              {!chegirmaFoizOchiq ? (
+                <button
+                  type="button"
+                  onClick={() => setChegirmaFoizOchiq(true)}
+                  className="flex items-center gap-1 text-xs text-pos hover:underline font-medium"
+                >
+                  <Plus size={12} /> Chegirma foizi
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 flex-1">
+                  <Percent size={12} className="text-gray-400 dark:text-gray-600 shrink-0" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={chegirmaFoiz}
+                    onChange={e => {
+                      const v = e.target.value.replace(/[^\d]/g, '')
+                      setChegirmaFoiz(v)
+                      const foiz = Math.min(100, parseFloat(v) || 0)
+                      setQolBilanSumma(v ? String(Math.round(jamiSumma * (1 - foiz / 100))) : '')
+                    }}
+                    placeholder="foiz"
+                    className="w-16 px-2 py-1 text-xs text-right bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-pos text-gray-900 dark:text-gray-100 font-medium"
+                  />
+                  <span className="text-xs text-gray-400 dark:text-gray-600 shrink-0">%</span>
+                  <button
+                    type="button"
+                    onClick={() => { setChegirmaFoizOchiq(false); setChegirmaFoiz(''); setQolBilanSumma('') }}
+                    className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition shrink-0 ml-auto"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+              {!bonusTanlashRejimi ? (
+                <button
+                  type="button"
+                  onClick={() => { setBonusTanlashRejimi(true); setMobileTab('tovarlar') }}
+                  className="flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 hover:underline font-medium shrink-0"
+                >
+                  <Plus size={12} /> Bonus mahsulot
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setBonusTanlashRejimi(false)}
+                  className="flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 font-medium shrink-0"
+                >
+                  <Gift size={12} /> Tanlanmoqda... <X size={12} />
+                </button>
+              )}
+            </div>
 
             <div className="flex justify-between font-bold border-t border-gray-100 dark:border-neutral-800 pt-2">
               <span className="text-gray-900 dark:text-gray-100">To&apos;lov:</span>
