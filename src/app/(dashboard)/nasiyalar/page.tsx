@@ -64,7 +64,8 @@ export default function NasiyalarPage() {
   const [nasiyalar, setNasiyalar] = useState<Nasiya[]>([])
   const [barchasi, setBarchasi] = useState<Nasiya[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
-  const [filter, setFilter] = useState('OCHIQ')
+  // Barchasi — holati bo'yicha filtrsiz, standart holat shu.
+  const [filter, setFilter] = useState('')
   const [qidiruv, setQidiruv] = useState('')
   const [tolovModal, setTolovModal] = useState<Nasiya | null>(null)
   const [tolovForm, setTolovForm] = useState({ summa: '', tolovUsuli: 'NAQD', izoh: '' })
@@ -296,9 +297,9 @@ export default function NasiyalarPage() {
           className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === '' ? 'border-red-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Qolgan qarz</p>
+              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Barchasi</p>
               <p className="text-base sm:text-2xl font-bold mt-1 text-gray-900 dark:text-gray-100">{formatSum(stats.jamiQoldiq)}</p>
-              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">{stats.mijozlarSoni} ta mijoz</p>
+              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Qolgan qarz &bull; {stats.mijozlarSoni} ta mijoz</p>
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 bg-red-500 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
               <Banknote size={16} className="text-white sm:w-5 sm:h-5" />
