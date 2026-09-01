@@ -33,24 +33,24 @@ export default function XaridlarPage() {
   const [jami, setJami] = useState(0)
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
-  const [danFilter, setDanFilter] = useState('')
-  const [gachaFilter, setGachaFilter] = useState('')
+  // Bitta sana bo'yicha qidirish — shu kunning boshidan oxirigacha
+  // (serverda "dan" va "gacha" bir xil sanaga o'rnatiladi).
+  const [sanaFilter, setSanaFilter] = useState('')
   const [renderLimit, setRenderLimit] = useState(30)
 
   async function yuklash() {
     setYuklanmoqda(true)
     const params = new URLSearchParams({ limit: '200' })
     if (qidiruv) params.set('q', qidiruv)
-    if (danFilter) params.set('dan', danFilter)
-    if (gachaFilter) params.set('gacha', gachaFilter)
+    if (sanaFilter) { params.set('dan', sanaFilter); params.set('gacha', sanaFilter) }
     const data = await fetch(`/api/sotuvlar?${params}`).then(r => r.json())
     setSotuvlar(data.sotuvlar || [])
     setJami(data.jami || 0)
     setYuklanmoqda(false)
   }
 
-  useEffect(() => { yuklash() }, [qidiruv, danFilter, gachaFilter])
-  useEffect(() => { setRenderLimit(30) }, [qidiruv, danFilter, gachaFilter])
+  useEffect(() => { yuklash() }, [qidiruv, sanaFilter])
+  useEffect(() => { setRenderLimit(30) }, [qidiruv, sanaFilter])
 
   const jamiSumma = sotuvlar.reduce((s, x) => s + Number(x.yakuniySumma), 0)
   const korsatiladigan = sotuvlar.slice(0, renderLimit)
@@ -58,29 +58,25 @@ export default function XaridlarPage() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
         <SearchBar value={qidiruv} onChange={setQidiruv} placeholder="Chek raqami yoki mijoz ismi bo'yicha qidirish..." className="flex-1" />
-        <input
-          type="date"
-          value={danFilter}
-          onChange={e => setDanFilter(e.target.value)}
-          className="px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
-          placeholder="Dan"
-        />
-        <input
-          type="date"
-          value={gachaFilter}
-          onChange={e => setGachaFilter(e.target.value)}
-          className="px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
-          placeholder="Gacha"
-        />
-        <a
-          href={`/api/sotuvlar/export${danFilter || gachaFilter ? `?${new URLSearchParams({ ...(danFilter ? { dan: danFilter } : {}), ...(gachaFilter ? { gacha: gachaFilter } : {}) })}` : ''}`}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 text-sm shrink-0"
-        >
-          <Download size={16} />
-          Excel export
-        </a>
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={sanaFilter}
+            onChange={e => setSanaFilter(e.target.value)}
+            title="Sana bo'yicha qidirish"
+            className="flex-1 sm:flex-none px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+          />
+          <a
+            href={`/api/sotuvlar/export${sanaFilter ? `?dan=${sanaFilter}&gacha=${sanaFilter}` : ''}`}
+            title="Excel export"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 text-xs sm:text-sm shrink-0"
+          >
+            <Download size={14} />
+            Export
+          </a>
+        </div>
       </div>
 
       {/* KPI */}
