@@ -322,6 +322,13 @@ export default function SotuvPage() {
         ])
         setMijozlar(Array.isArray(mj) ? mj : [])
         setDokonInfo(sz && typeof sz === 'object' ? sz : {})
+        // Mijozlar sahifasidagi "Sotuvni boshlash" tugmasi orqali kelingan
+        // bo'lsa — URL'dagi mijozId bo'yicha mijozni avtomatik tanlaymiz.
+        const boshlanguvchiMijozId = new URLSearchParams(window.location.search).get('mijozId')
+        if (boshlanguvchiMijozId && Array.isArray(mj)) {
+          const topilgan = mj.find((m: Mijoz) => m.id === boshlanguvchiMijozId)
+          if (topilgan) mijozTanlash(topilgan)
+        }
       } catch {
         // qo'shimcha ma'lumotlar muhim emas — sotuv ishlay beradi
       }
@@ -446,6 +453,10 @@ export default function SotuvPage() {
     // Joriy tanlangan narx turi (chakana/optom/bo'lish) bo'yicha — mahsulotda
     // o'sha tur uchun narx kiritilmagan bo'lsa, oddiy sotish narxiga tushadi.
     const narxSomda = narxTuriBoyicha(tovar, narxTuri, kursi)
+    // `savat` state'idan (setSavat ichidagi `prev`dan emas — u yangilanish
+    // React tomonidan keyinroq bajarilishi mumkin) — shu mahsulot savatda
+    // birinchi marta qo'shilayotganini oldindan bilib olamiz.
+    const yangiQator = !savat.some(s => s.tovarId === tovar.id && !s.bonus)
     setSavat(prev => {
       // Faqat oddiy (bonus bo'lmagan) qator bilan birlashtiriladi — bonus
       // qatori (bor bo'lsa) tegilmasdan saqlanib qoladi. Mavjud qatorning
@@ -466,6 +477,15 @@ export default function SotuvPage() {
         jami: narxSomda, mavjudQoldiq: tovar.qoldiq, narxTuri,
       }, ...prev]
     })
+    // Mijoz allaqachon tanlangan bo'lsa — bu mahsulot birinchi marta
+    // savatga qo'shilayotganda (miqdor oshirilayotganda emas) darhol
+    // eslatma tekshiriladi, keshlangan tarix orqali (yangi so'rovsiz).
+    if (yangiQator && mijozId && mijozTarixi[tovar.id]) {
+      eslatmaKorsat([{
+        tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
+        miqdor: 1, birlik: tovar.birlik, chegirma: 0, jami: narxSomda, mavjudQoldiq: tovar.qoldiq,
+      }], mijozTarixi, mijozIsmi)
+    }
   }
 
   // Skaner uchun har doim eng so'nggi tovarlar va savatQosh funksiyasi
@@ -562,29 +582,45 @@ export default function SotuvPage() {
     setMijozLokatsiya(m.lokatsiyaLat != null && m.lokatsiyaLng != null ? { lat: m.lokatsiyaLat, lng: m.lokatsiyaLng } : null)
     setTelefonTaklifOchiq(false)
     setIsmTaklifOchiq(false)
-    // Mijoz mavjudlar ro'yxatidan tanlangan zahoti eslatma — to'lov
-    // tugagunicha kutmaydi, kassir hali qaror qabul qila oladigan paytda.
-    mijozOldingiXaridlarniEslatish(m.id, m.ism, savat)
+    // Mijozning haqiqiy id'sini shu zahoti bilamiz — to'lov tugashini
+    // kutmasdan darhol o'rnatamiz, shunda quyidagi useEffect (tarix
+    // yuklash + eslatma) va savatga qo'shishdagi eslatma ham ishlay oladi.
+    setMijozId(m.id)
   }
 
-  // Mijoz avval hozirgi savatdagi mahsulotlardan sotib olganmi — bo'lsa
-  // kassirga eslatma (X tugmasi bosilmaguncha ochiq turadi). Sotuvni to'xtatmaydi —
-  // fon vazifasi, xato bo'lsa ham sokin o'tkazib yuboriladi.
-  async function mijozOldingiXaridlarniEslatish(mijozId: string, mijozIsm: string, savatHozir: SavatItem[]) {
-    try {
-      const tarix: Record<string, { narx: number; sana: string }> = await fetch(`/api/mijozlar/${mijozId}/tarix`).then(r => r.json())
-      const mosKelganlar = savatHozir.filter(item => tarix[item.tovarId] && !item.bonus)
-      if (mosKelganlar.length === 0) return
+  // Mijoz avval nimalarni sotib olganini (mahsulot -> {narx, sana}) keshlab
+  // qo'yamiz — mijoz tanlanganda BIR marta yuklanadi, keyin savatga har bir
+  // mahsulot qo'shilganda qayta so'rovsiz tekshiriladi.
+  const [mijozTarixi, setMijozTarixi] = useState<Record<string, { narx: number; sana: string }>>({})
 
-      const matn = mosKelganlar.length === 1
-        ? `${mijozIsm} avval "${mosKelganlar[0].nomi}"ni ${formatSum(tarix[mosKelganlar[0].tovarId].narx)}dan sotib olgan edi`
-        : `${mijozIsm} avval bu mahsulotlarni ham olgan: ${mosKelganlar.slice(0, 3).map(i => i.nomi).join(', ')}${mosKelganlar.length > 3 ? ` va yana ${mosKelganlar.length - 3} ta` : ''}`
+  // Bir yoki bir nechta savat qatorini mijozning oldingi xaridlari bilan
+  // solishtirib, mos kelsa eslatma ko'rsatadi (X tugmasi bosilmaguncha
+  // ochiq turadi). Sotuvga xalaqit bermaydi — sof, sinxron tekshiruv.
+  function eslatmaKorsat(itemlar: SavatItem[], tarix: Record<string, { narx: number; sana: string }>, mijozIsm: string) {
+    const mosKelganlar = itemlar.filter(item => tarix[item.tovarId] && !item.bonus)
+    if (mosKelganlar.length === 0) return
 
-      toast(matn, { icon: '🔔', duration: Infinity, closeButton: true })
-    } catch {
-      // eslatma ko'rsatilmasa ham sotuvga xalaqit bermaydi
-    }
+    const matn = mosKelganlar.length === 1
+      ? `${mijozIsm} avval "${mosKelganlar[0].nomi}"ni ${formatSum(tarix[mosKelganlar[0].tovarId].narx)}dan sotib olgan edi`
+      : `${mijozIsm} avval bu mahsulotlarni ham olgan: ${mosKelganlar.slice(0, 3).map(i => i.nomi).join(', ')}${mosKelganlar.length > 3 ? ` va yana ${mosKelganlar.length - 3} ta` : ''}`
+
+    toast(matn, { icon: '🔔', duration: Infinity, closeButton: true })
   }
+
+  // Mijoz o'rnatilganda (tanlanganda yoki mijoz kartasidan "Sotuvni
+  // boshlash" bilan kelinganda) — tarixni bir marta yuklab keshlaymiz va
+  // hozircha savatda bor mahsulotlarni shu zahoti tekshiramiz.
+  useEffect(() => {
+    if (!mijozId) { setMijozTarixi({}); return }
+    let bekor = false
+    fetch(`/api/mijozlar/${mijozId}/tarix`).then(r => r.json()).then(tarix => {
+      if (bekor) return
+      setMijozTarixi(tarix)
+      eslatmaKorsat(savat, tarix, mijozIsmi)
+    }).catch(() => {})
+    return () => { bekor = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mijozId])
 
   async function mijozTasdiqlaVaYubor(e: React.FormEvent) {
     e.preventDefault()
