@@ -8,4 +8,8 @@
 // bloklanishi mumkin edi. Hozircha faqat kelish narxi (foyda) yashiriladi.
 export const YASHIRILADIGAN_MAYDONLAR = [
   { kalit: 'kelishNarxi', label: 'Kelish narxi' },
+  // Bazada saqlanmaydigan, faqat kelish/sotish narxidan hisoblab
+  // ko'rsatiladigan qiymat — shuning uchun serverda emas, mahsulot
+  // qo'shish/tahrirlash formasida (client tomonda) yashiriladi.
+  { kalit: 'ustamaFoiz', label: 'Ustama foiz' },
 ] as const

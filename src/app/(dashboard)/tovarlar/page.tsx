@@ -60,6 +60,12 @@ export default function TovarlarPage() {
   // Shuning uchun ulashilgan admin uchun joriy ruxsatni bazadan jonli
   // qayta so'raymiz (server ham xuddi shunday tekshiradi — tovar-ruxsat.ts).
   const [ulashilganRuxsat, setUlashilganRuxsat] = useState<{ tahrirlashMumkin: boolean; ochirishMumkin: boolean } | null>(null)
+  // Ustama foiz bazada saqlanmaydi (kelish/sotish narxidan hisoblanadi),
+  // shuning uchun uni serverdagi kabi avtomatik yashirib bo'lmaydi — o'zimning
+  // yashirilgan maydonlarim ro'yxatini shu yerda tekshirib, formada shunga
+  // qarab ko'rsatamiz/yashiramiz.
+  const [ozYashirilganMaydonlar, setOzYashirilganMaydonlar] = useState<Set<string>>(new Set())
+  const ustamaFoizYashirilgan = ozYashirilganMaydonlar.has('ustamaFoiz')
   const tahrirRuxsat = haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.tahrirlashMumkin : !!(session?.user as any)?.tovarTahrirlashMumkin)
   const ochirishRuxsat = haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.ochirishMumkin : !!(session?.user as any)?.tovarOchirishMumkin)
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
@@ -169,7 +175,10 @@ export default function TovarlarPage() {
     if (!meId || !ulashilganEgaId) return
     fetch(`/api/foydalanuvchilar/${meId}/yashirilgan-tovarlar`)
       .then(r => r.json())
-      .then(d => setUlashilganRuxsat({ tahrirlashMumkin: d?.tahrirlashMumkin ?? true, ochirishMumkin: d?.ochirishMumkin ?? true }))
+      .then(d => {
+        setUlashilganRuxsat({ tahrirlashMumkin: d?.tahrirlashMumkin ?? true, ochirishMumkin: d?.ochirishMumkin ?? true })
+        setOzYashirilganMaydonlar(new Set(Array.isArray(d?.maydonlar) ? d.maydonlar : []))
+      })
       .catch(() => {})
   }, [session])
 
@@ -894,12 +903,15 @@ export default function TovarlarPage() {
                   <div className="relative">
                     <input
                       type="number"
-                      value={form.foiz}
+                      value={ustamaFoizYashirilgan ? '' : form.foiz}
                       onChange={e => foizOzgardi(e.target.value)}
+                      disabled={ustamaFoizYashirilgan}
                       className={inputCls + ' pr-8'}
-                      placeholder="15"
+                      placeholder={ustamaFoizYashirilgan ? 'Sizga yashirilgan' : '15'}
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 text-sm">%</span>
+                    {!ustamaFoizYashirilgan && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 text-sm">%</span>
+                    )}
                   </div>
                 </div>
               </div>
