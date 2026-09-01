@@ -499,6 +499,18 @@ export default function SotuvPage() {
     setEditNarx(null)
   }
 
+  // Savatdagi bitta qator uchun narx turini (chakana/optom/bo'lish) tanlash —
+  // narxni o'sha tovarning o'zidagi mos narxga o'zgartiradi va turini eslab qoladi.
+  function savatNarxTuriTanlash(tovarId: string, turi: NarxTuri) {
+    const tovar = tovarlar.find(t => t.id === tovarId)
+    if (!tovar) return
+    const narx = narxTuriBoyicha(tovar, turi, kursi)
+    setSavat(prev => prev.map(s => (s.tovarId === tovarId && !s.bonus)
+      ? { ...s, birlikNarxi: narx, jami: s.miqdor * narx, narxTuri: turi }
+      : s
+    ))
+  }
+
   const jamiSumma = savat.reduce((s, i) => s + i.miqdor * i.birlikNarxi, 0)
   const qolBilan = qolBilanSumma ? parseFloat(qolBilanSumma.replace(/\s/g, '')) : NaN
   const yakuniySumma = (!isNaN(qolBilan) && qolBilan >= 0) ? Math.min(jamiSumma, qolBilan) : jamiSumma
@@ -545,6 +557,9 @@ export default function SotuvPage() {
     setMijozManzil(m.manzil || '')
     setTelefonTaklifOchiq(false)
     setIsmTaklifOchiq(false)
+    // Mijoz mavjudlar ro'yxatidan tanlangan zahoti eslatma — to'lov
+    // tugagunicha kutmaydi, kassir hali qaror qabul qila oladigan paytda.
+    mijozOldingiXaridlarniEslatish(m.id, m.ism, savat)
   }
 
   // Mijoz avval hozirgi savatdagi mahsulotlardan sotib olganmi — bo'lsa
@@ -587,7 +602,6 @@ export default function SotuvPage() {
 
       setMijozId(natija.id)
       setMijozModal(false)
-      mijozOldingiXaridlarniEslatish(natija.id, natija.ism, savat)
       await sotuvYuborish(natija.id)
     } finally {
       setMijozAniqlanmoqda(false)
@@ -1186,8 +1200,14 @@ export default function SotuvPage() {
           ) : (
             <div className="overflow-y-auto max-h-72">
               {savat.map(item => {
-                const isNarxOzgartirilgan = item.birlikNarxi !== tovarlar.find(t => t.id === item.tovarId)?.sotishNarxi
+                const itemTovar = tovarlar.find(t => t.id === item.tovarId)
+                const isNarxOzgartirilgan = item.birlikNarxi !== itemTovar?.sotishNarxi
                 const isEditing = editNarx?.tovarId === item.tovarId
+                // Faqat narxi kiritilgan turlar ko'rsatiladi — bo'sh bo'lsa tugma chiqmaydi
+                const mavjudTurlar: NarxTuri[] = ['sotish',
+                  ...(itemTovar?.optomNarxi != null ? ['optom' as const] : []),
+                  ...(itemTovar?.bolishNarxi != null ? ['bolish' as const] : []),
+                ]
                 return (
                 <div key={item.tovarId + (item.bonus ? '-bonus' : '')} className="px-3 py-2.5 border-b border-gray-100 dark:border-neutral-800 last:border-b-0">
                   {/* Row 1: nomi + delete */}
@@ -1209,6 +1229,25 @@ export default function SotuvPage() {
                       <X size={13} />
                     </button>
                   </div>
+                  {/* Row 1.5: narx turi tanlash — mahsulotda optom/bo'lish narxi bo'lsagina chiqadi */}
+                  {!item.bonus && mavjudTurlar.length > 1 && (
+                    <div className="flex items-center gap-1 mb-1.5">
+                      {mavjudTurlar.map(turi => (
+                        <button
+                          key={turi}
+                          type="button"
+                          onClick={() => savatNarxTuriTanlash(item.tovarId, turi)}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition ${
+                            (item.narxTuri || 'sotish') === turi
+                              ? 'bg-pos text-white'
+                              : 'bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                          }`}
+                        >
+                          {NARX_TURI_LABEL[turi]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {/* Row 2: [narx input] × [miqdor] = [jami] */}
                   <div className="flex items-center gap-1.5">
                     {item.bonus ? (
