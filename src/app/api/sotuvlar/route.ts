@@ -222,6 +222,8 @@ export async function POST(req: NextRequest) {
               qoldiqQarz: Number(nasiya.qoldiq),
               muddat: nasiya.muddat,
               sotuvId: toliSotuv.id,
+              chegirma: Number(toliSotuv.chegirma),
+              jamiSumma: Number(toliSotuv.jamiSumma),
             }
           ).catch(e => console.error('[Telegram] Nasiya xabar xatosi:', e))
         } else {
@@ -233,6 +235,8 @@ export async function POST(req: NextRequest) {
               summasi: Number(toliSotuv.yakuniySumma),
               tolovUsuli: toliSotuv.tolovUsuli,
               mijozIsm: mijoz.ism,
+              chegirma: Number(toliSotuv.chegirma),
+              jamiSumma: Number(toliSotuv.jamiSumma),
             }
           ).catch(e => console.error('[Telegram] Sotuv cheki xabar xatosi:', e))
         }

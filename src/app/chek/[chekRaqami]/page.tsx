@@ -187,18 +187,31 @@ export default function PublicChekPage() {
             <div className="space-y-3">
               {data.tarkiblar.map((t, i) => {
                 const birlik = BIRLIK_NOMLARI[t.birlik] || t.birlik.toLowerCase()
+                const bonusmi = Number(t.birlikNarxi) === 0
                 return (
                   <div key={i} className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className="text-gray-900 text-sm font-medium leading-snug">{t.tovar}</p>
-                      <p className="text-gray-400 text-xs mt-0.5">
-                        {Number(t.miqdor)} {birlik} &times; {fSum(Number(t.birlikNarxi))}
-                        {Number(t.chegirma) > 0 && (
-                          <span className="text-red-500 ml-1">-{fSum(Number(t.chegirma))}</span>
+                      <p className="text-gray-900 text-sm font-medium leading-snug flex items-center gap-1.5">
+                        {t.tovar}
+                        {bonusmi && (
+                          <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full shrink-0">Bonus</span>
                         )}
                       </p>
+                      {!bonusmi && (
+                        <p className="text-gray-400 text-xs mt-0.5">
+                          {Number(t.miqdor)} {birlik} &times; {fSum(Number(t.birlikNarxi))}
+                          {Number(t.chegirma) > 0 && (
+                            <span className="text-red-500 ml-1">-{fSum(Number(t.chegirma))}</span>
+                          )}
+                        </p>
+                      )}
+                      {bonusmi && (
+                        <p className="text-violet-500 text-xs mt-0.5">{Number(t.miqdor)} {birlik} &times; Bepul</p>
+                      )}
                     </div>
-                    <p className="text-gray-900 text-sm font-semibold whitespace-nowrap">{fSum(Number(t.jami))}</p>
+                    <p className={`text-sm font-semibold whitespace-nowrap ${bonusmi ? 'text-violet-500' : 'text-gray-900'}`}>
+                      {bonusmi ? 'Bepul' : fSum(Number(t.jami))}
+                    </p>
                   </div>
                 )
               })}

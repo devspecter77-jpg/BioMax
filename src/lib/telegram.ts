@@ -687,7 +687,11 @@ async function getMahsulotlarMatni(sotuvId: string | null, maxQator: number = 10
     const miqdor = Number(t.miqdor)
     const narx = Number(t.birlikNarxi)
     const birlik = t.tovar.birlik === 'DONA' ? 'dona' : t.tovar.birlik.toLowerCase()
-    qatorlar.push(`  • ${t.tovar.nomi} — ${miqdor} ${birlik} × ${formatSum(narx)}`)
+    if (narx === 0) {
+      qatorlar.push(`  • ${t.tovar.nomi} (Bonus) — ${miqdor} ${birlik} × Bepul`)
+    } else {
+      qatorlar.push(`  • ${t.tovar.nomi} — ${miqdor} ${birlik} × ${formatSum(narx)}`)
+    }
   }
   if (tarkiblar.length > maxQator) {
     qatorlar.push(`  ... va yana ${tarkiblar.length - maxQator} ta mahsulot`)
@@ -967,7 +971,7 @@ export async function queueWorkerTick(): Promise<void> {
 export async function nasiyaYaratildiXabarToliq(
   nasiyaId: string,
   mijozId: string,
-  data: { chekRaqami: string; summasi: number; qoldiqQarz: number; muddat?: Date | null; mijozIsm?: string; sotuvId?: string | null }
+  data: { chekRaqami: string; summasi: number; qoldiqQarz: number; muddat?: Date | null; mijozIsm?: string; sotuvId?: string | null; chegirma?: number; jamiSumma?: number }
 ) {
   if (!(await isTelegramEnabled())) return
 
@@ -976,6 +980,8 @@ export async function nasiyaYaratildiXabarToliq(
 
   const dokonNomi = (await getSozlama('dokon_nomi')) || "Do'kon"
   const mahsulotlarMatni = await getMahsulotlarMatni(data.sotuvId || null)
+  const chegirmaFoizi = data.chegirma && data.jamiSumma
+    ? Math.round((data.chegirma / data.jamiSumma) * 100) : 0
 
   const xabar =
     `📋 Yangi nasiya ochildi\n\n` +
@@ -983,7 +989,8 @@ export async function nasiyaYaratildiXabarToliq(
     `👤 Mijoz: ${data.mijozIsm || mijoz.ism}\n` +
     `🧾 Chek: ${data.chekRaqami}\n` +
     mahsulotlarMatni +
-    `\n💰 Summa: ${formatSum(data.summasi)}\n` +
+    (chegirmaFoizi > 0 ? `\n🏷️ Chegirma: ${chegirmaFoizi}%\n` : '\n') +
+    `💰 Summa: ${formatSum(data.summasi)}\n` +
     `📊 Qoldiq qarz: ${formatSum(data.qoldiqQarz)}\n` +
     (data.muddat ? `📅 Muddat: ${formatSana(data.muddat)}\n` : '') +
     `\nIltimos, o'z vaqtida to'lang.`
@@ -1051,7 +1058,7 @@ const TOLOV_LABEL: Record<string, string> = {
 export async function sotuvChekiXabar(
   sotuvId: string,
   mijozId: string,
-  data: { chekRaqami: string; summasi: number; tolovUsuli: string; mijozIsm?: string }
+  data: { chekRaqami: string; summasi: number; tolovUsuli: string; mijozIsm?: string; chegirma?: number; jamiSumma?: number }
 ) {
   if (!(await isTelegramEnabled())) return
 
@@ -1060,6 +1067,8 @@ export async function sotuvChekiXabar(
 
   const dokonNomi = (await getSozlama('dokon_nomi')) || "Do'kon"
   const mahsulotlarMatni = await getMahsulotlarMatni(sotuvId)
+  const chegirmaFoizi = data.chegirma && data.jamiSumma
+    ? Math.round((data.chegirma / data.jamiSumma) * 100) : 0
 
   const xabar =
     `🧾 Xaridingiz uchun rahmat!\n\n` +
@@ -1067,7 +1076,8 @@ export async function sotuvChekiXabar(
     `👤 ${data.mijozIsm || mijoz.ism}\n` +
     `🧾 Chek: ${data.chekRaqami}\n` +
     mahsulotlarMatni +
-    `\n💰 Jami: ${formatSum(data.summasi)}\n` +
+    (chegirmaFoizi > 0 ? `\n🏷️ Chegirma: ${chegirmaFoizi}%\n` : '\n') +
+    `💰 Jami: ${formatSum(data.summasi)}\n` +
     `💳 To'lov: ${TOLOV_LABEL[data.tolovUsuli] || data.tolovUsuli}\n` +
     `\nBizni tanlaganingiz uchun rahmat! 🙏`
 

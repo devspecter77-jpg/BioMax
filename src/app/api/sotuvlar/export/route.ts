@@ -48,6 +48,9 @@ export async function GET(req: NextRequest) {
         (f, t) => f + (Number(t.birlikNarxi) - Number(t.tovar.kelishNarxi)) * Number(t.miqdor),
         0
       )
+      const jamiSumma = Number(s.jamiSumma)
+      const chegirmaFoizi = Number(s.chegirma) > 0 && jamiSumma > 0
+        ? Math.round((Number(s.chegirma) / jamiSumma) * 100) : 0
       return {
         Sana: s.sana.toISOString().replace('T', ' ').slice(0, 19),
         'Chek #': s.chekRaqami,
@@ -55,8 +58,9 @@ export async function GET(req: NextRequest) {
         Mijoz: s.mijoz?.ism ?? '\u2014',
         Telefon: s.mijoz?.telefon ?? '',
         "To'lov usuli": s.tolovUsuli,
-        Summa: Number(s.jamiSumma),
+        Summa: jamiSumma,
         Chegirma: Number(s.chegirma),
+        'Chegirma %': chegirmaFoizi,
         Yakuniy: Number(s.yakuniySumma),
         Foyda: foyda,
         Holati: s.holati,
@@ -68,6 +72,7 @@ export async function GET(req: NextRequest) {
       s.tarkiblar.map((t) => ({
         'Chek #': s.chekRaqami,
         Tovar: t.tovar.nomi,
+        Turi: Number(t.birlikNarxi) === 0 ? 'Bonus' : 'Oddiy',
         Birlik: t.tovar.birlik,
         Miqdor: Number(t.miqdor),
         Narx: Number(t.birlikNarxi),

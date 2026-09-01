@@ -80,14 +80,22 @@ export function buildChekHtml(opts: ChekPrintOptions): string {
   const tovarlarHtml = (s.tarkiblar || []).map((item) => {
     const nomi = t(item.tovar?.nomi || item.tovarNomi || '—')
     const miqdor = Number(item.miqdor)
+    const bonusmi = Number(item.birlikNarxi) === 0
+    if (bonusmi) {
+      return `<tr><td colspan="2" style="font-weight:600;padding-top:3px">${nomi} <span style="font-weight:normal">(${t('Bonus')})</span></td></tr>`
+        + `<tr><td colspan="2" style="white-space:nowrap"><span style="color:#222">${miqdor} × ${t('Bepul')}</span></td></tr>`
+    }
     const narxQ = formatNum(item.birlikNarxi)
     const jami = formatSum(item.jami)
     return `<tr><td colspan="2" style="font-weight:600;padding-top:3px">${nomi}</td></tr>`
       + `<tr><td colspan="2" style="white-space:nowrap"><span style="color:#222">${miqdor} × ${narxQ}</span> = <span style="font-weight:bold">${jami}</span></td></tr>`
   }).join('')
 
+  const jamiSumma = Number(s.chegirma) + Number(s.yakuniySumma)
+  const chegirmaFoizi = Number(s.chegirma) > 0 && jamiSumma > 0
+    ? Math.round((Number(s.chegirma) / jamiSumma) * 100) : 0
   const chegirmaHtml = Number(s.chegirma) > 0
-    ? `<tr><td>${t('Chegirma')}:</td><td style="text-align:right;color:#666">-${formatSum(s.chegirma)}</td></tr>` : ''
+    ? `<tr><td>${t('Chegirma')} (${chegirmaFoizi}%):</td><td style="text-align:right;color:#666">-${formatSum(s.chegirma)}</td></tr>` : ''
 
   const tolov = s.tolovUsuli === 'ARALASH'
     ? `<tr><td>${t('Naqd')}:</td><td style="text-align:right">${formatSum(s.naqdTolangan || 0)}</td></tr><tr><td>${t('Karta')}:</td><td style="text-align:right">${formatSum(s.kartaTolangan || 0)}</td></tr>`
