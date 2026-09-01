@@ -281,8 +281,6 @@ export default function FiliallarPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {yuklanmoqda ? (
           <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Yuklanmoqda...</p>
-        ) : filtered.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Hech narsa topilmadi</p>
         ) : filtered.map(f => (
           <div
             key={f.id}
