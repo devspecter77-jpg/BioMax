@@ -59,6 +59,14 @@ export default function MijozlarPage() {
       toast.error("Bu qurilma/brauzer GPS joylashuvni qo'llab-quvvatlamaydi")
       return
     }
+    // Geolocation faqat xavfsiz kontekstda (https:// yoki localhost) ishlaydi —
+    // http:// orqali (masalan lokal tarmoq IP'si bilan telefondan) ochilsa,
+    // brauzer buni "ruxsat berilmadi" kabi ko'rsatib, aslida umuman ishga
+    // tushirmaydi. Sababni aniqroq ko'rsatish uchun oldindan tekshiramiz.
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      toast.error('GPS faqat xavfsiz (https://) sahifada ishlaydi')
+      return
+    }
     setJoylashuvOlinmoqda(true)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -67,10 +75,17 @@ export default function MijozlarPage() {
         setJoylashuvOlinmoqda(false)
       },
       (err) => {
-        toast.error(err.code === err.PERMISSION_DENIED ? 'Joylashuvga ruxsat berilmadi' : "Joylashuvni aniqlab bo'lmadi")
+        const xabar = err.code === err.PERMISSION_DENIED
+          ? "Joylashuvga ruxsat berilmadi — brauzer/telefon sozlamalaridan ruxsat bering"
+          : err.code === err.TIMEOUT
+          ? 'GPS signal topilmadi — ochiq joyda qayta urinib ko\'ring'
+          : err.code === err.POSITION_UNAVAILABLE
+          ? 'Joylashuvni aniqlab bo\'lmadi — telefonda GPS yoqilganini tekshiring'
+          : "Joylashuvni aniqlab bo'lmadi"
+        toast.error(xabar)
         setJoylashuvOlinmoqda(false)
       },
-      { enableHighAccuracy: true, timeout: 15000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     )
   }
   const [view, setView] = useState<'table' | 'card'>('table')
