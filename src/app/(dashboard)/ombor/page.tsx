@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { formatSum, formatNarx, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
 import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -58,6 +59,7 @@ export default function OmborPage() {
   })
   const [otkazmaSaqlanmoqda, setOtkazmaSaqlanmoqda] = useState(false)
   const [tahrirSaqlanmoqda, setTahrirSaqlanmoqda] = useState(false)
+  useBodyScrollLock(tarix || otkazmaModal || tahrirModal || !!rasmModal)
 
   useEffect(() => {
     const saved = localStorage.getItem('view-preference') as 'table' | 'card' | null

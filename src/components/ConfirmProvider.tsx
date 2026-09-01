@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 interface ConfirmOptions {
   title?: string
@@ -22,6 +23,7 @@ export function useConfirm() {
 export default function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<(ConfirmOptions & { open: boolean }) | null>(null)
   const resolver = useRef<(v: boolean) => void>(null)
+  useBodyScrollLock(!!state?.open)
 
   const confirm = useCallback<ConfirmFn>((options) => {
     const opts = typeof options === 'string' ? { message: options } : options

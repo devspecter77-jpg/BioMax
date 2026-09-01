@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
 import { Receipt, Phone, User, Calendar, Search, Download, X, Wallet, CreditCard } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
 interface Sotuv {
@@ -42,6 +43,7 @@ export default function XaridlarPage() {
   const [sanaFilter, setSanaFilter] = useState('')
   const [renderLimit, setRenderLimit] = useState(30)
   const [tafsilot, setTafsilot] = useState<Sotuv | null>(null)
+  useBodyScrollLock(!!tafsilot)
 
   async function yuklash() {
     setYuklanmoqda(true)

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { X, Phone } from 'lucide-react'
 import { formatSum, formatSana, formatPhone } from '@/lib/utils'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 interface NasiyaDrillDownItem {
   id: string
@@ -43,6 +44,8 @@ export function NasiyaDrillDownModal({
   soni,
   nasiyalar,
 }: Props) {
+  useBodyScrollLock(open)
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {

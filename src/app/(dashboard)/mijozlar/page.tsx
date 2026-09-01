@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
 import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Calendar, Trophy, Users, Download, Upload, Eye, Pencil, LocateFixed } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import ViewToggle from '@/components/ViewToggle'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
@@ -81,6 +82,7 @@ export default function MijozlarPage() {
   // Mijoz tafsilotlari (xaridlar tarixi)
   const [detailModal, setDetailModal] = useState(false)
   const [detailYuklanmoqda, setDetailYuklanmoqda] = useState(false)
+  useBodyScrollLock(modal || detailModal)
   const [tanlanganMijoz, setTanlanganMijoz] = useState<MijozDetail | null>(null)
 
   async function mijozOch(id: string) {

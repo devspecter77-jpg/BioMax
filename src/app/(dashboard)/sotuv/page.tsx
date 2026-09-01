@@ -5,6 +5,7 @@ import { formatSum, formatNarx, formatSanaVaVaqt, playBeep, uzSearch } from '@/l
 import { buildChekHtml, chekChopEtish as printChek } from '@/lib/chek-print'
 import { toast } from 'sonner'
 import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2, Package, Plus, Gift, Percent } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { jsPDF } from 'jspdf'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -271,6 +272,7 @@ export default function SotuvPage() {
   // Saqlangan savatlar
   const [saqlanganiSavatlar, setSaqlanganiSavatlar] = useState<SaqlanganiSavat[]>([])
   const [saqlanganiModal, setSaqlanganiModal] = useState(false)
+  useBodyScrollLock(mijozModal || chekModal || saqlanganiModal || qaytarishModal)
 
   const tovarlarniYuklash = useCallback(async () => {
     setTovarlarYuklanmoqda(true)
@@ -769,10 +771,11 @@ export default function SotuvPage() {
         doc.addPage([80, 200])
         y = 8
       }
-      const nomi = t(item.tovar?.nomi || '—')
+      const bonusmi = Number(item.birlikNarxi) === 0
+      const nomi = t(item.tovar?.nomi || '—') + (bonusmi ? ` (${t('Bonus')})` : '')
       const miqdor = String(Number(item.miqdor))
-      const narx = formatSum(item.birlikNarxi)
-      const jami = formatSum(item.jami)
+      const narx = bonusmi ? t('Bepul') : formatSum(item.birlikNarxi)
+      const jami = bonusmi ? t('Bepul') : formatSum(item.jami)
 
       // Truncate long names
       const maxNomiW = 34
@@ -798,10 +801,12 @@ export default function SotuvPage() {
 
     // === CHEGIRMA ===
     if (Number(s.chegirma) > 0) {
+      const jamiSummaHisob = Number(s.chegirma) + Number(s.yakuniySumma)
+      const chegirmaFoizi = jamiSummaHisob > 0 ? Math.round((Number(s.chegirma) / jamiSummaHisob) * 100) : 0
       y += 1
       doc.setFontSize(7.5)
       doc.setTextColor(100, 100, 100)
-      doc.text(t('Chegirma') + ':', mx, y)
+      doc.text(`${t('Chegirma')} (${chegirmaFoizi}%):`, mx, y)
       doc.text('-' + formatSum(s.chegirma), w - mx, y, { align: 'right' })
       y += 4
     }
@@ -1426,21 +1431,33 @@ export default function SotuvPage() {
                 <div>{t('Sana')}: {formatSanaVaVaqt(s.sana)}</div>
                 {kassirTel && <div>{t('Kassir tel')}: {kassirTel}</div>}
                 <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                {s.tarkiblar?.map((item: any) => (
+                {s.tarkiblar?.map((item: any) => {
+                  const bonusmi = Number(item.birlikNarxi) === 0
+                  return (
                   <div key={item.id} style={{ marginBottom: 4 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ flex: 1 }}>{t(item.tovar?.nomi || '—')}</span>
+                      <span style={{ flex: 1 }}>
+                        {t(item.tovar?.nomi || '—')}
+                        {bonusmi && <span style={{ fontSize: 10, fontWeight: 'normal', color: '#8b5cf6', marginLeft: 4 }}>({t('Bonus')})</span>}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#555' }}>{Number(item.miqdor)} × {formatSum(item.birlikNarxi)}</span>
-                      <span style={{ fontWeight: 'bold' }}>{formatSum(item.jami)}</span>
-                    </div>
+                    {bonusmi ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8b5cf6' }}>
+                        <span>{Number(item.miqdor)} × {t('Bepul')}</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#555' }}>{Number(item.miqdor)} × {formatSum(item.birlikNarxi)}</span>
+                        <span style={{ fontWeight: 'bold' }}>{formatSum(item.jami)}</span>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  )
+                })}
                 <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
                 {Number(s.chegirma) > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{t('Chegirma')}:</span><span>-{formatSum(s.chegirma)}</span>
+                    <span>{t('Chegirma')} ({Math.round((Number(s.chegirma) / (Number(s.chegirma) + Number(s.yakuniySumma))) * 100)}%):</span><span>-{formatSum(s.chegirma)}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 13 }}>

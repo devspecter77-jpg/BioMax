@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useId } from 'react'
 import { ScanLine, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 interface Props {
   onScan: (kod: string) => void
@@ -12,6 +13,7 @@ interface Props {
 
 export default function BarcodeScanner({ onScan, className, title }: Props) {
   const [ochiq, setOchiq] = useState(false)
+  useBodyScrollLock(ochiq)
   const skanerRef = useRef<any>(null)
   const oxirgiSkanRef = useRef<string>('')
   const readerId = 'barcode-reader-' + useId().replace(/[^a-zA-Z0-9]/g, '')

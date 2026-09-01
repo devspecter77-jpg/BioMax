@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { formatSum, formatSana, uzSearch } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown, Download, Upload, Loader2, Calendar } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import ViewToggle from '@/components/ViewToggle'
 import MoneyInput from '@/components/ui/money-input'
 import DateInput from '@/components/ui/date-input'
@@ -78,6 +79,7 @@ export default function NasiyalarPage() {
   const [tahrirlashForm, setTahrirlashForm] = useState({ ism: '', manzil: '', telefon: '', qarz: '', muddat: '', sana: '' })
   const [tahrirlashYuklash, setTahrirlashYuklash] = useState(false)
   const [importYuklanmoqda, setImportYuklanmoqda] = useState(false)
+  useBodyScrollLock(!!tolovModal || qoshishModal || !!qarzQoshishModal || !!tahrirlashModal)
 
   async function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

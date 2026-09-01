@@ -9,10 +9,12 @@ import { cn } from '@/lib/utils'
 import { useSidebar } from '@/components/SidebarContext'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { visibleNavItems, navSections } from './nav-items'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { open, setOpen, collapsed, toggleCollapsed } = useSidebar()
+  useBodyScrollLock(open)
   const [dokonNomi, setDokonNomi] = useState('BioMax')
   const { data: session } = useSession()
   const rol = (session?.user as any)?.rol

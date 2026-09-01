@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, Barcode, Tag, Calendar, Check } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -90,6 +91,7 @@ export default function TovarlarPage() {
   const [katOchirilayotganId, setKatOchirilayotganId] = useState<string | null>(null)
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [detailTovar, setDetailTovar] = useState<Tovar | null>(null)
+  useBodyScrollLock(modal || katModal || korinishModal || !!detailTovar || !!rasmModal)
   const [kursi, setKursi] = useState<number | null>(null)
   const [kursSana, setKursSana] = useState<string | null>(null)
   const [kursYangilanmoqda, setKursYangilanmoqda] = useState(false)

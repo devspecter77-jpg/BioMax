@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { Grid3x3, X } from 'lucide-react'
 import { visibleNavItems, mobilePriorityOrder, type NavItem } from './nav-items'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 const MAX_PRIMARY = 4
 
@@ -22,6 +23,7 @@ export default function MobileNav() {
   const filialId = (session?.user as any)?.filialId
   const ulashilganEgaId = (session?.user as any)?.ulashilganEgaId
   const [moreOpen, setMoreOpen] = useState(false)
+  useBodyScrollLock(moreOpen)
 
   useEffect(() => {
     setMoreOpen(false)
@@ -33,10 +35,8 @@ export default function MobileNav() {
       if (e.key === 'Escape') setMoreOpen(false)
     }
     window.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
     return () => {
       window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = ''
     }
   }, [moreOpen])
 

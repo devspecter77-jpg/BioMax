@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { formatPhone } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Phone, MapPin, Building, X, Users, Check, UserPlus, Eye, EyeOff, Pencil, Trash2, Loader2, ToggleLeft, ToggleRight, Save, ShieldCheck } from 'lucide-react'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useConfirm } from '@/components/ConfirmProvider'
@@ -56,6 +57,7 @@ export default function FiliallarPage() {
   const [tahrirParolKorinsin, setTahrirParolKorinsin] = useState(false)
   const emptyTahrirForm = { nomi: '', manzil: '', telefon: '', faol: true, egaIsm: '', egaLogin: '', egaParol: '' }
   const [tahrirForm, setTahrirForm] = useState(emptyTahrirForm)
+  useBodyScrollLock(modal || tahrirModal)
 
   async function yuklash() {
     setYuklanmoqda(true)
