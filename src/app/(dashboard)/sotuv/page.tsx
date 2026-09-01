@@ -19,8 +19,8 @@ const TOLOV_USULI_BADGE: Record<string, { label: string; cls: string }> = {
 }
 
 interface Tovar {
-  id: string; nomi: string; sotishNarxi: number; kelishNarxi: number; birlik: string; qoldiq: number; shtrixKod: string | null
-  rasmlar?: string[]; valyuta?: string
+  id: string; nomi: string; sotishNarxi: number; kelishNarxi: number | null; birlik: string; qoldiq: number; shtrixKod: string | null
+  rasmlar?: string[]; valyuta?: string; kategoriya?: { nomi: string }
 }
 
 // Mahsulot USD'da narxlangan bo'lsa, savatga qo'shishda joriy kurs bo'yicha
@@ -203,7 +203,7 @@ export default function SotuvPage() {
         id: data.id,
         nomi: data.nomi,
         sotishNarxi: Number(data.sotishNarxi),
-        kelishNarxi: Number(data.kelishNarxi),
+        kelishNarxi: data.kelishNarxi === null ? null : Number(data.kelishNarxi),
         birlik: data.birlik,
         qoldiq: Number(data.qoldiq ?? 0),
         shtrixKod: data.shtrixKod ?? null,
@@ -938,7 +938,7 @@ export default function SotuvPage() {
               <p className="text-xs mt-1 text-gray-500 dark:text-gray-400">&laquo;{qidiruv}&raquo; bo&apos;yicha tovar yo&apos;q</p>
             </div>
           ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
             {korsatiladiganTovarlar.map(t => {
               const savatdagi = savat.find(s => s.tovarId === t.id)?.miqdor || 0
               const tugagan = t.qoldiq <= 0
@@ -955,7 +955,12 @@ export default function SotuvPage() {
                       {savatdagi}
                     </span>
                   )}
-                  <div className="h-48 bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
+                  <div className="aspect-[4/3] bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
+                    {t.kategoriya && (
+                      <span className={`absolute ${savatdagi > 0 ? 'left-9' : 'left-2'} top-2 z-10 text-[11px] bg-pos text-white px-2.5 py-1 rounded-full font-semibold shadow-sm max-w-[55%] truncate`} title={t.kategoriya.nomi}>
+                        {t.kategoriya.nomi}
+                      </span>
+                    )}
                     {t.rasmlar?.[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={t.rasmlar[0]} alt={t.nomi} className="w-full h-full object-cover" />
@@ -970,7 +975,26 @@ export default function SotuvPage() {
                   </div>
                   <div className="p-4">
                     <p className="text-gray-900 dark:text-gray-100 text-lg font-semibold leading-tight line-clamp-2 min-h-[2.6em]">{t.nomi}</p>
-                    <p className="text-pos text-xl font-bold font-mono tabular-nums mt-2">{formatNarx(t.sotishNarxi, t.valyuta)}</p>
+                    <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">Mahsulot kodi: #{(t.shtrixKod || '').padStart(3, '0') || '—'}</p>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center bg-gray-50 dark:bg-neutral-900/60 rounded-xl py-2.5">
+                      <div>
+                        <p className="text-gray-400 dark:text-gray-600 text-[11px]">Miqdori</p>
+                        <p className={`font-bold text-sm mt-0.5 ${kamQoldi ? 'text-amber-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                          {t.qoldiq} {t.birlik.toLowerCase()}
+                        </p>
+                      </div>
+                      <div className="border-x border-gray-200 dark:border-neutral-700">
+                        <p className="text-gray-400 dark:text-gray-600 text-[11px]">Kelish</p>
+                        <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">
+                          {t.kelishNarxi === null ? '—' : formatNarx(t.kelishNarxi, t.valyuta)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 dark:text-gray-600 text-[11px]">Sotish</p>
+                        <p className="text-pos font-bold text-sm mt-0.5">{formatNarx(t.sotishNarxi, t.valyuta)}</p>
+                      </div>
+                    </div>
                   </div>
                 </button>
               )
