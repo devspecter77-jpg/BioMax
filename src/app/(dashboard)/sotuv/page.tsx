@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { formatSum, formatNarx, formatSanaVaVaqt, playBeep, uzSearch } from '@/lib/utils'
 import { buildChekHtml, chekChopEtish as printChek } from '@/lib/chek-print'
 import { toast } from 'sonner'
-import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2, Package, Plus, Gift, Percent } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, Link2, Share2, Package, Plus, Gift, Percent, MapPin } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { jsPDF } from 'jspdf'
 import Combobox from '@/components/ui/combobox'
@@ -42,7 +42,7 @@ function narxTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number): number {
     : tovar.sotishNarxi
   return tovar.valyuta === 'USD' ? Math.round(asosiy * kursi) : asosiy
 }
-interface Mijoz { id: string; ism: string; telefon: string | null; manzil?: string | null }
+interface Mijoz { id: string; ism: string; telefon: string | null; manzil?: string | null; lokatsiyaLat?: number | null; lokatsiyaLng?: number | null }
 interface SavatItem {
   tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number; bonus?: boolean
   narxTuri?: NarxTuri
@@ -151,6 +151,9 @@ export default function SotuvPage() {
   const [mijozTelefon, setMijozTelefon] = useState('')
   const [mijozIsmi, setMijozIsmi] = useState('')
   const [mijozManzil, setMijozManzil] = useState('')
+  // Mavjud mijoz tanlanganda uning saqlangan GPS joylashuvi (bo'lsa) shu yerda
+  // ko'rsatiladi — telefon/ism qo'lda o'zgartirilsa avtomatik tozalanadi.
+  const [mijozLokatsiya, setMijozLokatsiya] = useState<{ lat: number; lng: number } | null>(null)
   const [mijozAniqlanmoqda, setMijozAniqlanmoqda] = useState(false)
   const [telefonTaklifOchiq, setTelefonTaklifOchiq] = useState(false)
   const [ismTaklifOchiq, setIsmTaklifOchiq] = useState(false)
@@ -538,6 +541,7 @@ export default function SotuvPage() {
     setMijozTelefon('')
     setMijozIsmi('')
     setMijozManzil('')
+    setMijozLokatsiya(null)
     setMijozModal(true)
   }
 
@@ -555,6 +559,7 @@ export default function SotuvPage() {
     setMijozTelefon(digits.length === 12 && digits.startsWith('998') ? digits.slice(3) : digits.slice(0, 9))
     setMijozIsmi(m.ism)
     setMijozManzil(m.manzil || '')
+    setMijozLokatsiya(m.lokatsiyaLat != null && m.lokatsiyaLng != null ? { lat: m.lokatsiyaLat, lng: m.lokatsiyaLng } : null)
     setTelefonTaklifOchiq(false)
     setIsmTaklifOchiq(false)
     // Mijoz mavjudlar ro'yxatidan tanlangan zahoti eslatma — to'lov
@@ -1453,7 +1458,7 @@ export default function SotuvPage() {
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Telefon raqam *</label>
                 <PhoneInput
                   value={mijozTelefon}
-                  onChange={v => { setMijozTelefon(v); setTelefonTaklifOchiq(true) }}
+                  onChange={v => { setMijozTelefon(v); setMijozLokatsiya(null); setTelefonTaklifOchiq(true) }}
                   onFocus={() => setTelefonTaklifOchiq(true)}
                   onBlur={() => setTimeout(() => setTelefonTaklifOchiq(false), 150)}
                   required
@@ -1478,7 +1483,7 @@ export default function SotuvPage() {
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
                 <input
                   value={mijozIsmi}
-                  onChange={e => { setMijozIsmi(e.target.value); setIsmTaklifOchiq(true) }}
+                  onChange={e => { setMijozIsmi(e.target.value); setMijozLokatsiya(null); setIsmTaklifOchiq(true) }}
                   onFocus={() => setIsmTaklifOchiq(true)}
                   onBlur={() => setTimeout(() => setIsmTaklifOchiq(false), 150)}
                   required
@@ -1505,6 +1510,15 @@ export default function SotuvPage() {
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Manzil</label>
                 <input value={mijozManzil} onChange={e => setMijozManzil(e.target.value)} placeholder="Ixtiyoriy" className={inputCls} />
               </div>
+              {mijozLokatsiya && (
+                <a
+                  href={`https://www.google.com/maps?q=${mijozLokatsiya.lat},${mijozLokatsiya.lng}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-primary-light dark:bg-primary/10 text-primary rounded-xl text-sm font-medium hover:underline w-fit"
+                >
+                  <MapPin size={14} /> Mijozning GPS joylashuvi — xaritada ko&apos;rish
+                </a>
+              )}
               <div className="flex gap-3">
                 <button type="button" onClick={() => setMijozModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
                   Bekor
