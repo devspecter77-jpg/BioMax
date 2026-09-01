@@ -187,30 +187,31 @@ export default function OmborPage() {
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
         <SearchBar value={qidiruv} onChange={setQidiruv} placeholder="Tovar nomi bo'yicha qidirish..." className="flex-1" />
-        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-none">
+        {/* flex-wrap — overflow-x-auto emas: gorizontal scroll konteynerida
+            mobil brauzerlar ba'zan bitta bosishni scroll harakati deb
+            tushunib, klikni bekor qilib qo'yishi mumkin. */}
+        <div className="flex flex-wrap items-center gap-2">
           <ViewToggle view={view} onChange={changeView} />
           <button
             onClick={() => setKamQolganFilter(!kamQolganFilter)}
-            className={`flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2.5 rounded-xl font-medium transition whitespace-nowrap shrink-0 text-sm ${kamQolganFilter ? 'bg-red-600 text-white' : 'bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-medium transition whitespace-nowrap text-xs sm:text-sm ${kamQolganFilter ? 'bg-red-600 text-white' : 'bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800'}`}
           >
-            <AlertTriangle size={16} />
-            <span className="sm:hidden">{kamQolganSoni}</span>
-            <span className="hidden sm:inline">Kam qolgan ({kamQolganSoni})</span>
+            <AlertTriangle size={14} />
+            Kam qolgan ({kamQolganSoni})
           </button>
           <button
             onClick={() => setMuddatiYaqinFilter(!muddatiYaqinFilter)}
-            className={`flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2.5 rounded-xl font-medium transition whitespace-nowrap shrink-0 text-sm ${muddatiYaqinFilter ? 'bg-amber-600 text-white' : 'bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-medium transition whitespace-nowrap text-xs sm:text-sm ${muddatiYaqinFilter ? 'bg-amber-600 text-white' : 'bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800'}`}
           >
-            <CalendarClock size={16} />
-            <span className="sm:hidden">{muddatiYaqinSoni}</span>
-            <span className="hidden sm:inline">Yaroqlilik muddati yaqin ({muddatiYaqinSoni})</span>
+            <CalendarClock size={14} />
+            Yaroqlilik muddati yaqin ({muddatiYaqinSoni})
           </button>
           <button
             onClick={() => setTarix(!tarix)}
-            className={`flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2.5 rounded-xl font-medium transition whitespace-nowrap shrink-0 text-sm ${tarix ? 'bg-blue-600 text-white' : 'bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-medium transition whitespace-nowrap text-xs sm:text-sm ${tarix ? 'bg-blue-600 text-white' : 'bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800'}`}
           >
-            <History size={16} />
-            <span className="hidden sm:inline">Harakatlar tarixi</span>
+            <History size={14} />
+            Harakatlar tarixi
           </button>
         </div>
       </div>
