@@ -256,30 +256,40 @@ async function resolvePhone(client: TelegramClient, telefon: string): Promise<Ap
   // 2) ImportContacts — random clientId va 3 sekund delay (Telegram spam pattern'ini buzish)
   await new Promise(resolve => setTimeout(resolve, 3000))
 
-  const randomClientId = Math.floor(Math.random() * 0x7FFFFFFF)
-
-  let result
-  try {
-    result = await client.invoke(
-      new Api.contacts.ImportContacts({
-        contacts: [
-          new Api.InputPhoneContact({
-            clientId: randomClientId as any,
-            phone: cleanPhone,
-            firstName: 'Mijoz',
-            lastName: '',
-          }),
-        ],
-      })
-    )
-  } catch (e: any) {
-    if (e.message?.includes('PHONE_NOT_OCCUPIED') || e.message?.includes('PHONE_NUMBER_INVALID')) {
-      return null
+  // Telegram ba'zan bu chaqiruvga darhol emas — "retryContacts" (keyinroq qayta
+  // urinib ko'ring) deb javob beradi (masalan yangi ulangan sessiyalarda tez-tez
+  // uchraydi). Bir marta bo'sh natija bilan taslim bo'lish o'rniga, qisqa kutib
+  // yana bir marta uriniladi — ko'p holatda ikkinchi urinishda topiladi.
+  let result: Awaited<ReturnType<typeof client.invoke<Api.contacts.ImportContacts>>> | null = null
+  for (let urinish = 1; urinish <= 2; urinish++) {
+    const randomClientId = Math.floor(Math.random() * 0x7FFFFFFF)
+    try {
+      result = await client.invoke(
+        new Api.contacts.ImportContacts({
+          contacts: [
+            new Api.InputPhoneContact({
+              clientId: randomClientId as any,
+              phone: cleanPhone,
+              firstName: 'Mijoz',
+              lastName: '',
+            }),
+          ],
+        })
+      )
+    } catch (e: any) {
+      if (e.message?.includes('PHONE_NOT_OCCUPIED') || e.message?.includes('PHONE_NUMBER_INVALID')) {
+        return null
+      }
+      throw e
     }
-    throw e
+
+    if (result.users && result.users.length > 0) break
+    if (urinish < 2 && result.retryContacts && result.retryContacts.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 5000))
+    }
   }
 
-  if (!result.users || result.users.length === 0) return null
+  if (!result || !result.users || result.users.length === 0) return null
 
   const user = result.users[0] as any
 
@@ -657,13 +667,22 @@ export async function telegramDisconnect(): Promise<{ ok: boolean }> {
     _clientReady = false
   }
   _entityCache.clear()
+  _entityCacheLoaded = false
+  _floodUntil = 0
+  _cacheOnlyUntil = 0
+  _lastSendTime = 0
 
+  // Entity cache, flood-timer va cache-only rejim shu (eskirayotgan) hisobga
+  // tegishli — access hash'lar akkauntga bog'liq, boshqa hisob ulanganda
+  // ular yaroqsiz. DB'da qolib ketsa, keyingi cold start'da (Vercel) qayta
+  // yuklanib, yangi hisobni buzilgan ma'lumot bilan zaharlashi mumkin edi.
   await prisma.sozlama.deleteMany({
     where: {
       kalit: {
         in: [
           'telegram_session', 'telegram_api_id', 'telegram_api_hash',
           'telegram_phone', 'telegram_user_name', 'telegram_temp_session',
+          'telegram_entity_cache', 'telegram_flood_until', 'telegram_cache_only_until',
         ],
       },
     },
