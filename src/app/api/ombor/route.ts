@@ -32,9 +32,14 @@ export async function GET(req: NextRequest) {
       orderBy: { nomi: 'asc' },
     })
 
-    // 2. Qoldiqni SQL aggregatsiya bilan hisoblash (bitta query)
-    const stockMap = await getStockMap()
-    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari(foydalanuvchiId)
+    // 2. Qoldiqni SQL aggregatsiya bilan hisoblash — faqat shu ro'yxatdagi
+    // tovarlar bo'yicha (butun kompaniya emas), va parallel ravishda
+    // (bir-biriga bog'liq emas, cross-region DB'da qo'shimcha round-trip
+    // vaqtini tejaydi).
+    const [stockMap, yashirilganMaydonlar] = await Promise.all([
+      getStockMap(tovarlar.map(t => t.id)),
+      foydalanuvchiYashirilganMaydonlari(foydalanuvchiId),
+    ])
 
     // 3. Natijani birlashtirish
     const besh_kun_ms = 5 * 24 * 60 * 60 * 1000

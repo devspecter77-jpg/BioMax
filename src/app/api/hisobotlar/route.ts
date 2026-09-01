@@ -47,16 +47,17 @@ export async function GET(req: NextRequest) {
       ...egaFilialWhere(session),
     }
 
-    const qaytarishSumma = await prisma.qaytarish.aggregate({
-      where: {
-        yaratilgan: { gte: danSana, lt: gachaSana },
-        aslSotuv: egaFilialWhere(session),
-      },
-      _sum: { jamiSumma: true },
-    })
-    const jamiQaytarish = Number(qaytarishSumma._sum.jamiSumma || 0)
-
-    const [sotuvlar, xarajatlar, nasiyalar, topTovarlar] = await Promise.all([
+    // Barchasi bir-biriga bog'liq emas — bittasi ham qolganlarining
+    // natijasiga tayanmaydi, shuning uchun hammasi bir vaqtda yuboriladi
+    // (cross-region DB'da har bir ketma-ket so'rov qo'shimcha kutish vaqti).
+    const [qaytarishSumma, sotuvlar, xarajatlar, nasiyalar, topTovarlar] = await Promise.all([
+      prisma.qaytarish.aggregate({
+        where: {
+          yaratilgan: { gte: danSana, lt: gachaSana },
+          aslSotuv: egaFilialWhere(session),
+        },
+        _sum: { jamiSumma: true },
+      }),
       prisma.sotuv.findMany({
         where: sotuvFilter,
         include: {
@@ -85,6 +86,7 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
+    const jamiQaytarish = Number(qaytarishSumma._sum.jamiSumma || 0)
     const jamiSotuv = sotuvlar.reduce((s, v) => s + Number(v.yakuniySumma), 0) - jamiQaytarish
     const jamiXarajat = xarajatlar.reduce((s, x) => s + Number(x.summa), 0)
 

@@ -53,7 +53,10 @@ export async function GET(req: NextRequest) {
       ]
     }
 
-    const [tovarlar, jami] = await Promise.all([
+    // foydalanuvchiYashirilganMaydonlari tovarlar natijasiga bog'liq emas —
+    // uch(tasi ham) parallel yuboriladi (cross-region DB'da har bir ketma-ket
+    // so'rov qo'shimcha round-trip vaqti qo'shadi).
+    const [tovarlar, jami, yashirilganMaydonlar] = await Promise.all([
       prisma.tovar.findMany({
         where,
         include: { kategoriya: true },
@@ -61,14 +64,12 @@ export async function GET(req: NextRequest) {
         ...(limit > 0 ? { skip: (page - 1) * limit, take: limit } : {}),
       }),
       prisma.tovar.count({ where }),
+      foydalanuvchiYashirilganMaydonlari(foydalanuvchiId),
     ])
 
-    // SQL aggregatsiya — omborHarakati yuklanmaydi
+    // SQL aggregatsiya — omborHarakati yuklanmaydi. tovarlar ID'lariga
+    // bog'liq bo'lgani uchun bu alohida (ketma-ket) qoladi.
     const stockMap = await getStockMap(tovarlar.map(t => t.id))
-
-    // Ega tomonidan ushbu (bog'langan) hisobdan maxsus yashirilgan maydonlar
-    // (masalan kelish narxi) — bor bo'lsa, javobdan olib tashlanadi.
-    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari(foydalanuvchiId)
 
     const tovarlarQoldiq = tovarlar.map((t) => {
       const stock = stockMap.get(t.id)
