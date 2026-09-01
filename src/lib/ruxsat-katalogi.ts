@@ -19,13 +19,11 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
     kalit: 'hisobotlar', label: 'Hisobotlar', children: [
       { kalit: 'hisobotlar.umumiy', label: 'Umumiy' },
       { kalit: 'hisobotlar.sotuv', label: 'Sotuv' },
-      { kalit: 'hisobotlar.moliya', label: 'Moliya' },
       { kalit: 'hisobotlar.tovarlar', label: 'Tovarlar' },
       { kalit: 'hisobotlar.ombor', label: 'Ombor' },
       { kalit: 'hisobotlar.mijozlar', label: 'Mijozlar' },
       { kalit: 'hisobotlar.nasiya', label: 'Nasiya' },
       { kalit: 'hisobotlar.xaridlar', label: 'Xaridlar' },
-      { kalit: 'hisobotlar.kassirlar', label: 'Kassirlar' },
     ],
   },
 ]

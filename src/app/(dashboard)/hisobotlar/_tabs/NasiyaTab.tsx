@@ -133,7 +133,7 @@ export function NasiyaTab({ filtrlar }: Props) {
   return (
     <div className="space-y-4">
       {/* KPI cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="text-center p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900">
           <p className="text-amber-700 dark:text-amber-400 text-sm font-medium">Ochiq nasiyalar</p>
           <p className="text-amber-700 dark:text-amber-400 font-bold text-2xl mt-1">

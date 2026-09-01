@@ -27,26 +27,28 @@ export function ReportFilter({ tur, dan, gacha, onChange }: Props) {
     ['Yil', 'yillik'],
   ]
   return (
-    <div className="flex flex-wrap gap-2 items-center">
-      {presets.map(([label, t]) => (
-        <button key={t} onClick={() => onChange({ tur: t })} className={btnCls(tur === t)}>
-          {label}
-        </button>
-      ))}
-      <div className="flex items-center gap-2 ml-auto">
+    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center">
+      <div className="flex flex-wrap gap-2">
+        {presets.map(([label, t]) => (
+          <button key={t} onClick={() => onChange({ tur: t })} className={btnCls(tur === t)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 sm:ml-auto">
         <input
           type="date"
           value={dan}
           onChange={(e) => onChange({ dan: e.target.value })}
-          className={inputCls}
+          className={`${inputCls} flex-1 min-w-0 sm:flex-none`}
           aria-label="Boshlanish sanasi"
         />
-        <span className="text-gray-400 dark:text-gray-600">—</span>
+        <span className="text-gray-400 dark:text-gray-600 shrink-0">—</span>
         <input
           type="date"
           value={gacha}
           onChange={(e) => onChange({ gacha: e.target.value })}
-          className={inputCls}
+          className={`${inputCls} flex-1 min-w-0 sm:flex-none`}
           aria-label="Tugash sanasi"
         />
       </div>

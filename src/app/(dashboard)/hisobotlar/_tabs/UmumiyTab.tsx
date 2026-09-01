@@ -261,7 +261,7 @@ export function UmumiyTab({ filtrlar, isKassir }: Props) {
       {/* Nasiya holati — boxes with hardcoded background colors for dark mode safety */}
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">
         <h2 className="text-gray-900 dark:text-gray-100 font-semibold mb-4">Nasiya holati</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="text-center p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40">
             <p className="text-amber-700 dark:text-amber-400 text-sm font-medium">Ochiq nasiyalar</p>
             <p className="text-amber-700 dark:text-amber-400 font-bold text-2xl mt-1">

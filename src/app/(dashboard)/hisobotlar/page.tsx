@@ -10,9 +10,6 @@ import { SkeletonKPI, SkeletonChart } from './_components/Skeletons'
 const UmumiyTab = lazy(() =>
   import('./_tabs/UmumiyTab').then((m) => ({ default: m.UmumiyTab })),
 )
-const MoliyaTab = lazy(() =>
-  import('./_tabs/MoliyaTab').then((m) => ({ default: m.MoliyaTab })),
-)
 const SotuvTab = lazy(() =>
   import('./_tabs/SotuvTab').then((m) => ({ default: m.SotuvTab })),
 )
@@ -28,35 +25,28 @@ const MijozlarTab = lazy(() =>
 const NasiyaTab = lazy(() =>
   import('./_tabs/NasiyaTab').then((m) => ({ default: m.NasiyaTab })),
 )
-const KassirlarTab = lazy(() =>
-  import('./_tabs/KassirlarTab').then((m) => ({ default: m.KassirlarTab })),
-)
 const XaridlarTab = lazy(() =>
   import('./_tabs/XaridlarTab').then((m) => ({ default: m.XaridlarTab })),
 )
 
 const TAB_LIST: Array<{ key: string; label: string }> = [
   { key: 'umumiy', label: 'Umumiy' },
-  { key: 'moliya', label: 'Moliya' },
   { key: 'sotuv', label: 'Sotuv' },
   { key: 'tovarlar', label: 'Tovarlar' },
   { key: 'ombor', label: 'Ombor' },
   { key: 'mijozlar', label: 'Mijozlar' },
   { key: 'nasiya', label: 'Nasiya' },
   { key: 'xaridlar', label: 'Xaridlar' },
-  { key: 'kassirlar', label: 'Kassirlar' },
 ]
 
 const TAB_COMPONENTS = {
   umumiy: UmumiyTab,
-  moliya: MoliyaTab,
   sotuv: SotuvTab,
   tovarlar: TovarlarTab,
   ombor: OmborTab,
   mijozlar: MijozlarTab,
   nasiya: NasiyaTab,
   xaridlar: XaridlarTab,
-  kassirlar: KassirlarTab,
 } as const
 
 // Inner component that uses useSearchParams (via useReportFilters) — must be inside Suspense
