@@ -20,18 +20,32 @@ const TOLOV_USULI_BADGE: Record<string, { label: string; cls: string }> = {
 }
 
 interface Tovar {
-  id: string; nomi: string; sotishNarxi: number; kelishNarxi: number | null; birlik: string; qoldiq: number; shtrixKod: string | null
+  id: string; nomi: string; sotishNarxi: number; kelishNarxi: number | null
+  optomNarxi?: number | null; bolishNarxi?: number | null
+  birlik: string; qoldiq: number; shtrixKod: string | null
   rasmlar?: string[]; valyuta?: string; kategoriya?: { nomi: string }
 }
+
+type NarxTuri = 'sotish' | 'optom' | 'bolish'
+const NARX_TURI_LABEL: Record<NarxTuri, string> = { sotish: 'Chakana', optom: 'Optom', bolish: "Bo'lish" }
 
 // Mahsulot USD'da narxlangan bo'lsa, savatga qo'shishda joriy kurs bo'yicha
 // so'mga o'giriladi — chek/hisobotlar hammasi so'mda bo'lishi shart.
 function sotishNarxiSomda(tovar: Tovar, kursi: number): number {
   return tovar.valyuta === 'USD' ? Math.round(tovar.sotishNarxi * kursi) : tovar.sotishNarxi
 }
+// Tanlangan narx turi bo'yicha narxni tanlaydi — o'sha tur uchun mahsulotda
+// narx kiritilmagan bo'lsa, oddiy sotish narxiga qaytadi.
+function narxTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number): number {
+  const asosiy = turi === 'optom' && tovar.optomNarxi != null ? tovar.optomNarxi
+    : turi === 'bolish' && tovar.bolishNarxi != null ? tovar.bolishNarxi
+    : tovar.sotishNarxi
+  return tovar.valyuta === 'USD' ? Math.round(asosiy * kursi) : asosiy
+}
 interface Mijoz { id: string; ism: string; telefon: string | null; manzil?: string | null }
 interface SavatItem {
   tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number; bonus?: boolean
+  narxTuri?: NarxTuri
 }
 interface SaqlanganiSavat {
   id: string; savat: SavatItem[]; sana: string; jami: number
@@ -120,6 +134,9 @@ export default function SotuvPage() {
   const [chegirmaFoizOchiq, setChegirmaFoizOchiq] = useState(false)
   const [chegirmaFoiz, setChegirmaFoiz] = useState('')
   const [bonusTanlashRejimi, setBonusTanlashRejimi] = useState(false)
+  // Qaysi narx bilan sotilyapti — chakana/optom/bo'lish. Savatga yangi
+  // qo'shilayotgan mahsulotlar shu tur bo'yicha narxlanadi.
+  const [narxTuri, setNarxTuri] = useState<NarxTuri>('sotish')
   const [mijozId, setMijozId] = useState('')
   const [nasiyaMuddat, setNasiyaMuddat] = useState('')
   const [yuklanmoqda, setYuklanmoqda] = useState(false)
@@ -423,10 +440,14 @@ export default function SotuvPage() {
       toast.success(`${tovar.nomi} bonus sifatida qo'shildi`)
       return
     }
-    const narxSomda = sotishNarxiSomda(tovar, kursi)
+    // Joriy tanlangan narx turi (chakana/optom/bo'lish) bo'yicha — mahsulotda
+    // o'sha tur uchun narx kiritilmagan bo'lsa, oddiy sotish narxiga tushadi.
+    const narxSomda = narxTuriBoyicha(tovar, narxTuri, kursi)
     setSavat(prev => {
       // Faqat oddiy (bonus bo'lmagan) qator bilan birlashtiriladi — bonus
-      // qatori (bor bo'lsa) tegilmasdan saqlanib qoladi.
+      // qatori (bor bo'lsa) tegilmasdan saqlanib qoladi. Mavjud qatorning
+      // narxi (va turi) o'zgartirilmaydi — faqat miqdor qo'shiladi, narx
+      // turini almashtirish kerak bo'lsa narxni qo'lda tahrirlash mumkin.
       const mavjud = prev.find(s => s.tovarId === tovar.id && !s.bonus)
       if (mavjud) {
         if (mavjud.miqdor + 1 > tovar.qoldiq) {
@@ -439,7 +460,7 @@ export default function SotuvPage() {
       return [{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
         miqdor: 1, birlik: tovar.birlik, chegirma: 0,
-        jami: narxSomda, mavjudQoldiq: tovar.qoldiq
+        jami: narxSomda, mavjudQoldiq: tovar.qoldiq, narxTuri,
       }, ...prev]
     })
   }
@@ -526,6 +547,25 @@ export default function SotuvPage() {
     setIsmTaklifOchiq(false)
   }
 
+  // Mijoz avval hozirgi savatdagi mahsulotlardan sotib olganmi — bo'lsa
+  // kassirga eslatma (5 soniya turib o'zi yopiladi). Sotuvni to'xtatmaydi —
+  // fon vazifasi, xato bo'lsa ham sokin o'tkazib yuboriladi.
+  async function mijozOldingiXaridlarniEslatish(mijozId: string, mijozIsm: string, savatHozir: SavatItem[]) {
+    try {
+      const tarix: Record<string, { narx: number; sana: string }> = await fetch(`/api/mijozlar/${mijozId}/tarix`).then(r => r.json())
+      const mosKelganlar = savatHozir.filter(item => tarix[item.tovarId] && !item.bonus)
+      if (mosKelganlar.length === 0) return
+
+      const matn = mosKelganlar.length === 1
+        ? `${mijozIsm} avval "${mosKelganlar[0].nomi}"ni ${formatSum(tarix[mosKelganlar[0].tovarId].narx)}dan sotib olgan edi`
+        : `${mijozIsm} avval bu mahsulotlarni ham olgan: ${mosKelganlar.slice(0, 3).map(i => i.nomi).join(', ')}${mosKelganlar.length > 3 ? ` va yana ${mosKelganlar.length - 3} ta` : ''}`
+
+      toast(matn, { icon: '🔔', duration: 5000 })
+    } catch {
+      // eslatma ko'rsatilmasa ham sotuvga xalaqit bermaydi
+    }
+  }
+
   async function mijozTasdiqlaVaYubor(e: React.FormEvent) {
     e.preventDefault()
     if (mijozTelefon.length < 9) { toast.error("To'liq telefon raqam kiriting!"); return }
@@ -547,6 +587,7 @@ export default function SotuvPage() {
 
       setMijozId(natija.id)
       setMijozModal(false)
+      mijozOldingiXaridlarniEslatish(natija.id, natija.ism, savat)
       await sotuvYuborish(natija.id)
     } finally {
       setMijozAniqlanmoqda(false)
@@ -945,6 +986,19 @@ export default function SotuvPage() {
             />
           </div>
         </div>
+        {/* Narx turi — savatga yangi qo'shiladigan mahsulotlar shu narx bilan hisoblanadi */}
+        <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 w-fit">
+          {(['sotish', 'optom', 'bolish'] as NarxTuri[]).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setNarxTuri(t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${narxTuri === t ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+            >
+              {NARX_TURI_LABEL[t]}
+            </button>
+          ))}
+        </div>
         {skanerOchiq && (
           <div className="bg-black rounded-xl overflow-hidden relative">
             <div id="skaner-reader" style={{ width: '100%' }} />
@@ -1143,6 +1197,11 @@ export default function SotuvPage() {
                       {item.bonus && (
                         <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-violet-100 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 px-1.5 py-0.5 rounded-full shrink-0">
                           <Gift size={9} /> Bonus
+                        </span>
+                      )}
+                      {!item.bonus && item.narxTuri && item.narxTuri !== 'sotish' && (
+                        <span className="inline-flex items-center text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full shrink-0">
+                          {NARX_TURI_LABEL[item.narxTuri]}
                         </span>
                       )}
                     </p>
