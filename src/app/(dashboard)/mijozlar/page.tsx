@@ -338,7 +338,11 @@ export default function MijozlarPage() {
           ) : korsatiladiganMijozlar.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Mijozlar topilmadi</p>
           ) : korsatiladiganMijozlar.map((m, idx) => (
-            <div key={m.id} className="relative bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4 hover:shadow-md transition-shadow">
+            <div
+              key={m.id}
+              onClick={() => mijozOch(m.id)}
+              className="relative bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5 sm:p-4 hover:shadow-md active:scale-[0.98] transition-all cursor-pointer"
+            >
               {kategoriya === 'top' && (
                 <span className={`absolute -top-2 -left-2 inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shadow ${
                   idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-gray-300 text-gray-700' : idx === 2 ? 'bg-orange-400 text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400'
@@ -346,59 +350,69 @@ export default function MijozlarPage() {
               )}
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="text-gray-900 dark:text-gray-100 font-semibold text-base">{m.ism}</p>
+                  <p className="text-gray-900 dark:text-gray-100 font-semibold text-lg sm:text-base">{m.ism}</p>
                   {m.telefon && (
-                    <a href={`tel:${m.telefon.replace(/\s/g, '')}`} className="text-blue-500 hover:text-blue-600 text-sm flex items-center gap-1 mt-0.5">
-                      <Phone size={12} /> {formatPhone(m.telefon)}
+                    <a href={`tel:${m.telefon.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="text-blue-500 hover:text-blue-600 text-base sm:text-sm flex items-center gap-1 mt-1 sm:mt-0.5">
+                      <Phone size={14} className="sm:hidden" /><Phone size={12} className="hidden sm:block" /> {formatPhone(m.telefon)}
                     </a>
                   )}
                   {m.manzil && (
-                    <p className="text-gray-400 dark:text-gray-600 text-sm flex items-center gap-1 mt-0.5">
+                    <p className="text-gray-400 dark:text-gray-600 text-base sm:text-sm flex items-center gap-1 mt-1 sm:mt-0.5">
                       {m.lokatsiyaLat !== null && m.lokatsiyaLng !== null ? (
                         <a href={`https://www.google.com/maps?q=${m.lokatsiyaLat},${m.lokatsiyaLng}`} target="_blank" rel="noopener noreferrer"
                           onClick={e => e.stopPropagation()} title="Xaritada ko'rish" className="text-primary hover:text-primary-hover shrink-0">
-                          <MapPin size={12} />
+                          <MapPin size={14} className="sm:hidden" /><MapPin size={12} className="hidden sm:block" />
                         </a>
-                      ) : <MapPin size={12} className="shrink-0" />}
+                      ) : <><MapPin size={14} className="shrink-0 sm:hidden" /><MapPin size={12} className="shrink-0 hidden sm:block" /></>}
                       {m.manzil}
                     </p>
                   )}
                 </div>
-                <div className="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center text-red-600 font-bold text-lg shrink-0 ml-2">
+                <div className="w-14 h-14 sm:w-11 sm:h-11 bg-red-100 rounded-xl flex items-center justify-center text-red-600 font-bold text-xl sm:text-lg shrink-0 ml-2">
                   {m.ism[0]?.toUpperCase()}
                 </div>
               </div>
               {m.maxsus_kod && (
-                <p className="mt-1.5 text-xs font-mono text-gray-400 dark:text-gray-600 flex items-center gap-1">
-                  <Hash size={10} />{m.maxsus_kod}
+                <p className="mt-2 sm:mt-1.5 text-sm sm:text-xs font-mono text-gray-400 dark:text-gray-600 flex items-center gap-1">
+                  <Hash size={12} className="sm:hidden" /><Hash size={10} className="hidden sm:block" />{m.maxsus_kod}
                 </p>
               )}
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2 gap-2">
+              <div className="mt-4 sm:mt-3 pt-4 sm:pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2 gap-2">
                 <div className="text-center">
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Jami sotuv</p>
-                  <p className="text-gray-900 dark:text-gray-100 font-semibold">{m._count.sotuvlar} ta</p>
+                  <p className="text-gray-400 dark:text-gray-600 text-sm sm:text-xs">Jami sotuv</p>
+                  <p className="text-gray-900 dark:text-gray-100 font-semibold text-lg sm:text-base">{m._count.sotuvlar} ta</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Qarz</p>
-                  <p className={`font-semibold ${m.jami_qarz > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <p className="text-gray-400 dark:text-gray-600 text-sm sm:text-xs">Qarz</p>
+                  <p className={`font-semibold text-lg sm:text-base ${m.jami_qarz > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {m.jami_qarz > 0 ? formatSum(m.jami_qarz) : "Yo'q"}
                   </p>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3 -mx-4 -mb-4">
-                <button onClick={() => mijozOch(m.id)} title="Batafsil" className="flex items-center justify-center py-2.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800 transition border-r border-gray-100 dark:border-neutral-800 rounded-bl-2xl">
-                  <Eye size={16} />
-                </button>
-                <button onClick={() => modalOchish(m)} title="Tahrirlash" className="flex items-center justify-center py-2.5 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800">
-                  <Pencil size={16} />
+              <div className="mt-4 sm:mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2 -mx-5 sm:-mx-4 -mb-5 sm:-mb-4">
+                <button
+                  onClick={e => { e.stopPropagation(); modalOchish(m) }}
+                  title="Tahrirlash"
+                  className="flex items-center justify-center py-4 sm:py-2.5 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800 rounded-bl-2xl"
+                >
+                  <Pencil size={22} className="sm:hidden" /><Pencil size={16} className="hidden sm:block" />
                 </button>
                 <button
-                  onClick={() => ochirish(m)}
+                  onClick={e => { e.stopPropagation(); ochirish(m) }}
                   disabled={ochirilayotganId === m.id}
                   title="O'chirish"
-                  className="flex items-center justify-center py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition disabled:opacity-50 rounded-br-2xl"
+                  className="flex items-center justify-center py-4 sm:py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition disabled:opacity-50 rounded-br-2xl"
                 >
-                  {ochirilayotganId === m.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {ochirilayotganId === m.id ? (
+                    <Loader2 size={22} className="sm:hidden animate-spin" />
+                  ) : (
+                    <Trash2 size={22} className="sm:hidden" />
+                  )}
+                  {ochirilayotganId === m.id ? (
+                    <Loader2 size={16} className="hidden sm:block animate-spin" />
+                  ) : (
+                    <Trash2 size={16} className="hidden sm:block" />
+                  )}
                 </button>
               </div>
             </div>
