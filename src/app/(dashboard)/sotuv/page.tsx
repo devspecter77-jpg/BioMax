@@ -568,7 +568,7 @@ export default function SotuvPage() {
   }
 
   // Mijoz avval hozirgi savatdagi mahsulotlardan sotib olganmi — bo'lsa
-  // kassirga eslatma (5 soniya turib o'zi yopiladi). Sotuvni to'xtatmaydi —
+  // kassirga eslatma (15 soniya turib o'zi yopiladi). Sotuvni to'xtatmaydi —
   // fon vazifasi, xato bo'lsa ham sokin o'tkazib yuboriladi.
   async function mijozOldingiXaridlarniEslatish(mijozId: string, mijozIsm: string, savatHozir: SavatItem[]) {
     try {
@@ -580,7 +580,7 @@ export default function SotuvPage() {
         ? `${mijozIsm} avval "${mosKelganlar[0].nomi}"ni ${formatSum(tarix[mosKelganlar[0].tovarId].narx)}dan sotib olgan edi`
         : `${mijozIsm} avval bu mahsulotlarni ham olgan: ${mosKelganlar.slice(0, 3).map(i => i.nomi).join(', ')}${mosKelganlar.length > 3 ? ` va yana ${mosKelganlar.length - 3} ta` : ''}`
 
-      toast(matn, { icon: '🔔', duration: 5000 })
+      toast(matn, { icon: '🔔', duration: 15000 })
     } catch {
       // eslatma ko'rsatilmasa ham sotuvga xalaqit bermaydi
     }
