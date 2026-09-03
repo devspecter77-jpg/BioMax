@@ -71,7 +71,15 @@ export default function FiliallarPage() {
   const [tahrirParolKorinsin, setTahrirParolKorinsin] = useState(false)
   const emptyTahrirForm = { nomi: '', manzil: '', telefon: '', faol: true, egaIsm: '', egaLogin: '', egaParol: '' }
   const [tahrirForm, setTahrirForm] = useState(emptyTahrirForm)
-  useBodyScrollLock(modal || tahrirModal)
+
+  const [egaTahrirModal, setEgaTahrirModal] = useState(false)
+  const [egaTahrirId, setEgaTahrirId] = useState<string | null>(null)
+  const [egaTahrirSaqlanmoqda, setEgaTahrirSaqlanmoqda] = useState(false)
+  const [egaTahrirParolKorinsin, setEgaTahrirParolKorinsin] = useState(false)
+  const emptyEgaTahrirForm = { ism: '', login: '', parol: '', faol: true }
+  const [egaTahrirForm, setEgaTahrirForm] = useState(emptyEgaTahrirForm)
+
+  useBodyScrollLock(modal || tahrirModal || egaTahrirModal)
 
   async function yuklash() {
     setYuklanmoqda(true)
@@ -197,6 +205,39 @@ export default function FiliallarPage() {
       }
     } finally {
       setOchirilayotganId(null)
+    }
+  }
+
+  function egaTahrirOch(u: EgaHisob) {
+    setEgaTahrirId(u.id)
+    setEgaTahrirForm({ ism: u.ism, login: u.login, parol: '', faol: u.faol })
+    setEgaTahrirModal(true)
+  }
+
+  async function egaTahrirSaqlash(e: React.FormEvent) {
+    e.preventDefault()
+    if (!egaTahrirId) return
+    setEgaTahrirSaqlanmoqda(true)
+    try {
+      const res = await fetch(`/api/foydalanuvchilar/${egaTahrirId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ism: egaTahrirForm.ism, login: egaTahrirForm.login,
+          ...(egaTahrirForm.parol ? { parol: egaTahrirForm.parol } : {}),
+          rol: 'ADMIN', faol: egaTahrirForm.faol, filialId: null,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        toast.error(err.xato || 'Xatolik yuz berdi')
+        return
+      }
+      toast.success('Hisob yangilandi')
+      setEgaTahrirModal(false)
+      yuklash()
+    } finally {
+      setEgaTahrirSaqlanmoqda(false)
     }
   }
 
@@ -415,6 +456,13 @@ export default function FiliallarPage() {
                   )}
                 </div>
                 <button
+                  onClick={() => egaTahrirOch(u)}
+                  className="p-2 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition shrink-0"
+                  title="Tahrirlash"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
                   onClick={() => egaOchirish(u)}
                   disabled={ochirilayotganId === u.id}
                   className="p-2 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50 shrink-0"
@@ -624,6 +672,63 @@ export default function FiliallarPage() {
                 <button type="submit" disabled={tahrirSaqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
                   {tahrirSaqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   {tahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {egaTahrirModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
+            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Hisobni tahrirlash</h3>
+              <button onClick={() => setEgaTahrirModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={egaTahrirSaqlash} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
+                <input required value={egaTahrirForm.ism} onChange={e => setEgaTahrirForm(p => ({ ...p, ism: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Telefon raqami (login) *</label>
+                <PhoneInput required value={egaTahrirForm.login} onChange={v => setEgaTahrirForm(p => ({ ...p, login: v }))} />
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Yangi parol <span className="text-gray-400 font-normal">(ixtiyoriy — bo&apos;sh qoldirsa eskisi qoladi)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={egaTahrirParolKorinsin ? 'text' : 'password'}
+                    value={egaTahrirForm.parol}
+                    onChange={e => setEgaTahrirForm(p => ({ ...p, parol: e.target.value }))}
+                    className={inputCls + ' pr-10'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEgaTahrirParolKorinsin(v => !v)}
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {egaTahrirParolKorinsin ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-neutral-800 rounded-xl">
+                <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">Faollik holati</span>
+                <button type="button" onClick={() => setEgaTahrirForm(f => ({ ...f, faol: !f.faol }))} className={`transition ${egaTahrirForm.faol ? 'text-green-500' : 'text-gray-400 dark:text-gray-600'}`}>
+                  {egaTahrirForm.faol ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setEgaTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
+                <button type="submit" disabled={egaTahrirSaqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+                  {egaTahrirSaqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {egaTahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
                 </button>
               </div>
             </form>

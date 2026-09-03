@@ -23,8 +23,9 @@ interface Tovar {
   id: string; nomi: string; sotishNarxi: number; kelishNarxi: number | null
   optomNarxi?: number | null; bolishNarxi?: number | null
   birlik: string; qoldiq: number; shtrixKod: string | null
-  rasmlar?: string[]; valyuta?: string; kategoriya?: { nomi: string }
+  rasmlar?: string[]; valyuta?: string; kategoriya?: { id: string; nomi: string }
 }
+interface Kategoriya { id: string; nomi: string }
 
 type NarxTuri = 'sotish' | 'optom' | 'bolish'
 const NARX_TURI_LABEL: Record<NarxTuri, string> = { sotish: 'Chakana', optom: 'Optom', bolish: "Bo'lish" }
@@ -128,6 +129,8 @@ export default function SotuvPage() {
   const [mijozlar, setMijozlar] = useState<Mijoz[]>([])
   const [savat, setSavat] = useState<SavatItem[]>([])
   const [qidiruv, setQidiruv] = useState('')
+  const [kategoriyalar, setKategoriyalar] = useState<Kategoriya[]>([])
+  const [aktifKategoriya, setAktifKategoriya] = useState<string | null>(null)
   const [tolovUsuli, setTolovUsuli] = useState('NAQD')
   const [naqdTolangan, setNaqdTolangan] = useState('')
   const [qolBilanSumma, setQolBilanSumma] = useState('')
@@ -316,12 +319,14 @@ export default function SotuvPage() {
   useEffect(() => {
     async function yuklashQoshimcha() {
       try {
-        const [mj, sz] = await Promise.all([
+        const [mj, sz, kt] = await Promise.all([
           fetch('/api/mijozlar').then(r => r.json()).catch(() => []),
           fetch('/api/sozlamalar').then(r => r.json()).catch(() => ({})),
+          fetch('/api/kategoriyalar').then(r => r.json()).catch(() => []),
         ])
         setMijozlar(Array.isArray(mj) ? mj : [])
         setDokonInfo(sz && typeof sz === 'object' ? sz : {})
+        setKategoriyalar(Array.isArray(kt) ? kt : [])
         // Mijozlar sahifasidagi "Sotuvni boshlash" tugmasi orqali kelingan
         // bo'lsa — URL'dagi mijozId bo'yicha mijozni avtomatik tanlaymiz.
         const boshlanguvchiMijozId = new URLSearchParams(window.location.search).get('mijozId')
@@ -412,8 +417,8 @@ export default function SotuvPage() {
   }, [tovarlar])
 
   const filteredTovarlar = tovarlar.filter(t =>
-    uzSearch(t.nomi, qidiruv) ||
-    (t.shtrixKod && t.shtrixKod.includes(qidiruv))
+    (!aktifKategoriya || t.kategoriya?.id === aktifKategoriya) &&
+    (uzSearch(t.nomi, qidiruv) || (t.shtrixKod && t.shtrixKod.includes(qidiruv)))
   )
   const korsatiladiganTovarlar = filteredTovarlar
 
@@ -1054,6 +1059,33 @@ export default function SotuvPage() {
             </button>
           ))}
         </div>
+        {kategoriyalar.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              onClick={() => setAktifKategoriya(null)}
+              className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+                aktifKategoriya === null
+                  ? 'bg-pos text-white'
+                  : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              Barchasi
+            </button>
+            {kategoriyalar.map(k => (
+              <button
+                key={k.id}
+                onClick={() => setAktifKategoriya(k.id)}
+                className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+                  aktifKategoriya === k.id
+                    ? 'bg-pos text-white'
+                    : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                }`}
+              >
+                {k.nomi}
+              </button>
+            ))}
+          </div>
+        )}
         {skanerOchiq && (
           <div className="bg-black rounded-xl overflow-hidden relative">
             <div id="skaner-reader" style={{ width: '100%' }} />
