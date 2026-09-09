@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 import { tolovQilindiXabar } from '@/lib/telegram'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { kanalUsuliMi } from '@/lib/tolov-usullari'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,9 +18,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const egalik = await prisma.nasiya.findFirst({ where: { id, mijoz: egaFilialWhere(session) }, select: { id: true } })
     if (!egalik) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
 
-    // tolovUsuli validatsiya
-    const USULLAR = ['NAQD', 'KARTA'] as const
-    const tolovUsuli = USULLAR.includes(data.tolovUsuli) ? data.tolovUsuli : 'NAQD'
+    // tolovUsuli validatsiya — faqat haqiqiy pul kanallari
+    // (ARALASH/NASIYA/SHERIK qarz to'lovida ma'noga ega emas)
+    const tolovUsuli = kanalUsuliMi(data.tolovUsuli) ? data.tolovUsuli : 'NAQD'
 
     const tolovSumma = new Prisma.Decimal(data.summa || 0)
     if (tolovSumma.lte(0)) return NextResponse.json({ xato: "Summa 0 dan katta bo'lishi kerak" }, { status: 400 })

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatSum, formatSana, uzSearch } from '@/lib/utils'
+import { QARZ_TOLOV_USULLARI, TOLOV_MALUMOTI, tolovQisqa } from '@/lib/tolov-usullari'
 import { toast } from 'sonner'
 import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown, Download, Upload, Loader2, Calendar } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -297,9 +298,9 @@ export default function NasiyalarPage() {
           className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === '' ? 'border-red-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Barchasi</p>
+              <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">Barchasi</p>
               <p className="text-base sm:text-2xl font-bold mt-1 text-gray-900 dark:text-gray-100">{formatSum(stats.jamiQoldiq)}</p>
-              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Qolgan qarz &bull; {stats.mijozlarSoni} ta mijoz</p>
+              <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs mt-0.5 sm:mt-1">Qolgan qarz &bull; {stats.mijozlarSoni} ta mijoz</p>
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 bg-red-500 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
               <Banknote size={16} className="text-white sm:w-5 sm:h-5" />
@@ -310,9 +311,9 @@ export default function NasiyalarPage() {
           className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === 'BUGUN' ? 'border-orange-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Bugun to&apos;lov sanasi</p>
+              <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">Bugun to&apos;lov sanasi</p>
               <p className="text-base sm:text-2xl font-bold mt-1 text-orange-600">{stats.bugunSoni} ta</p>
-              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Qarz: {formatSum(stats.bugunQoldiq)}</p>
+              <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs mt-0.5 sm:mt-1">Qarz: {formatSum(stats.bugunQoldiq)}</p>
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 bg-orange-500 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
               <Calendar size={16} className="text-white sm:w-5 sm:h-5" />
@@ -323,9 +324,9 @@ export default function NasiyalarPage() {
           className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === 'OCHIQ' ? 'border-amber-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Ochiq</p>
+              <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">Ochiq</p>
               <p className="text-base sm:text-2xl font-bold mt-1 text-amber-600">{stats.ochiq} ta</p>
-              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Qarz: {formatSum(stats.jamiQoldiq)}</p>
+              <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs mt-0.5 sm:mt-1">Qarz: {formatSum(stats.jamiQoldiq)}</p>
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 bg-amber-500 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
               <Clock size={16} className="text-white sm:w-5 sm:h-5" />
@@ -336,9 +337,9 @@ export default function NasiyalarPage() {
           className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === 'MUDDATI_OTGAN' ? 'border-red-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Muddati o&apos;tgan</p>
+              <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">Muddati o&apos;tgan</p>
               <p className="text-base sm:text-2xl font-bold mt-1 text-red-600">{stats.muddatiOtgan} ta</p>
-              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Diqqat talab etadi</p>
+              <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs mt-0.5 sm:mt-1">Diqqat talab etadi</p>
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 bg-red-600 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
               <AlertTriangle size={16} className="text-white sm:w-5 sm:h-5" />
@@ -349,9 +350,9 @@ export default function NasiyalarPage() {
           className={`text-left rounded-2xl p-3 sm:p-5 transition-shadow border-2 ${filter === 'YOPILGAN' ? 'border-green-500 shadow-md' : 'border-gray-200 dark:border-neutral-800 hover:shadow-md'} bg-white dark:bg-neutral-900`}>
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Yopilgan</p>
+              <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">Yopilgan</p>
               <p className="text-base sm:text-2xl font-bold mt-1 text-green-600">{stats.yopilgan} ta</p>
-              <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1">To&apos;langan: {formatSum(stats.yopilganTolangan)}</p>
+              <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs mt-0.5 sm:mt-1">To&apos;langan: {formatSum(stats.yopilganTolangan)}</p>
             </div>
             <div className="w-8 h-8 sm:w-11 sm:h-11 bg-green-500 rounded-xl flex items-center justify-center shrink-0 ml-2 sm:ml-3">
               <CheckCircle size={16} className="text-white sm:w-5 sm:h-5" />
@@ -401,21 +402,21 @@ export default function NasiyalarPage() {
             <table className="w-full table-fixed">
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-800">
-                  <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3">Mijoz</th>
-                  <th style={{ width: '110px' }} className="text-center text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Holati</th>
-                  <th style={{ width: '130px' }} className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden lg:table-cell whitespace-nowrap">Jami qarz</th>
-                  <th style={{ width: '130px' }} className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden lg:table-cell whitespace-nowrap">To&apos;langan</th>
-                  <th style={{ width: '130px' }} className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Qoldiq</th>
-                  <th style={{ width: '110px' }} className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Berilgan</th>
-                  <th style={{ width: '110px' }} className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Qaytarish</th>
-                  <th style={{ width: '120px' }} className="text-center text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Amal</th>
+                  <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3">Mijoz</th>
+                  <th style={{ width: '110px' }} className="text-center text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Holati</th>
+                  <th style={{ width: '130px' }} className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden lg:table-cell whitespace-nowrap">Jami qarz</th>
+                  <th style={{ width: '130px' }} className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden lg:table-cell whitespace-nowrap">To&apos;langan</th>
+                  <th style={{ width: '130px' }} className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Qoldiq</th>
+                  <th style={{ width: '110px' }} className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Berilgan</th>
+                  <th style={{ width: '110px' }} className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Qaytarish</th>
+                  <th style={{ width: '120px' }} className="text-center text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Amal</th>
                 </tr>
               </thead>
               <tbody>
                 {yuklanmoqda ? (
-                  <tr><td colSpan={8} className="text-center text-gray-400 dark:text-gray-600 py-12">Yuklanmoqda...</td></tr>
+                  <tr><td colSpan={8} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
                 ) : filteredNasiyalar.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center text-gray-400 dark:text-gray-600 py-12">Nasiyalar topilmadi</td></tr>
+                  <tr><td colSpan={8} className="text-center text-gray-500 dark:text-gray-400 py-12">Nasiyalar topilmadi</td></tr>
                 ) : filteredNasiyalar.map((n, idx) => {
                   const hCfg = holatiConfig[n.holati as keyof typeof holatiConfig]
                   return (
@@ -443,17 +444,17 @@ export default function NasiyalarPage() {
                         </span>
                       </td>
                       {/* Jami qarz */}
-                      <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-500 text-sm hidden lg:table-cell whitespace-nowrap">{formatSum(n.jamiQarz)}</td>
+                      <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 text-sm hidden lg:table-cell whitespace-nowrap">{formatSum(n.jamiQarz)}</td>
                       {/* To'langan */}
                       <td className="px-4 py-3 text-right text-green-600 text-sm hidden lg:table-cell whitespace-nowrap">{formatSum(n.tolangan)}</td>
                       {/* Qoldiq */}
                       <td className="px-4 py-3 text-right text-red-600 font-semibold text-sm whitespace-nowrap">{formatSum(n.qoldiq)}</td>
                       {/* Berilgan sana */}
-                      <td className="px-4 py-3 text-right text-gray-400 dark:text-gray-600 text-sm hidden md:table-cell whitespace-nowrap">
+                      <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 text-sm hidden md:table-cell whitespace-nowrap">
                         {formatSana(n.sana)}
                       </td>
                       {/* Qaytarish sanasi */}
-                      <td className="px-4 py-3 text-right text-gray-400 dark:text-gray-600 text-sm hidden md:table-cell whitespace-nowrap">
+                      <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 text-sm hidden md:table-cell whitespace-nowrap">
                         {n.muddat ? formatSana(n.muddat) : <span className="text-gray-300 dark:text-gray-700">—</span>}
                       </td>
                       {/* Amal: To'lov + O'chirish buttons */}
@@ -500,9 +501,9 @@ export default function NasiyalarPage() {
       {/* CARD VIEW — mobilda har doim ko'rinadi, desktopda faqat view==='card' bo'lsa */}
       <div className={`space-y-3 ${view === 'card' ? '' : 'sm:hidden'}`}>
           {yuklanmoqda ? (
-            <p className="text-gray-400 dark:text-gray-600 text-center py-12">Yuklanmoqda...</p>
+            <p className="text-gray-500 dark:text-gray-400 text-center py-12">Yuklanmoqda...</p>
           ) : filteredNasiyalar.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-600 text-center py-12">Nasiyalar topilmadi</p>
+            <p className="text-gray-500 dark:text-gray-400 text-center py-12">Nasiyalar topilmadi</p>
           ) : filteredNasiyalar.map(n => {
             const hCfg = holatiConfig[n.holati as keyof typeof holatiConfig]
             return (
@@ -527,14 +528,14 @@ export default function NasiyalarPage() {
                     {n.mijoz.manzil && (
                       <p className="text-gray-400 dark:text-gray-500 text-xs mt-0.5">{n.mijoz.manzil}</p>
                     )}
-                    <p className="text-gray-400 dark:text-gray-600 text-xs mt-1">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                       {formatSana(n.sana)}
                       {n.muddat && ` • Muddat: ${formatSana(n.muddat)}`}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-red-600 font-bold text-lg">{formatSum(n.qoldiq)}</p>
-                    <p className="text-gray-400 dark:text-gray-600 text-xs">Jami: {formatSum(n.jamiQarz)}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs">Jami: {formatSum(n.jamiQarz)}</p>
                     <p className="text-green-600 text-xs">To&apos;langan: {formatSum(n.tolangan)}</p>
                   </div>
                 </div>
@@ -582,13 +583,13 @@ export default function NasiyalarPage() {
 
       {/* Tahrirlash modal */}
       {tahrirlashModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Nasiyani tahrirlash</h3>
               <button
                 onClick={() => setTahrirlashModal(null)}
-                className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -661,17 +662,17 @@ export default function NasiyalarPage() {
 
       {/* Qarz qo'shish modal */}
       {qarzQoshishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Qarz qo&apos;shish</h3>
-                <p className="text-gray-500 dark:text-gray-500 text-sm">{qarzQoshishModal.mijoz.ism}</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">{qarzQoshishModal.mijoz.ism}</p>
                 <p className="text-xs text-gray-400 mt-1">Hozirgi qarz: <span className="text-red-600 font-medium">{formatSum(qarzQoshishModal.qoldiq)}</span></p>
               </div>
               <button
                 onClick={() => setQarzQoshishModal(null)}
-                className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
                 <X size={18} />
               </button>
             </div>
@@ -711,13 +712,13 @@ export default function NasiyalarPage() {
 
       {/* Nasiya qo'shish modal */}
       {qoshishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Nasiya qo&apos;shish</h3>
               <button
                 onClick={() => setQoshishModal(false)}
-                className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -794,13 +795,13 @@ export default function NasiyalarPage() {
 
       {/* To'lov modal */}
       {tolovModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             {/* Modal header with progress info */}
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <h3 className="text-gray-900 dark:text-gray-100 font-semibold">To&apos;lov qabul qilish</h3>
-                <p className="text-gray-500 dark:text-gray-500 text-sm">{tolovModal.mijoz.ism}</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">{tolovModal.mijoz.ism}</p>
                 <div className="flex gap-3 mt-1 text-xs flex-wrap">
                   <span className="text-gray-400">Jami: {formatSum(tolovModal.jamiQarz)}</span>
                   <span className="text-green-600">To&apos;langan: {formatSum(tolovModal.tolangan)}</span>
@@ -816,7 +817,7 @@ export default function NasiyalarPage() {
               </div>
               <button
                 onClick={() => setTolovModal(null)}
-                className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
                 <X size={18} />
               </button>
             </div>
@@ -846,16 +847,13 @@ export default function NasiyalarPage() {
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-2 block font-medium">To&apos;lov usuli</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { value: 'NAQD', label: 'Naqd pul' },
-                    { value: 'KARTA', label: 'Bank kartasi' },
-                  ].map(u => (
+                  {QARZ_TOLOV_USULLARI.map(usul => (
                     <button
-                      key={u.value}
+                      key={usul}
                       type="button"
-                      onClick={() => setTolovForm(f => ({ ...f, tolovUsuli: u.value }))}
-                      className={`py-2 rounded-xl text-sm font-medium border transition ${tolovForm.tolovUsuli === u.value ? 'bg-green-600 border-green-600 text-white' : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400'}`}>
-                      {u.label}
+                      onClick={() => setTolovForm(f => ({ ...f, tolovUsuli: usul }))}
+                      className={`py-2 rounded-xl text-sm font-medium border transition ${tolovForm.tolovUsuli === usul ? 'bg-green-600 border-green-600 text-white' : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400'}`}>
+                      {TOLOV_MALUMOTI[usul].label}
                     </button>
                   ))}
                 </div>
@@ -893,7 +891,7 @@ export default function NasiyalarPage() {
                       <div key={q.id} className="flex items-center justify-between gap-2 py-2 border-b border-gray-100 dark:border-neutral-800 last:border-0">
                         <div className="flex-1 min-w-0">
                           <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{formatSum(q.summa)}</p>
-                          <p className="text-gray-400 dark:text-gray-600 text-xs">
+                          <p className="text-gray-500 dark:text-gray-400 text-xs">
                             {formatSana(q.sana)}
                             {q.izoh && ` • ${q.izoh}`}
                           </p>
@@ -921,8 +919,8 @@ export default function NasiyalarPage() {
                       <div key={t.id} className="flex items-center justify-between gap-2 py-2 border-b border-gray-100 dark:border-neutral-800 last:border-0">
                         <div className="flex-1 min-w-0">
                           <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{formatSum(t.summa)}</p>
-                          <p className="text-gray-400 dark:text-gray-600 text-xs">
-                            {formatSana(t.sana)} • {t.tolovUsuli === 'NAQD' ? 'Naqd' : 'Karta'}
+                          <p className="text-gray-500 dark:text-gray-400 text-xs">
+                            {formatSana(t.sana)} • {tolovQisqa(t.tolovUsuli)}
                             {t.izoh && ` • ${t.izoh}`}
                           </p>
                         </div>

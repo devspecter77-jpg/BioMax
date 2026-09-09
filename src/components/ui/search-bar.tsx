@@ -40,7 +40,7 @@ export default function SearchBar({
     <div className={`relative ${className}`}>
       <Search
         size={16}
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 pointer-events-none"
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none"
       />
       <input
         type="text"
@@ -53,7 +53,7 @@ export default function SearchBar({
         <button
           type="button"
           onClick={() => { setLocal(''); onChangeRef.current('') }}
-          className={`absolute top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition ${onScan ? 'right-9' : 'right-3'}`}
+          className={`absolute top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-400 transition ${onScan ? 'right-9' : 'right-3'}`}
           aria-label="Tozalash"
         >
           <X size={14} />
@@ -63,7 +63,7 @@ export default function SearchBar({
         <BarcodeScanner
           onScan={onScan}
           title="Shtrix-kodni skanerlang"
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 hover:text-primary transition p-1"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-primary transition p-1"
         />
       )}
     </div>

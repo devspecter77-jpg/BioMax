@@ -50,7 +50,7 @@ export function MoliyaTab({ filtrlar, isKassir }: Props) {
 
   if (isKassir) {
     return (
-      <div className="text-center text-gray-400 dark:text-gray-600 py-12">
+      <div className="text-center text-gray-500 dark:text-gray-400 py-12">
         Ruxsat yo&apos;q
       </div>
     )
@@ -110,7 +110,7 @@ export function MoliyaTab({ filtrlar, isKassir }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-gray-200 dark:border-neutral-800">
-              <tr className="text-gray-500 dark:text-gray-500 text-xs">
+              <tr className="text-gray-500 dark:text-gray-400 text-xs">
                 <th className="text-left py-2 px-2"></th>
                 <th className="text-right py-2 px-2">Joriy davr</th>
               </tr>
@@ -123,7 +123,7 @@ export function MoliyaTab({ filtrlar, isKassir }: Props) {
                 </td>
               </tr>
               <tr className="border-b border-gray-100 dark:border-neutral-800/50">
-                <td className="py-2 px-2 text-gray-500 dark:text-gray-500 pl-6">
+                <td className="py-2 px-2 text-gray-500 dark:text-gray-400 pl-6">
                   (−) COGS (Tannarx)
                 </td>
                 <td className="text-right py-2 px-2 text-red-600">
@@ -138,7 +138,7 @@ export function MoliyaTab({ filtrlar, isKassir }: Props) {
               </tr>
               {Object.entries(OPEX_LABELS).map(([kateg, label]) => (
                 <tr key={kateg} className="border-b border-gray-100 dark:border-neutral-800/50">
-                  <td className="py-2 px-2 text-gray-500 dark:text-gray-500 pl-6">
+                  <td className="py-2 px-2 text-gray-500 dark:text-gray-400 pl-6">
                     (−) {label}
                   </td>
                   <td className="text-right py-2 px-2 text-red-600">

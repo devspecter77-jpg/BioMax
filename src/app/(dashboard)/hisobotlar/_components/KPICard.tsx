@@ -24,10 +24,10 @@ export function KPICard({
     <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">{sarlavha}</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">{sarlavha}</p>
           <p className={`text-xl font-bold mt-1 ${rang}`}>{qiymat}</p>
           {qoshimcha && (
-            <p className="text-gray-400 dark:text-gray-600 text-xs">{qoshimcha}</p>
+            <p className="text-gray-500 dark:text-gray-400 text-xs">{qoshimcha}</p>
           )}
           {trend && <div className="mt-1">{trend}</div>}
         </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { kanalUsuliMi } from '@/lib/tolov-usullari'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         data: {
           xaridId: id,
           summa: tolovSumma,
-          tolovUsuli: data.tolovUsuli || 'NAQD',
+          tolovUsuli: kanalUsuliMi(data.tolovUsuli) ? data.tolovUsuli : 'NAQD',
           qabulQiluvchiId: foydalanuvchiId,
           izoh: data.izoh,
         },

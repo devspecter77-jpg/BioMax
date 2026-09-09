@@ -10,6 +10,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider>
       <div className="h-screen overflow-hidden bg-gray-50 dark:bg-neutral-950">
+        {/* Klaviatura foydalanuvchisi uchun: Tab bosilganda birinchi chiqadi
+            va menyudan sakrab to'g'ridan-to'g'ri kontentga olib boradi. */}
+        <a href="#asosiy" className="asosiyga-otish">
+          Asosiy qismga o&apos;tish
+        </a>
         <LokatsiyaKuzatuv />
         <Sidebar />
         <DashboardContent>

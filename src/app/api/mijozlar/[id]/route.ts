@@ -10,17 +10,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const filialId = sessionFilialId(session)
 
     const { id } = await params
+    // Chekni qayta chop etish uchun sotuv yozuvi TO'LIQ kerak — summa
+    // taqsimoti, chegirma, to'lov kanallari, birlik va kassir telefoni.
+    // Oldin faqat mahsulot nomi qaytarilar edi, shuning uchun mijoz
+    // kartasidan chek chiqarib bo'lmasdi.
     const mijoz = await prisma.mijoz.findFirst({
       where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
       include: {
         sotuvlar: {
           orderBy: { sana: 'desc' },
           include: {
-            tarkiblar: { include: { tovar: { select: { nomi: true } } } },
-            kassir: { select: { ism: true } },
+            tarkiblar: {
+              include: { tovar: { select: { nomi: true, birlik: true } } },
+            },
+            kassir: { select: { ism: true, telefon: true } },
             qaytarishlar: {
               include: {
-                tarkiblar: { include: { tovar: { select: { nomi: true } } } },
+                tarkiblar: { include: { tovar: { select: { nomi: true, birlik: true } } } },
                 kassir: { select: { ism: true } },
               },
               orderBy: { yaratilgan: 'desc' },
@@ -30,7 +36,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     })
     if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
-    return NextResponse.json(mijoz)
+
+    // Do'kon ma'lumotlari chek sarlavhasi uchun. Ataylab shu yerdan
+    // beriladi — /api/sozlamalar BARCHA sozlamalarni (Telegram sessiyasi
+    // ham) qaytaradi, uni yana bitta sahifaga ochish shart emas.
+    const sozlamalar = await prisma.sozlama.findMany({
+      where: { kalit: { in: ['dokon_nomi', 'manzil', 'telefon', 'chek_matn'] } },
+    })
+    const soz: Record<string, string> = {}
+    for (const x of sozlamalar) soz[x.kalit] = x.qiymat
+
+    return NextResponse.json({
+      ...mijoz,
+      dokon: {
+        dokon_nomi: soz.dokon_nomi || "Do'kon",
+        manzil: soz.manzil || '',
+        telefon: soz.telefon || '',
+        chek_matn: soz.chek_matn || '',
+      },
+    })
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
@@ -84,6 +108,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data: {
         ism: data.ism,
         telefon: data.telefon || null,
+        telefon2: data.telefon2 || null,
+        viloyat: data.viloyat?.trim() || null,
+        tuman: data.tuman?.trim() || null,
         manzil: data.manzil || null,
         izoh: data.izoh || null,
         lokatsiyaLat: typeof data.lokatsiyaLat === 'number' ? data.lokatsiyaLat : null,

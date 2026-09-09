@@ -6,6 +6,7 @@ import { getStockMap } from '@/lib/stock'
 import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
 import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 import { rasmlarniSiqish } from '@/lib/rasm'
+import { joriyUsdKursi } from '@/lib/kurs'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 
 export async function GET(req: NextRequest) {
@@ -36,6 +37,12 @@ export async function GET(req: NextRequest) {
       where.egaId = sessionEgaId(session)
     }
     if (holati !== 'BARCHASI') where.holati = holati
+    // Sotuv (POS) qulflangan tovarlarni umuman ko'rmasligi kerak.
+    // Filtrlash SERVERDA: mijoz tomonda yashirish yetarli emas, chunki
+    // javobni to'g'ridan-to'g'ri o'qish mumkin.
+    if (searchParams.get('sotuvUchun') === '1') where.qulflangan = false
+    // Katalogda esa faqat qulflanganlarni ko'rish uchun
+    else if (searchParams.get('qulflangan') === '1') where.qulflangan = true
     if (kategoriyaId) where.kategoriyaId = kategoriyaId
     if (qidiruv) {
       const normalized = normalizeUzbek(qidiruv)
@@ -59,7 +66,7 @@ export async function GET(req: NextRequest) {
     const [tovarlar, jami, yashirilganMaydonlar] = await Promise.all([
       prisma.tovar.findMany({
         where,
-        include: { kategoriya: true },
+        include: { kategoriya: true, taminotchi: { select: { id: true, nomi: true } } },
         orderBy: { nomi: 'asc' },
         ...(limit > 0 ? { skip: (page - 1) * limit, take: limit } : {}),
       }),
@@ -96,6 +103,15 @@ async function keyingiShtrixKod(filialId: string | null): Promise<string> {
   return String(keyingi)
 }
 
+// Erkin matnli manzil: bo'sh qiymat null bo'lib saqlanadi (bo'sh satr
+// "kiritilgan" deb ko'rinmasin) va uzunligi cheklanadi.
+const MANZIL_MAX = 300
+function manzilTozala(qiymat: unknown): string | null {
+  const matn = String(qiymat ?? '').trim()
+  if (!matn) return null
+  return matn.slice(0, MANZIL_MAX)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
@@ -115,8 +131,29 @@ export async function POST(req: NextRequest) {
     }
 
     // Shtrix kod yo'q bo'lsa ketma-ketlikdagi bo'sh raqamni topib berish
+    // Ta'minotchi SHU doiradan bo'lishi kerak — boshqa Eganing
+    // ta'minotchisiga tovar bog'lab bo'lmasin.
+    let taminotchiId: string | null = null
+    if (data.taminotchiId) {
+      const tam = await prisma.taminotchi.findFirst({
+        where: { id: data.taminotchiId, ...(filialId ? { filialId } : { egaId }) },
+        select: { id: true },
+      })
+      if (!tam) return NextResponse.json({ xato: "Ta'minotchi topilmadi" }, { status: 400 })
+      taminotchiId = tam.id
+    }
+
     const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod(filialId)
     const rasmlar = await rasmlarniSiqish(data.rasmlar)
+
+    // Yaratilgan paytdagi USD kursi — keyin kurs o'zgarsa ham bu tovar
+    // qanday kursda kiritilgani ma'lum bo'lib qoladi. `joriyUsdKursi`
+    // kunlik keshlangan, shuning uchun har yaratishda tashqi so'rov
+    // yuborilmaydi. Kurs olinmasa ham mahsulot yaratilishi to'xtamasligi
+    // kerak — shuning uchun xato yutiladi.
+    const kursQiymati = await joriyUsdKursi()
+      .then(k => k.kursi)
+      .catch(() => null)
 
     const tovar = await prisma.tovar.create({
       data: {
@@ -132,6 +169,9 @@ export async function POST(req: NextRequest) {
         valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
         birlik: data.birlik || 'DONA',
         minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
+        taminotchiId,
+        keltirilganManzil: manzilTozala(data.keltirilganManzil),
+        yaratilganKursi: kursQiymati,
         rasmlar,
         yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
       },
@@ -147,7 +187,14 @@ export async function POST(req: NextRequest) {
           joy: 'DOKON',
           miqdor: parseFloat(data.boshlangichQoldiq),
           narx: parseFloat(data.kelishNarxi),
-          izoh: 'Boshlang\'ich qoldiq',
+          // Boshlang'ich kirim ham ta'minotchiga bog'lanadi: "bu partiya
+          // kimdan keldi" degan savolga ombor tarixi javob beradi.
+          taminotchiId,
+          // Manzil harakat izohiga ham yoziladi: mahsulot kartasidagi qiymat
+          // keyin o'zgartirilsa ham, shu PARTIYA qayerdan kelgani tarixda qoladi.
+          izoh: tovar.keltirilganManzil
+            ? `Boshlang'ich qoldiq · ${tovar.keltirilganManzil}`
+            : "Boshlang'ich qoldiq",
           foydalanuvchiId: (session.user as any).id,
         },
       })

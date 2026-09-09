@@ -221,3 +221,99 @@ body {
   background: #EF4444;
   color: #2B0A0A;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TEGINISH NISHONLARI
+   UX auditida 905 ta bosiladigan elementdan 183 tasi 36px dan kichik
+   chiqdi — "Tahrirlash" va "O'chirish" 31x31px bo'lib yonma-yon turardi,
+   telefonda noto'g'ri bosish xavfi bor edi.
+
+   Yechim: faqat IKONKADAN iborat (matnsiz) tugmalar kamida 40x40px
+   bo'ladi. Ichki padding o'zgarmaydi — element o'zi kattalashadi,
+   shuning uchun sahifa ko'rinishi deyarli o'zgarmaydi.
+   40px tanlandi: Apple 44, Material 48 tavsiya qiladi, lekin jadval
+   qatorlari zich — 40px xato bosishni yo'qotadi va qatorni cho'zmaydi.
+   ───────────────────────────────────────────────────────────────────── */
+button:has(> svg:only-child),
+a[href]:has(> svg:only-child),
+label:has(> input[type="checkbox"]:only-child) {
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Yonma-yon turgan amal tugmalari orasida bo'shliq — "Tahrirlash" o'rniga
+   "O'chirish" bosilib ketmasligi uchun. */
+.amal-tugmalari {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Katakchalar WCAG 2.5.8 bo'yicha kamida 24px bo'lishi kerak.
+   Tailwind'dagi `w-4 h-4` (16px) shu yerda ustidan yoziladi — `min-width`
+   `width` dan kuchliroq, shuning uchun har bir sahifani tahrirlash shart emas. */
+input[type="checkbox"],
+input[type="radio"] {
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+}
+
+/* Leaflet xaritasining o'z boshqaruv tugmalari 30px — barmoq uchun kichik.
+   Kutubxona ichidagi uslubni tashqaridan kattalashtiramiz. */
+.leaflet-touch .leaflet-bar a,
+.leaflet-bar a {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  line-height: 2.25rem !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   HARAKATNI KAMAYTIRISH
+   Tizim sozlamasida "harakatni kamaytirish" yoqilgan bo'lsa (vestibulyar
+   sezgirlik, bosh aylanishi) animatsiyalar deyarli o'chiriladi.
+   Yuklanish aylanmasi ISTISNO — u bezak emas, holat ko'rsatkichi.
+   ───────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *:not(.animate-spin)::before,
+  *:not(.animate-spin)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ASOSIY QISMGA O'TISH (skip link)
+   Klaviatura foydalanuvchisi har sahifada 16 ta menyu havolasidan
+   o'tishga majbur edi. Tab bosilganda birinchi bo'lib shu havola chiqadi.
+   ───────────────────────────────────────────────────────────────────── */
+.asosiyga-otish {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  padding: 0.625rem 1rem;
+  border-radius: 0.75rem;
+  background: #DC2626;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  /* Fokuslanmaguncha ko'rinmaydi, lekin ekran o'quvchi o'qiy oladi */
+  transform: translateY(-150%);
+  transition: transform 0.15s ease;
+}
+.asosiyga-otish:focus {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

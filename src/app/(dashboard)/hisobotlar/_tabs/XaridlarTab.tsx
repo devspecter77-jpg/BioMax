@@ -59,7 +59,7 @@ function BucketCard({ label, count, summa, rang, borderRang, bgRang }: BucketCar
       <p className="text-gray-900 dark:text-gray-100 font-bold text-lg mt-1">
         {count} ta
       </p>
-      <p className="text-gray-500 dark:text-gray-500 text-xs">{formatSum(summa)}</p>
+      <p className="text-gray-500 dark:text-gray-400 text-xs">{formatSum(summa)}</p>
     </div>
   )
 }
@@ -72,7 +72,7 @@ export function XaridlarTab({ filtrlar }: Props) {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-600 gap-3">
+      <div className="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-3">
         <Loader2 className="animate-spin w-6 h-6 text-red-500" />
         <span>Yuklanmoqda...</span>
       </div>
@@ -82,7 +82,7 @@ export function XaridlarTab({ filtrlar }: Props) {
   if (!data) {
     return (
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-8 text-center">
-        <p className="text-gray-400 dark:text-gray-600">Ma&apos;lumot topilmadi</p>
+        <p className="text-gray-500 dark:text-gray-400">Ma&apos;lumot topilmadi</p>
       </div>
     )
   }
@@ -126,7 +126,7 @@ export function XaridlarTab({ filtrlar }: Props) {
           <h2 className="text-gray-900 dark:text-gray-100 font-semibold">
             Ta&apos;minotchi qarzlari (payables aging)
           </h2>
-          <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
             Xarid sanasidan kechikkan kunlar bo&apos;yicha guruhlash
           </p>
         </div>
@@ -180,19 +180,19 @@ export function XaridlarTab({ filtrlar }: Props) {
           <h2 className="text-gray-900 dark:text-gray-100 font-semibold">
             Top ta&apos;minotchilar (qarz bo&apos;yicha)
           </h2>
-          <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
             Eng katta qarzdan boshlab, top 20 ta
           </p>
         </div>
         {topTaminotchilar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ta&apos;minotchi qarzi yo&apos;q
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-neutral-800 text-xs text-gray-500 dark:text-gray-500">
+                <tr className="border-b border-gray-100 dark:border-neutral-800 text-xs text-gray-500 dark:text-gray-400">
                   <th className="text-left pb-3 font-medium">#</th>
                   <th className="text-left pb-3 font-medium">Nomi</th>
                   <th className="text-left pb-3 font-medium">Kontakt shaxs</th>
@@ -205,7 +205,7 @@ export function XaridlarTab({ filtrlar }: Props) {
               <tbody className="divide-y divide-gray-50 dark:divide-neutral-800">
                 {topTaminotchilar.map((t, i) => (
                   <tr key={t.taminotchiId}>
-                    <td className="py-2.5 text-gray-400 dark:text-gray-600 text-xs">
+                    <td className="py-2.5 text-gray-500 dark:text-gray-400 text-xs">
                       {i + 1}
                     </td>
                     <td className="py-2.5 text-gray-900 dark:text-gray-100 font-medium max-w-[140px] truncate">

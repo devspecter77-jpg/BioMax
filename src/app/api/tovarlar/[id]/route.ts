@@ -18,6 +18,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
       include: {
         kategoriya: true,
+        taminotchi: { select: { id: true, nomi: true } },
         omborHarakati: {
           include: { foydalanuvchi: { select: { ism: true } } },
           orderBy: { sana: 'desc' },
@@ -32,6 +33,15 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
+}
+
+// Erkin matnli manzil: bo'sh qiymat null bo'lib saqlanadi (bo'sh satr
+// "kiritilgan" deb ko'rinmasin) va uzunligi cheklanadi.
+const MANZIL_MAX = 300
+function manzilTozala(qiymat: unknown): string | null {
+  const matn = String(qiymat ?? '').trim()
+  if (!matn) return null
+  return matn.slice(0, MANZIL_MAX)
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -50,31 +60,60 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const data = await req.json()
-    const rasmlar = await rasmlarniSiqish(data.rasmlar)
+
+    // Bu marshrutga IKKI xil forma yuboradi: Tovarlar sahifasidagi to'liq
+    // forma va Ombor sahifasidagi qisqartirilgan forma (faqat nomi, narx,
+    // birlik, minimal qoldiq, shtrix-kod, muddat). Shuning uchun payload'da
+    // YO'Q maydon "null qil" emas, "tegma" deb tushuniladi — aks holda
+    // Ombordan tahrirlash ta'minotchi, rasmlar va optom/bo'lish narxlarini
+    // o'chirib yuborardi.
+    const bor = (kalit: string) => Object.prototype.hasOwnProperty.call(data, kalit)
 
     // Yashirilgan maydonlarni (masalan kelish narxi) shu hisob ko'rmaydi —
     // shuning uchun ularni saqlashda o'zgartirmaymiz, aks holda ko'rinmas
     // qiymat bo'sh/0 deb noto'g'ri ustidan yozilib qolishi mumkin edi.
     const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari((session.user as any).id)
-    const updateData: any = {
-      nomi: data.nomi,
-      kategoriyaId: data.kategoriyaId,
-      shtrixKod: data.shtrixKod || null,
-      valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
-      birlik: data.birlik,
-      minimalQoldiq: parseInt(data.minimalQoldiq),
-      rasmlar,
-      yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
+
+    const updateData: any = {}
+    if (bor('nomi')) updateData.nomi = data.nomi
+    if (bor('kategoriyaId')) updateData.kategoriyaId = data.kategoriyaId
+    if (bor('shtrixKod')) updateData.shtrixKod = data.shtrixKod || null
+    if (bor('valyuta')) updateData.valyuta = data.valyuta === 'USD' ? 'USD' : 'UZS'
+    if (bor('birlik')) updateData.birlik = data.birlik
+    if (bor('minimalQoldiq')) updateData.minimalQoldiq = parseInt(data.minimalQoldiq)
+    if (bor('keltirilganManzil')) updateData.keltirilganManzil = manzilTozala(data.keltirilganManzil)
+    if (bor('qulflangan')) updateData.qulflangan = !!data.qulflangan
+    if (bor('rasmlar')) updateData.rasmlar = await rasmlarniSiqish(data.rasmlar)
+    if (bor('yaroqlilikMuddati')) {
+      updateData.yaroqlilikMuddati = data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null
     }
-    if (!yashirilganMaydonlar.has('kelishNarxi')) updateData.kelishNarxi = parseFloat(data.kelishNarxi)
-    if (!yashirilganMaydonlar.has('sotishNarxi')) updateData.sotishNarxi = parseFloat(data.sotishNarxi)
-    updateData.optomNarxi = data.optomNarxi ? parseFloat(data.optomNarxi) : null
-    updateData.bolishNarxi = data.bolishNarxi ? parseFloat(data.bolishNarxi) : null
+    if (bor('optomNarxi')) updateData.optomNarxi = data.optomNarxi ? parseFloat(data.optomNarxi) : null
+    if (bor('bolishNarxi')) updateData.bolishNarxi = data.bolishNarxi ? parseFloat(data.bolishNarxi) : null
+    if (bor('kelishNarxi') && !yashirilganMaydonlar.has('kelishNarxi')) {
+      updateData.kelishNarxi = parseFloat(data.kelishNarxi)
+    }
+    if (bor('sotishNarxi') && !yashirilganMaydonlar.has('sotishNarxi')) {
+      updateData.sotishNarxi = parseFloat(data.sotishNarxi)
+    }
+
+    // Ta'minotchi doirasi — yaratishdagi bilan bir xil tekshiruv
+    if (bor('taminotchiId')) {
+      let taminotchiId: string | null = null
+      if (data.taminotchiId) {
+        const tam = await prisma.taminotchi.findFirst({
+          where: { id: data.taminotchiId, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
+          select: { id: true },
+        })
+        if (!tam) return NextResponse.json({ xato: "Ta'minotchi topilmadi" }, { status: 400 })
+        taminotchiId = tam.id
+      }
+      updateData.taminotchiId = taminotchiId
+    }
 
     const tovar = await prisma.tovar.update({
       where: { id },
       data: updateData,
-      include: { kategoriya: true },
+      include: { kategoriya: true, taminotchi: { select: { id: true, nomi: true } } },
     })
 
     // Qoldiqni oshirish (ixtiyoriy) — do'konga to'g'ridan-to'g'ri kirim
@@ -87,7 +126,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           joy: 'DOKON',
           miqdor: qoshiladigan,
           narx: Number(tovar.kelishNarxi),
-          izoh: "Tahrirlashda qoldiq oshirildi",
+          izoh: tovar.keltirilganManzil
+            ? `Tahrirlashda qoldiq oshirildi · ${tovar.keltirilganManzil}`
+            : 'Tahrirlashda qoldiq oshirildi',
           foydalanuvchiId: (session.user as any).id,
         },
       })

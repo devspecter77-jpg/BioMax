@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getStockMap } from '@/lib/stock'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { kodniAjrat } from '@/lib/qr-kod'
 
 // Shtrix-kod bo'yicha bitta tovarni topish — skaner uchun.
 // Bir nechta variantni sinaydi: aynan, trim, leading-zero olib/qo'yib.
@@ -12,7 +13,8 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ kod: s
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const { kod } = await params
-    const n = decodeURIComponent(kod || '').trim()
+    // QR to'liq manzil saqlaydi — mijoz normallashtirmagan bo'lsa ham ishlasin
+    const n = kodniAjrat(decodeURIComponent(kod || ''))
     if (!n) return NextResponse.json({ xato: 'Shtrix-kod bo\'sh' }, { status: 400 })
 
     const filialId = sessionFilialId(session)
@@ -22,7 +24,8 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ kod: s
     const egaScope = filialId ? {} : { egaId: sessionEgaId(session) }
 
     let tovar = await prisma.tovar.findFirst({
-      where: { holati: 'FAOL', shtrixKod: { in: variantlar }, ...(filialId ? { filialId } : {}), ...egaScope },
+      // Qulflangan tovar skaner orqali ham savatga tushmasligi kerak
+      where: { holati: 'FAOL', qulflangan: false, shtrixKod: { in: variantlar }, ...(filialId ? { filialId } : {}), ...egaScope },
       include: { kategoriya: true },
     })
 
@@ -31,6 +34,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ kod: s
       tovar = await prisma.tovar.findFirst({
         where: {
           holati: 'FAOL',
+          qulflangan: false,
           OR: variantlar.map(v => ({ shtrixKod: { contains: v } })),
           ...(filialId ? { filialId } : {}),
           ...egaScope,

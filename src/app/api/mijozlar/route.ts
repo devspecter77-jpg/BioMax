@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
               ...(kirillVariant !== qidiruv ? [{ ism: { contains: kirillVariant, mode: 'insensitive' as const } }] : []),
               ...(lotinVariant !== qidiruv ? [{ ism: { contains: lotinVariant, mode: 'insensitive' as const } }] : []),
               { telefon: { contains: qidiruv } },
+              { telefon2: { contains: qidiruv } },
               { maxsus_kod: { contains: qidiruv } },
+              { viloyat: { contains: qidiruv, mode: 'insensitive' as const } },
+              { tuman: { contains: qidiruv, mode: 'insensitive' as const } },
               { manzil: { contains: qidiruv, mode: 'insensitive' as const } },
               ...(kirillVariant !== qidiruv ? [{ manzil: { contains: kirillVariant, mode: 'insensitive' as const } }] : []),
               ...(lotinVariant !== qidiruv ? [{ manzil: { contains: lotinVariant, mode: 'insensitive' as const } }] : []),
@@ -74,10 +77,21 @@ export async function POST(req: NextRequest) {
 
     // Telefon raqam bo'yicha — bir xil mijoz qayta-qayta yaratilmasin.
     // Serverda tekshiriladi (client'dagi eskirgan ro'yxatga tayanmaydi).
+    // Dublikat tekshiruvi ikkala raqam bo'yicha: bir mijoz avval asosiy
+    // raqami bilan, keyin Telegram raqami bilan kiritilib, ikki marta
+    // yaratilib qolmasin.
     const telefonToza = (data.telefon || '').replace(/\D/g, '')
-    if (telefonToza) {
+    const telefon2Toza = (data.telefon2 || '').replace(/\D/g, '')
+    const raqamlar = [telefonToza, telefon2Toza].filter(r => r.length >= 9).map(r => r.slice(-9))
+    if (raqamlar.length > 0) {
       const mavjudMijoz = await prisma.mijoz.findFirst({
-        where: { telefon: { endsWith: telefonToza.slice(-9) }, ...(filialId ? { filialId } : { egaId }) },
+        where: {
+          OR: raqamlar.flatMap(r => [
+            { telefon: { endsWith: r } },
+            { telefon2: { endsWith: r } },
+          ]),
+          ...(filialId ? { filialId } : { egaId }),
+        },
       })
       if (mavjudMijoz) {
         return NextResponse.json({ ...mavjudMijoz, mavjud: true }, { status: 200 })
@@ -87,7 +101,14 @@ export async function POST(req: NextRequest) {
     const maxsus_kod = await generateUniqueKod()
     const mijoz = await prisma.mijoz.create({
       data: {
-        ism: data.ism, telefon: data.telefon, manzil: data.manzil, izoh: data.izoh, maxsus_kod, filialId, egaId,
+        ism: data.ism,
+        telefon: data.telefon,
+        telefon2: data.telefon2 || null,
+        viloyat: data.viloyat?.trim() || null,
+        tuman: data.tuman?.trim() || null,
+        manzil: data.manzil,
+        izoh: data.izoh,
+        maxsus_kod, filialId, egaId,
         lokatsiyaLat: typeof data.lokatsiyaLat === 'number' ? data.lokatsiyaLat : null,
         lokatsiyaLng: typeof data.lokatsiyaLng === 'number' ? data.lokatsiyaLng : null,
       },

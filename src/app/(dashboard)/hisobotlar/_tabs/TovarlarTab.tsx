@@ -94,7 +94,7 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-600 gap-3">
+      <div className="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-3">
         <Loader2 className="animate-spin w-6 h-6 text-red-500" />
         <span>Yuklanmoqda...</span>
       </div>
@@ -107,13 +107,13 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">
         <div className="mb-4">
           <h2 className="text-gray-900 dark:text-gray-100 font-semibold">ABC tahlil</h2>
-          <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
             A — top 80% daromad, B — keyingi 15%, C — qolgan 5%
           </p>
         </div>
 
         {!abc.data || abc.data.tovarlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -137,16 +137,16 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-neutral-800">
-                    <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                    <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                       Tovar
                     </th>
-                    <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                    <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                       Sotuv
                     </th>
-                    <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                    <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                       Ulush
                     </th>
-                    <th className="text-center pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                    <th className="text-center pb-3 text-gray-500 dark:text-gray-400 font-medium">
                       Sinf
                     </th>
                   </tr>
@@ -183,13 +183,13 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">
         <div className="mb-4">
           <h2 className="text-gray-900 dark:text-gray-100 font-semibold">Dead Stock</h2>
-          <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
             30+ kun sotilmagan tovarlar
           </p>
         </div>
 
         {!dead.data || dead.data.tovarlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Dead stock topilmadi
           </p>
         ) : (
@@ -197,16 +197,16 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
-                  <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Tovar
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Qoldiq
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Oxirgi sotuv
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Kunlar
                   </th>
                 </tr>
@@ -220,7 +220,7 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
                     <td className="py-2.5 text-right text-gray-700 dark:text-gray-300">
                       {t.qoldiq} {t.birlik}
                     </td>
-                    <td className="py-2.5 text-right text-gray-500 dark:text-gray-500">
+                    <td className="py-2.5 text-right text-gray-500 dark:text-gray-400">
                       {t.oxirgiSotuv ?? '—'}
                     </td>
                     <td className="py-2.5 text-right">
@@ -249,18 +249,18 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
             <h2 className="text-gray-900 dark:text-gray-100 font-semibold">
               Stock Turnover (Aylanish tezligi)
             </h2>
-            <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
+            <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
               Har bir tovar necha kunda sotilishini ko&apos;rsatadi
             </p>
           </div>
 
           {turnover.yuklanmoqda ? (
-            <div className="flex items-center justify-center h-24 gap-2 text-gray-400 dark:text-gray-600">
+            <div className="flex items-center justify-center h-24 gap-2 text-gray-500 dark:text-gray-400">
               <Loader2 className="animate-spin w-4 h-4 text-red-500" />
               <span className="text-sm">Yuklanmoqda...</span>
             </div>
           ) : !turnover.data ? (
-            <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
               Ma&apos;lumot yo&apos;q
             </p>
           ) : (
@@ -294,7 +294,7 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
               </div>
 
               {/* O'rtacha */}
-              <div className="flex gap-4 mb-4 text-sm text-gray-500 dark:text-gray-500">
+              <div className="flex gap-4 mb-4 text-sm text-gray-500 dark:text-gray-400">
                 <span>
                   O&apos;rtacha:{' '}
                   <span className="font-semibold text-gray-800 dark:text-gray-200">
@@ -317,7 +317,7 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
 
               {/* Jadval */}
               {turnover.data.tovarlar.length === 0 ? (
-                <p className="text-gray-400 dark:text-gray-600 text-center py-6">
+                <p className="text-gray-500 dark:text-gray-400 text-center py-6">
                   Tovarlar topilmadi
                 </p>
               ) : (
@@ -325,22 +325,22 @@ export function TovarlarTab({ filtrlar, isKassir }: Props) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 dark:border-neutral-800">
-                        <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                        <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                           Tovar
                         </th>
-                        <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                        <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                           Sotilgan
                         </th>
-                        <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                        <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                           Kun/o&apos;rtacha
                         </th>
-                        <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                        <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                           Qoldiq
                         </th>
-                        <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                        <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                           Turnover
                         </th>
-                        <th className="text-center pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                        <th className="text-center pb-3 text-gray-500 dark:text-gray-400 font-medium">
                           Klass
                         </th>
                       </tr>

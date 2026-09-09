@@ -86,7 +86,7 @@ export default function Sidebar() {
           {/* Mobil: yopish tugmasi */}
           <button
             onClick={() => setOpen(false)}
-            className="lg:hidden mr-3 shrink-0 p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
+            className="lg:hidden mr-3 shrink-0 p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
             aria-label="Yopish"
           >
             <X size={18} />
@@ -122,7 +122,7 @@ export default function Sidebar() {
                     size={18}
                     className={cn(
                       'shrink-0',
-                      active ? 'text-primary dark:text-[#2E9B6B]' : 'text-gray-400 dark:text-gray-600'
+                      active ? 'text-primary dark:text-[#2E9B6B]' : 'text-gray-500 dark:text-gray-400'
                     )}
                   />
                   <span className={cn('truncate', collapsed && 'lg:hidden')}>
@@ -149,7 +149,7 @@ export default function Sidebar() {
                     )}
                   >
                     <p className={cn(
-                      'px-3 mb-1 text-[10px] font-bold tracking-widest text-gray-400 dark:text-gray-600 select-none',
+                      'px-3 mb-1 text-[11px] font-bold tracking-widest text-gray-500 dark:text-gray-400 select-none',
                       collapsed && 'lg:hidden'
                     )}>
                       {section}
@@ -167,12 +167,12 @@ export default function Sidebar() {
           'border-t border-gray-200 dark:border-neutral-800 shrink-0 flex items-center py-3',
           collapsed ? 'lg:justify-center lg:px-2 px-4 justify-between' : 'px-4 justify-between'
         )}>
-          <p className={cn('text-gray-400 dark:text-gray-600 text-[11px]', collapsed && 'lg:hidden')}>
+          <p className={cn('text-gray-500 dark:text-gray-400 text-[11px]', collapsed && 'lg:hidden')}>
             v1.0.0
           </p>
           <button
             onClick={toggleCollapsed}
-            className="hidden lg:flex items-center justify-center p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
+            className="hidden lg:flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
             title={collapsed ? "Kengaytirish" : "Yig'ish"}
             aria-label={collapsed ? "Kengaytirish" : "Yig'ish"}
           >

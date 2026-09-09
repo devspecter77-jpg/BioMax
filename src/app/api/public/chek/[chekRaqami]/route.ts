@@ -54,6 +54,8 @@ export async function GET(
       tolovUsuli: sotuv.tolovUsuli,
       naqdTolangan: sotuv.naqdTolangan,
       kartaTolangan: sotuv.kartaTolangan,
+      clickTolangan: sotuv.clickTolangan,
+      bankTolangan: sotuv.bankTolangan,
       kassir: sotuv.kassir.ism,
       mijoz: sotuv.mijoz ? { ism: sotuv.mijoz.ism } : null,
       tarkiblar: sotuv.tarkiblar.map((t) => ({

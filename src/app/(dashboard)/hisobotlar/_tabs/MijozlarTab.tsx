@@ -42,7 +42,7 @@ export function MijozlarTab({ filtrlar }: Props) {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-600 gap-3">
+      <div className="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-3">
         <Loader2 className="animate-spin w-6 h-6 text-red-500" />
         <span>Yuklanmoqda...</span>
       </div>
@@ -52,7 +52,7 @@ export function MijozlarTab({ filtrlar }: Props) {
   if (!data) {
     return (
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-8 text-center">
-        <p className="text-gray-400 dark:text-gray-600">Ma&apos;lumot topilmadi</p>
+        <p className="text-gray-500 dark:text-gray-400">Ma&apos;lumot topilmadi</p>
       </div>
     )
   }
@@ -62,19 +62,19 @@ export function MijozlarTab({ filtrlar }: Props) {
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Jami mijozlar</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Jami mijozlar</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {data.jamiMijozlar} ta
           </p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Aktiv mijozlar</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Aktiv mijozlar</p>
           <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1">
             {data.aktivMijozlar} ta
           </p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">O&apos;rtacha sotuv</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">O&apos;rtacha sotuv</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {formatSum(data.o_rtachaSotuv)}
           </p>
@@ -87,7 +87,7 @@ export function MijozlarTab({ filtrlar }: Props) {
           Top 10 mijoz (sotuv bo&apos;yicha)
         </h2>
         {data.topMijozlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -134,7 +134,7 @@ export function MijozlarTab({ filtrlar }: Props) {
           Mijozlar reytingi
         </h2>
         {data.topMijozlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -142,19 +142,19 @@ export function MijozlarTab({ filtrlar }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
-                  <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     #
                   </th>
-                  <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Mijoz
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Sotuvlar
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Jami summa
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Oxirgi sotuv
                   </th>
                 </tr>
@@ -162,7 +162,7 @@ export function MijozlarTab({ filtrlar }: Props) {
               <tbody className="divide-y divide-gray-50 dark:divide-neutral-800">
                 {data.topMijozlar.map((m, i) => (
                   <tr key={m.mijozId}>
-                    <td className="py-2.5 text-gray-400 dark:text-gray-600">{i + 1}</td>
+                    <td className="py-2.5 text-gray-500 dark:text-gray-400">{i + 1}</td>
                     <td className="py-2.5 text-gray-700 dark:text-gray-300 max-w-[160px] truncate">
                       {m.ism}
                     </td>
@@ -172,7 +172,7 @@ export function MijozlarTab({ filtrlar }: Props) {
                     <td className="py-2.5 text-right font-medium text-gray-900 dark:text-gray-100">
                       {formatSum(m.jamiSotuv)}
                     </td>
-                    <td className="py-2.5 text-right text-gray-500 dark:text-gray-500 text-xs">
+                    <td className="py-2.5 text-right text-gray-500 dark:text-gray-400 text-xs">
                       {m.oxirgiSotuv ?? '—'}
                     </td>
                   </tr>

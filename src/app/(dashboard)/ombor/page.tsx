@@ -5,6 +5,8 @@ import { formatSum, formatNarx, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
 import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import TovarTafsilot from '@/components/TovarTafsilot'
+import { harakatMalumoti } from '@/lib/harakat-turlari'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -15,6 +17,7 @@ interface QoldiqItem {
   id: string; nomi: string; kategoriya: { id: string; nomi: string }; kategoriyaId: string; shtrixKod: string | null
   birlik: string; sotishNarxi: number; kelishNarxi: number; valyuta: string
   minimalQoldiq: number; qoldiq: number; omborQoldiq: number; dokonQoldiq: number; kamQolgan: boolean
+  keltirilganManzil: string | null
   rasmlar?: string[]
   yaroqlilikMuddati: string | null; kunQoldi: number | null; muddatiYaqin: boolean
 }
@@ -36,6 +39,7 @@ export default function OmborPage() {
   const [taminotchilar, setTaminotchilar] = useState<Taminotchi[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
+  const [tafsilotId, setTafsilotId] = useState<string | null>(null)
   const [kamQolganFilter, setKamQolganFilter] = useState(false)
   const [muddatiYaqinFilter, setMuddatiYaqinFilter] = useState(false)
   const [view, setView] = useState<'table' | 'card'>('table')
@@ -55,7 +59,7 @@ export default function OmborPage() {
   const [tahrirTovar, setTahrirTovar] = useState<QoldiqItem | null>(null)
   const [tahrirForm, setTahrirForm] = useState({
     nomi: '', kategoriyaId: '', kelishNarxi: '', sotishNarxi: '', birlik: 'DONA',
-    minimalQoldiq: '5', shtrixKod: '', yaroqlilikMuddati: ''
+    minimalQoldiq: '5', shtrixKod: '', yaroqlilikMuddati: '', keltirilganManzil: ''
   })
   const [otkazmaSaqlanmoqda, setOtkazmaSaqlanmoqda] = useState(false)
   const [tahrirSaqlanmoqda, setTahrirSaqlanmoqda] = useState(false)
@@ -129,6 +133,7 @@ export default function OmborPage() {
     setTahrirForm({
       nomi: q.nomi, kategoriyaId: q.kategoriyaId || '', kelishNarxi: String(q.kelishNarxi),
       sotishNarxi: String(q.sotishNarxi), birlik: q.birlik, minimalQoldiq: String(q.minimalQoldiq),
+      keltirilganManzil: q.keltirilganManzil || '',
       shtrixKod: q.shtrixKod || '', yaroqlilikMuddati: q.yaroqlilikMuddati ? q.yaroqlilikMuddati.slice(0, 10) : ''
     })
     setTahrirModal(true)
@@ -225,21 +230,29 @@ export default function OmborPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-800">
-                  <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Tovar</th>
-                  <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden sm:table-cell whitespace-nowrap">Kategoriya</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Ombor</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Do&apos;kon</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Kelish narxi</th>
-                  <th className="text-center text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Amallar</th>
+                  <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Tovar</th>
+                  <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden sm:table-cell whitespace-nowrap">Kategoriya</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Ombor</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Do&apos;kon</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Kelish narxi</th>
+                  <th className="text-center text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Amallar</th>
                 </tr>
               </thead>
               <tbody>
                 {yuklanmoqda ? (
-                  <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-600 py-12">Yuklanmoqda...</td></tr>
+                  <tr><td colSpan={6} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
                 ) : qoldiqlar.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-600 py-12">Ma&apos;lumot topilmadi</td></tr>
+                  <tr><td colSpan={6} className="text-center text-gray-500 dark:text-gray-400 py-12">Ma&apos;lumot topilmadi</td></tr>
                 ) : korsatiladiganQoldiqlar.map((q, idx) => (
-                  <tr key={q.id} className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition ${q.kamQolgan ? 'bg-red-50/50 dark:bg-red-950/20' : idx % 2 === 1 ? 'bg-gray-50/40 dark:bg-neutral-800/40' : ''}`}>
+                  <tr
+                    key={q.id}
+                    onClick={() => setTafsilotId(q.id)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTafsilotId(q.id) } }}
+                    tabIndex={0}
+                    role="button"
+                    title="Batafsil ma'lumot"
+                    className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition cursor-pointer ${q.kamQolgan ? 'bg-red-50/50 dark:bg-red-950/20' : idx % 2 === 1 ? 'bg-gray-50/40 dark:bg-neutral-800/40' : ''}`}
+                  >
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{q.nomi}</p>
                       {q.muddatiYaqin && (
@@ -262,10 +275,12 @@ export default function OmborPage() {
                         {q.dokonQoldiq} {q.birlik.toLowerCase()}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-400 dark:text-gray-600 text-sm hidden md:table-cell whitespace-nowrap">
+                    <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 text-sm hidden md:table-cell whitespace-nowrap">
                       {formatNarx(q.kelishNarxi, q.valyuta)}
                     </td>
-                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                    {/* Qator bosilganda tafsilot ochiladi — amal tugmalari
+                        o'sha bosishni yuqoriga o'tkazmasligi kerak. */}
+                    <td className="px-4 py-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         {q.omborQoldiq > 0 && (
                           <button onClick={() => { setOtkazmaTovar(q); setOtkazmaMiqdor(''); setOtkazmaModal(true) }} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition" title="Do'konga o'tkazma">
@@ -297,11 +312,14 @@ export default function OmborPage() {
       {view === 'card' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {yuklanmoqda ? (
-            <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Yuklanmoqda...</p>
+            <p className="text-gray-500 dark:text-gray-400 col-span-3 text-center py-12">Yuklanmoqda...</p>
           ) : qoldiqlar.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Ma&apos;lumot topilmadi</p>
+            <p className="text-gray-500 dark:text-gray-400 col-span-3 text-center py-12">Ma&apos;lumot topilmadi</p>
           ) : korsatiladiganQoldiqlar.map(q => (
             <div key={q.id} className={`bg-white dark:bg-neutral-900 border rounded-2xl overflow-hidden hover:shadow-lg transition-all ${q.kamQolgan ? 'border-red-200 dark:border-red-900' : 'border-gray-200 dark:border-neutral-800 hover:border-primary/30 dark:hover:border-primary/40'}`}>
+              {/* Banner va matn qismi bosilsa tafsilot ochiladi; ichkaridagi
+                  tugmalar o'z bosishini yuqoriga o'tkazmaydi. */}
+              <div onClick={() => setTafsilotId(q.id)} title="Batafsil ma'lumot" className="cursor-pointer">
               {/* Rasm o'rnini bosuvchi banner — katta ikonka + yumshoq nurlanish */}
               <div className={`h-56 flex items-center justify-center relative overflow-hidden ${q.kamQolgan ? 'bg-gradient-to-br from-red-50 to-white dark:from-red-950/20 dark:to-neutral-800' : 'bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800'}`}>
                 <span className="absolute top-3 left-3 z-10 text-[11px] bg-primary text-white px-3 py-1.5 rounded-full font-semibold shadow-sm max-w-[55%] truncate" title={q.kategoriya.nomi}>
@@ -328,7 +346,7 @@ export default function OmborPage() {
 
               <div className="p-4">
                 <p className="text-gray-900 dark:text-gray-100 font-bold text-base truncate" title={q.nomi}>{q.nomi}</p>
-                <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">Mahsulot kodi: #{(q.shtrixKod || '').padStart(3, '0') || '—'}</p>
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">Mahsulot kodi: #{(q.shtrixKod || '').padStart(3, '0') || '—'}</p>
                 {q.muddatiYaqin && (
                   <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-semibold mt-1.5 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 rounded-lg">
                     <CalendarClock size={11} />
@@ -338,25 +356,26 @@ export default function OmborPage() {
 
                 <div className="mt-3 grid grid-cols-3 gap-2 text-center bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-3">
                   <div>
-                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Ombor</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-[11px]">Ombor</p>
                     <p className={`font-bold text-sm mt-0.5 ${q.omborQoldiq <= 0 ? 'text-red-600' : 'text-blue-600'}`}>{q.omborQoldiq} {q.birlik.toLowerCase()}</p>
                   </div>
                   <div className="border-x border-gray-200 dark:border-neutral-700">
-                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Do&apos;kon</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-[11px]">Do&apos;kon</p>
                     <p className={`font-bold text-sm mt-0.5 ${q.dokonQoldiq <= 0 ? 'text-gray-400' : 'text-green-600'}`}>{q.dokonQoldiq} {q.birlik.toLowerCase()}</p>
                   </div>
                   <div>
-                    <p className="text-gray-400 dark:text-gray-600 text-[11px]">Kelish</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-[11px]">Kelish</p>
                     <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">{formatNarx(q.kelishNarxi, q.valyuta)}</p>
                   </div>
                 </div>
 
                 {q.omborQoldiq > 0 && (
-                  <button onClick={() => { setOtkazmaTovar(q); setOtkazmaMiqdor(''); setOtkazmaModal(true) }} className="w-full mt-3 text-xs bg-primary-light dark:bg-primary/10 text-primary px-3 py-2 rounded-lg font-medium hover:bg-primary/20 transition flex items-center justify-center gap-1">
+                  <button onClick={e => { e.stopPropagation(); setOtkazmaTovar(q); setOtkazmaMiqdor(''); setOtkazmaModal(true) }} className="w-full mt-3 text-xs bg-primary-light dark:bg-primary/10 text-primary px-3 py-2 rounded-lg font-medium hover:bg-primary/20 transition flex items-center justify-center gap-1">
                     <ArrowRightLeft size={12} />
                     Do&apos;konga o&apos;tkazish
                   </button>
                 )}
+              </div>
               </div>
 
               <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2">
@@ -382,16 +401,16 @@ export default function OmborPage() {
                 Ombor harakatlari tarixi
               </h2>
               <div className="flex items-center gap-2 flex-wrap">
-                {['', 'KIRIM', 'CHIQIM', 'OTKAZMA', 'QAYTARISH', 'YOQOTISH'].map(t => (
+                {['', 'KIRIM', 'CHIQIM', 'OTKAZMA', 'OTKAZMA_KIRIM', 'OTKAZMA_CHIQIM', 'QAYTARISH', 'YOQOTISH'].map(t => (
                   <button
                     key={t}
                     onClick={() => setHarakatTur(t)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${harakatTur === t ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
                   >
-                    {t || 'Barchasi'}
+                    {t ? harakatMalumoti(t).label : 'Barchasi'}
                   </button>
                 ))}
-                <button onClick={() => setTarix(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition ml-2">
+                <button onClick={() => setTarix(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition ml-2">
                   <X size={18} />
                 </button>
               </div>
@@ -400,42 +419,36 @@ export default function OmborPage() {
               <table className="w-full">
                 <thead className="sticky top-0">
                   <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-800">
-                    <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Sana</th>
-                    <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Tovar</th>
-                    <th className="text-center text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Tur</th>
-                    <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Miqdor</th>
-                    <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Ta&apos;minotchi</th>
-                    <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 hidden lg:table-cell whitespace-nowrap">Izoh</th>
+                    <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Sana</th>
+                    <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Tovar</th>
+                    <th className="text-center text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Tur</th>
+                    <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Miqdor</th>
+                    <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden md:table-cell whitespace-nowrap">Ta&apos;minotchi</th>
+                    <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 hidden lg:table-cell whitespace-nowrap">Izoh</th>
                   </tr>
                 </thead>
                 <tbody>
                   {harakatYuklanmoqda ? (
-                    <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-600 py-12">Yuklanmoqda...</td></tr>
+                    <tr><td colSpan={6} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
                   ) : harakatlar.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-600 py-12">Harakatlar topilmadi</td></tr>
+                    <tr><td colSpan={6} className="text-center text-gray-500 dark:text-gray-400 py-12">Harakatlar topilmadi</td></tr>
                   ) : harakatlar.map((h, idx) => {
-                    const turConfig: Record<string, { cls: string; label: string }> = {
-                      KIRIM: { cls: 'bg-green-100 text-green-700', label: 'Kirim' },
-                      CHIQIM: { cls: 'bg-red-100 text-red-700', label: 'Chiqim' },
-                      QAYTARISH: { cls: 'bg-blue-100 text-blue-700', label: 'Qaytarish' },
-                      YOQOTISH: { cls: 'bg-orange-100 text-orange-700', label: "Yo'qotish" },
-                      OTKAZMA: { cls: 'bg-purple-100 text-purple-700', label: "O'tkazma" },
-                    }
-                    const tc = turConfig[h.turi] || { cls: 'bg-gray-100 text-gray-700', label: h.turi }
+                    // Yorliq va rang harakat-turlari.ts dan — bir joyda saqlanadi
+                    const tc = harakatMalumoti(h.turi)
                     return (
                       <tr key={h.id} className={`border-b border-gray-100 dark:border-neutral-800 ${idx % 2 === 1 ? 'bg-gray-50/40 dark:bg-neutral-800/40' : ''}`}>
-                        <td className="px-4 py-3 text-gray-400 dark:text-gray-600 text-xs whitespace-nowrap">{formatSana(h.sana)}</td>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{formatSana(h.sana)}</td>
                         <td className="px-4 py-3 text-gray-900 dark:text-gray-100 text-sm font-medium whitespace-nowrap">{h.tovar.nomi}</td>
                         <td className="px-4 py-3 text-center whitespace-nowrap">
-                          <span className={`text-xs px-2 py-0.5 rounded-lg font-medium ${tc.cls}`}>{tc.label}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-lg font-medium ${tc.badge}`}>{tc.label}</span>
                         </td>
                         <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100 text-sm font-semibold whitespace-nowrap">
-                          {(h.turi === 'CHIQIM' || h.turi === 'YOQOTISH' || h.turi === 'OTKAZMA') ? '-' : '+'}{h.miqdor} {h.tovar.birlik.toLowerCase()}
+                          {(h.turi === 'CHIQIM' || h.turi === 'YOQOTISH' || h.turi === 'OTKAZMA' || h.turi === 'OTKAZMA_CHIQIM') ? '-' : '+'}{h.miqdor} {h.tovar.birlik.toLowerCase()}
                         </td>
-                        <td className="px-4 py-3 text-gray-500 dark:text-gray-500 text-sm hidden md:table-cell whitespace-nowrap">
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-sm hidden md:table-cell whitespace-nowrap">
                           {h.taminotchi?.nomi || <span className="text-gray-300 dark:text-gray-700">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-gray-400 dark:text-gray-600 text-xs hidden lg:table-cell">
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs hidden lg:table-cell">
                           {h.izoh || <span className="text-gray-300 dark:text-gray-700">—</span>}
                         </td>
                       </tr>
@@ -451,14 +464,14 @@ export default function OmborPage() {
       {/* Ommaviy kirim modal */}
       {/* O'tkazma modal */}
       {otkazmaModal && otkazmaTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
                 <ArrowRightLeft size={18} className="text-blue-500" />
                 Do&apos;konga o&apos;tkazma
               </h3>
-              <button onClick={() => setOtkazmaModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => setOtkazmaModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -500,7 +513,7 @@ export default function OmborPage() {
 
       {/* Tahrirlash modal */}
       {tahrirModal && tahrirTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
@@ -551,7 +564,19 @@ export default function OmborPage() {
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
-                  Yaroqlilik muddati <span className="text-gray-400 dark:text-gray-600 font-normal">(ixtiyoriy)</span>
+                  Keltirilgan manzil <span className="text-gray-400 font-normal">(qayerdan olib kelindi)</span>
+                </label>
+                <input
+                  value={tahrirForm.keltirilganManzil}
+                  onChange={e => setTahrirForm(f => ({ ...f, keltirilganManzil: e.target.value }))}
+                  maxLength={300}
+                  placeholder="Masalan: Chorsu bozori, 12-rasta"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Yaroqlilik muddati <span className="text-gray-500 dark:text-gray-400 font-normal">(ixtiyoriy)</span>
                 </label>
                 <input
                   type="date"
@@ -608,6 +633,13 @@ export default function OmborPage() {
             </div>
           </div>
         </div>
+      )}
+      {tafsilotId && (
+        <TovarTafsilot
+          key={tafsilotId}
+          tovarId={tafsilotId}
+          onYopish={() => setTafsilotId(null)}
+        />
       )}
     </div>
   )

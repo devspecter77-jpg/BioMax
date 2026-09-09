@@ -35,7 +35,10 @@ export async function POST(req: NextRequest) {
       const ism = String(row['Ism'] || '').trim()
       if (!ism) continue
       const telefonToza = String(row['Telefon'] || '').replace(/\D/g, '')
+      const telefon2Toza = String(row["Qo'shimcha raqam"] || row['Telefon 2'] || '').replace(/\D/g, '')
       const manzil = String(row['Manzil'] || '').trim() || null
+      const viloyat = String(row['Viloyat'] || '').trim() || null
+      const tuman = String(row['Tuman'] || '').trim() || null
 
       try {
         let mavjud = telefonToza
@@ -47,13 +50,27 @@ export async function POST(req: NextRequest) {
         if (mavjud) {
           await prisma.mijoz.update({
             where: { id: mavjud.id },
-            data: { ism, manzil: manzil ?? mavjud.manzil },
+            // Faylda bo'sh qolgan ustun mavjud qiymatni O'CHIRMAYDI —
+            // qisman to'ldirilgan fayl bilan ma'lumot yo'qolib ketmasin.
+            data: {
+              ism,
+              manzil: manzil ?? mavjud.manzil,
+              telefon2: telefon2Toza || mavjud.telefon2,
+              viloyat: viloyat ?? mavjud.viloyat,
+              tuman: tuman ?? mavjud.tuman,
+            },
           })
           yangilandi++
         } else {
           const maxsus_kod = await generateUniqueKod()
           await prisma.mijoz.create({
-            data: { ism, telefon: telefonToza || null, manzil, maxsus_kod, filialId, egaId },
+            data: {
+              ism,
+              telefon: telefonToza || null,
+              telefon2: telefon2Toza || null,
+              viloyat, tuman, manzil,
+              maxsus_kod, filialId, egaId,
+            },
           })
           qoshildi++
         }

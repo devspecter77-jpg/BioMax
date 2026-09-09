@@ -42,7 +42,7 @@ export function OmborTab({ filtrlar }: Props) {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-600 gap-3">
+      <div className="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-3">
         <Loader2 className="animate-spin w-6 h-6 text-red-500" />
         <span>Yuklanmoqda...</span>
       </div>
@@ -52,7 +52,7 @@ export function OmborTab({ filtrlar }: Props) {
   if (!data) {
     return (
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-8 text-center">
-        <p className="text-gray-400 dark:text-gray-600">Ma&apos;lumot topilmadi</p>
+        <p className="text-gray-500 dark:text-gray-400">Ma&apos;lumot topilmadi</p>
       </div>
     )
   }
@@ -64,19 +64,19 @@ export function OmborTab({ filtrlar }: Props) {
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Jami qiymat</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Jami qiymat</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {formatSum(data.jamiQiymat)}
           </p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Tovarlar</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Tovarlar</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {data.tovarCount} ta
           </p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Kritik qoldiq</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Kritik qoldiq</p>
           <p
             className={`text-xl font-bold mt-1 ${
               data.kritikCount > 0
@@ -95,7 +95,7 @@ export function OmborTab({ filtrlar }: Props) {
           Top 10 — ombor qiymati bo&apos;yicha
         </h2>
         {top10.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -141,7 +141,7 @@ export function OmborTab({ filtrlar }: Props) {
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">
           <div className="mb-4">
             <h2 className="text-gray-900 dark:text-gray-100 font-semibold">Kritik qoldiqlar</h2>
-            <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
+            <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
               Min qoldiqdan past tovarlar
             </p>
           </div>
@@ -149,16 +149,16 @@ export function OmborTab({ filtrlar }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
-                  <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Tovar
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Qoldiq
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Min
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Qiymat
                   </th>
                 </tr>
@@ -174,7 +174,7 @@ export function OmborTab({ filtrlar }: Props) {
                       <td className="py-2.5 text-right text-red-600 dark:text-red-400 font-semibold">
                         {t.qoldiq} {t.birlik}
                       </td>
-                      <td className="py-2.5 text-right text-gray-500 dark:text-gray-500">
+                      <td className="py-2.5 text-right text-gray-500 dark:text-gray-400">
                         {t.minQoldiq ?? '—'}
                       </td>
                       <td className="py-2.5 text-right text-gray-900 dark:text-gray-100">
@@ -197,16 +197,16 @@ export function OmborTab({ filtrlar }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-neutral-800">
-                <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                   Tovar
                 </th>
-                <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                   Qoldiq
                 </th>
-                <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                   Kelish narxi
                 </th>
-                <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                   Jami qiymat
                 </th>
               </tr>

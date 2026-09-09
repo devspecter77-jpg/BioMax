@@ -35,10 +35,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 
-    const { nomi, manzil, telefon, faol } = await req.json()
+    const { nomi, manzil, telefon, faol, lokatsiyaLat, lokatsiyaLng } = await req.json()
+
+    // Joylashuv ATAYLAB shartli yangilanadi: so'rovda yuborilmagan bo'lsa
+    // mavjud koordinata o'chib ketmasin (oddiy tahrirlash formasi uni
+    // yubormaydi). Tozalash uchun ataylab null yuboriladi.
+    const joylashuv: Record<string, number | null> = {}
+    if (lokatsiyaLat !== undefined) {
+      joylashuv.lokatsiyaLat = typeof lokatsiyaLat === 'number' ? lokatsiyaLat : null
+    }
+    if (lokatsiyaLng !== undefined) {
+      joylashuv.lokatsiyaLng = typeof lokatsiyaLng === 'number' ? lokatsiyaLng : null
+    }
+
     const filial = await prisma.filial.update({
       where: { id },
-      data: { nomi, manzil: manzil || null, telefon: telefon || null, faol },
+      data: { nomi, manzil: manzil || null, telefon: telefon || null, faol, ...joylashuv },
     })
 
     return NextResponse.json(filial)

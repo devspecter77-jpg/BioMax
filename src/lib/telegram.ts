@@ -2,6 +2,7 @@ import { TelegramClient, Api } from 'telegram'
 import { StringSession } from 'telegram/sessions'
 import { computeCheck } from 'telegram/Password'
 import { prisma } from './prisma'
+import { tolovQisqa } from './tolov-usullari'
 
 // ─── Yordamchi funksiyalar ───────────────────────────────────────────────────
 
@@ -371,6 +372,22 @@ async function sendMessageToPhone(
     console.error('[Telegram] Xabar yuborish xatosi:', msg)
     return { ok: false, xato: msg }
   }
+}
+
+// ─── Xodimga (Ega/Admin) ichki xabar ─────────────────────────────────────────
+//
+// BildirishnomLog mijozlar uchun (`mijozId` majburiy), shuning uchun ichki
+// hisobotlar u yerga yozilmaydi — chaqiruvchi o'z jurnalini yuritadi.
+// Telegram o'chirilgan bo'lsa `oq: false` qaytadi, xato tashlanmaydi.
+
+export async function ichkiXabarYubor(
+  telefon: string,
+  xabar: string,
+): Promise<{ ok: boolean; queued?: boolean; xato?: string }> {
+  if (!(await isTelegramEnabled())) {
+    return { ok: false, xato: "Telegram bildirishnomasi o'chirilgan" }
+  }
+  return sendMessageToPhone(telefon, xabar)
 }
 
 // ─── Eski API uchun alias (legacy) ───────────────────────────────────────────
@@ -1070,10 +1087,6 @@ export async function tolovQilindiXabar(nasiyaId: string, mijozId: string, tolov
   })
 }
 
-const TOLOV_LABEL: Record<string, string> = {
-  NAQD: 'Naqd', KARTA: 'Karta', ARALASH: 'Aralash', SHERIK: 'Sherik',
-}
-
 export async function sotuvChekiXabar(
   sotuvId: string,
   mijozId: string,
@@ -1097,7 +1110,7 @@ export async function sotuvChekiXabar(
     mahsulotlarMatni +
     (chegirmaFoizi > 0 ? `\n🏷️ Chegirma: ${chegirmaFoizi}%\n` : '\n') +
     `💰 Jami: ${formatSum(data.summasi)}\n` +
-    `💳 To'lov: ${TOLOV_LABEL[data.tolovUsuli] || data.tolovUsuli}\n` +
+    `💳 To'lov: ${tolovQisqa(data.tolovUsuli)}\n` +
     `\nBizni tanlaganingiz uchun rahmat! 🙏`
 
   return xabarDarholYuborVaSaqla({

@@ -335,7 +335,7 @@ export default function FiliallarPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {yuklanmoqda ? (
-          <p className="text-gray-400 dark:text-gray-600 col-span-3 text-center py-12">Yuklanmoqda...</p>
+          <p className="text-gray-500 dark:text-gray-400 col-span-3 text-center py-12">Yuklanmoqda...</p>
         ) : filtered.map(f => (
           <div
             key={f.id}
@@ -350,13 +350,13 @@ export default function FiliallarPage() {
                       <Check size={11} /> Faol
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-500 px-2 py-0.5 rounded-lg font-medium">
+                    <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-lg font-medium">
                       <X size={11} /> Nofaol
                     </span>
                   )}
                 </div>
                 {f.manzil && (
-                  <p className="text-gray-400 dark:text-gray-600 text-sm mt-1 flex items-center gap-1">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 flex items-center gap-1">
                     <MapPin size={12} /> {f.manzil}
                   </p>
                 )}
@@ -369,7 +369,7 @@ export default function FiliallarPage() {
               <div className="flex items-center gap-1 shrink-0 ml-2">
                 <button
                   onClick={e => { e.stopPropagation(); tahrirlashOch(f) }}
-                  className="p-2 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition"
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition"
                   title="Tahrirlash"
                 >
                   <Pencil size={15} />
@@ -377,7 +377,7 @@ export default function FiliallarPage() {
                 <button
                   onClick={e => { e.stopPropagation(); ochirish(f) }}
                   disabled={ochirilayotganId === f.id}
-                  className="p-2 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50"
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50"
                   title="O'chirish"
                 >
                   {ochirilayotganId === f.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
@@ -393,7 +393,7 @@ export default function FiliallarPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{x.ism}</p>
-                      <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(x.login)}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs">{formatPhone(x.login)}</p>
                       {x.lokatsiyaLat !== null && x.lokatsiyaLng !== null && (
                         <a
                           href={`https://www.google.com/maps?q=${x.lokatsiyaLat},${x.lokatsiyaLng}`}
@@ -406,14 +406,14 @@ export default function FiliallarPage() {
                       )}
                     </div>
                     {i > 0 && (
-                      <span className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg font-medium shrink-0" title="Ma'lumotlarga bog'langan qo'shimcha admin">
+                      <span className="text-[11px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg font-medium shrink-0" title="Ma'lumotlarga bog'langan qo'shimcha admin">
                         Bog'langan
                       </span>
                     )}
                   </div>
                 ))
               ) : (
-                <div className="flex items-center gap-1.5 text-gray-400 dark:text-gray-600 text-sm">
+                <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-sm">
                   <Users size={13} />
                   Ega tayinlanmagan
                 </div>
@@ -425,7 +425,7 @@ export default function FiliallarPage() {
 
       {egalar.length > 0 && (
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide flex items-center gap-2 mb-3">
+          <p className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide flex items-center gap-2 mb-3">
             <ShieldCheck size={13} /> Egalar
           </p>
           <div className="space-y-2">
@@ -438,12 +438,12 @@ export default function FiliallarPage() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{u.ism}</p>
                     {!u.faol && (
-                      <span className="inline-flex items-center text-[10px] bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-500 px-1.5 py-0.5 rounded font-medium shrink-0">
+                      <span className="inline-flex items-center text-[11px] bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded font-medium shrink-0">
                         Nofaol
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">{formatPhone(u.login)}</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">{formatPhone(u.login)}</p>
                   {u.lokatsiyaLat !== null && u.lokatsiyaLng !== null && (
                     <a
                       href={`https://www.google.com/maps?q=${u.lokatsiyaLat},${u.lokatsiyaLng}`}
@@ -457,7 +457,7 @@ export default function FiliallarPage() {
                 </div>
                 <button
                   onClick={() => egaTahrirOch(u)}
-                  className="p-2 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition shrink-0"
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition shrink-0"
                   title="Tahrirlash"
                 >
                   <Pencil size={15} />
@@ -465,7 +465,7 @@ export default function FiliallarPage() {
                 <button
                   onClick={() => egaOchirish(u)}
                   disabled={ochirilayotganId === u.id}
-                  className="p-2 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50 shrink-0"
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50 shrink-0"
                   title="O'chirish"
                 >
                   {ochirilayotganId === u.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
@@ -477,11 +477,11 @@ export default function FiliallarPage() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi hisob qo&apos;shish</h3>
-              <button onClick={() => setModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => setModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -492,26 +492,26 @@ export default function FiliallarPage() {
                   <button
                     type="button"
                     onClick={() => setEgaTuri('FILIALCHI')}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${egaTuri === 'FILIALCHI' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                    className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium transition ${egaTuri === 'FILIALCHI' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
                   >
                     Filialchi
                   </button>
                   <button
                     type="button"
                     onClick={() => setEgaTuri('EGA')}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${egaTuri === 'EGA' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                    className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium transition ${egaTuri === 'EGA' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
                   >
                     Ega
                   </button>
                   <button
                     type="button"
                     onClick={() => setEgaTuri('ADMIN')}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${egaTuri === 'ADMIN' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
+                    className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium transition ${egaTuri === 'ADMIN' ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
                   >
                     Admin
                   </button>
                 </div>
-                <p className="text-gray-400 dark:text-gray-600 text-xs mt-1.5">
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1.5">
                   {egaTuri === 'FILIALCHI'
                     ? "Filialchi — yangi filial yaratiladi, u shu filialning egasi bo'ladi."
                     : egaTuri === 'EGA'
@@ -522,7 +522,7 @@ export default function FiliallarPage() {
 
               {egaTuri === 'FILIALCHI' ? (
                 <>
-                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
                     <Building size={13} /> Filial ma&apos;lumotlari
                   </div>
                   <div>
@@ -549,7 +549,7 @@ export default function FiliallarPage() {
                     />
                     <span>
                       <span className="text-sm text-gray-900 dark:text-gray-100 font-medium block">Mening mahsulotlarimni ulashish</span>
-                      <span className="text-gray-400 dark:text-gray-600 text-xs">
+                      <span className="text-gray-500 dark:text-gray-400 text-xs">
                         Bu admin mening (hozirgi hisobim) tovarlar katalogimni o&apos;zining login-paroli bilan ko&apos;radi. Qaysi maydonlarni ko&apos;ra olishi va tahrirlash/o&apos;chirish ruxsatini keyinroq Tovarlar sahifasidagi &quot;Ko&apos;rinish sozlamalari&quot;dan belgilaysiz.
                       </span>
                     </span>
@@ -557,7 +557,7 @@ export default function FiliallarPage() {
                 </div>
               ) : null}
 
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
                 <UserPlus size={13} /> {egaTuri === 'FILIALCHI' ? 'Filial egasi' : egaTuri === 'EGA' ? 'Ega hisobi' : 'Admin hisobi'}
               </div>
               <div>
@@ -600,16 +600,16 @@ export default function FiliallarPage() {
       )}
 
       {tahrirModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Filial va uning egasini tahrirlash</h3>
-              <button onClick={() => setTahrirModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => setTahrirModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={tahrirlashSaqlash} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide">
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide">
                 <Building size={13} /> Filial ma&apos;lumotlari
               </div>
               <div>
@@ -626,14 +626,14 @@ export default function FiliallarPage() {
               </div>
               <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-neutral-800 rounded-xl">
                 <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">Faollik holati</span>
-                <button type="button" onClick={() => setTahrirForm(f => ({ ...f, faol: !f.faol }))} className={`transition ${tahrirForm.faol ? 'text-green-500' : 'text-gray-400 dark:text-gray-600'}`}>
+                <button type="button" onClick={() => setTahrirForm(f => ({ ...f, faol: !f.faol }))} className={`transition ${tahrirForm.faol ? 'text-green-500' : 'text-gray-500 dark:text-gray-400'}`}>
                   {tahrirForm.faol ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                 </button>
               </div>
 
               {tahrirEgaId && (
                 <>
-                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide pt-2 border-t border-gray-100 dark:border-neutral-800">
                     <UserPlus size={13} /> Filial egasi
                   </div>
                   <div>
@@ -680,11 +680,11 @@ export default function FiliallarPage() {
       )}
 
       {egaTahrirModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Hisobni tahrirlash</h3>
-              <button onClick={() => setEgaTahrirModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => setEgaTahrirModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -719,7 +719,7 @@ export default function FiliallarPage() {
               </div>
               <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-neutral-800 rounded-xl">
                 <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">Faollik holati</span>
-                <button type="button" onClick={() => setEgaTahrirForm(f => ({ ...f, faol: !f.faol }))} className={`transition ${egaTahrirForm.faol ? 'text-green-500' : 'text-gray-400 dark:text-gray-600'}`}>
+                <button type="button" onClick={() => setEgaTahrirForm(f => ({ ...f, faol: !f.faol }))} className={`transition ${egaTahrirForm.faol ? 'text-green-500' : 'text-gray-500 dark:text-gray-400'}`}>
                   {egaTahrirForm.faol ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                 </button>
               </div>

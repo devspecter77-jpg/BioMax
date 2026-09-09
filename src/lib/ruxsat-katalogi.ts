@@ -12,8 +12,13 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
   { kalit: 'sotuv', label: 'Sotuv (POS)' },
   { kalit: 'tovarlar', label: 'Tovarlar' },
   { kalit: 'ombor', label: 'Ombor harakati' },
+  { kalit: 'kunlik-hisobot', label: 'Kunlik hisobot' },
   { kalit: 'mijozlar', label: 'Mijozlar' },
   { kalit: 'nasiyalar', label: 'Nasiyalar' },
+  { kalit: 'ballar', label: 'Ballar va keshbeklar' },
+  { kalit: 'tolovlar', label: "To'lovlar" },
+  { kalit: 'taminotchilar', label: "Ta'minotchilar" },
+  { kalit: 'xodimlar', label: 'Xodimlar' },
   { kalit: 'xaridlar', label: 'Xaridlar' },
   {
     kalit: 'hisobotlar', label: 'Hisobotlar', children: [
@@ -38,10 +43,10 @@ export const barchaRuxsatKalitlari: string[] = ruxsatKatalogi.flatMap(b =>
 // Xodim uchun hali maxsus sozlash qilinmagan bo'limlarda shu standart ishlatiladi.
 const ROL_STANDART: Record<string, string[]> = {
   KASSIR: [
-    'sotuv', 'tovarlar', 'ombor', 'mijozlar', 'nasiyalar',
-    'xaridlar', 'hisobotlar', 'hisobotlar.umumiy', 'hisobotlar.sotuv',
+    'sotuv', 'tovarlar', 'ombor', 'mijozlar', 'nasiyalar', 'ballar',
+    'taminotchilar', 'xaridlar', 'hisobotlar', 'hisobotlar.umumiy', 'hisobotlar.sotuv',
   ],
-  OMBORCHI: ['tovarlar', 'ombor'],
+  OMBORCHI: ['tovarlar', 'ombor', 'taminotchilar'],
 }
 
 export function rolStandartRuxsat(rol: string, bolim: string): boolean {

@@ -45,9 +45,9 @@ export async function GET(req: NextRequest) {
       const cur = qoldiqMap.get(h.tovarId) ?? 0
       const amt = Number(h._sum.miqdor || 0)
       let delta = 0
-      if (h.turi === 'KIRIM' || h.turi === 'QAYTARISH') delta = amt
-      else if (h.turi === 'CHIQIM' || h.turi === 'YOQOTISH') delta = -amt
-      // OTKAZMA: net zero
+      if (h.turi === 'KIRIM' || h.turi === 'QAYTARISH' || h.turi === 'OTKAZMA_KIRIM') delta = amt
+      else if (h.turi === 'CHIQIM' || h.turi === 'YOQOTISH' || h.turi === 'OTKAZMA_CHIQIM') delta = -amt
+      // OTKAZMA (filial ichida ombor->do'kon): net zero
       qoldiqMap.set(h.tovarId, cur + delta)
     }
 

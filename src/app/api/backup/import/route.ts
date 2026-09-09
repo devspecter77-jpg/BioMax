@@ -39,12 +39,14 @@ export async function POST(req: NextRequest) {
             kelishNarxi: t.kelishNarxi, sotishNarxi: t.sotishNarxi,
             birlik: t.birlik, minimalQoldiq: t.minimalQoldiq,
             holati: t.holati, shtrixKod: t.shtrixKod || null,
+            keltirilganManzil: t.keltirilganManzil || null,
           },
           update: {
             nomi: t.nomi, kategoriyaId: t.kategoriyaId,
             kelishNarxi: t.kelishNarxi, sotishNarxi: t.sotishNarxi,
             birlik: t.birlik, minimalQoldiq: t.minimalQoldiq,
             holati: t.holati, shtrixKod: t.shtrixKod || null,
+            keltirilganManzil: t.keltirilganManzil || null,
           },
         })
       }

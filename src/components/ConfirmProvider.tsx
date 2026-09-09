@@ -50,7 +50,7 @@ export default function ConfirmProvider({ children }: { children: React.ReactNod
                 <AlertTriangle size={18} className={state.danger !== false ? 'text-red-500' : 'text-amber-500'} />
                 {state.title || 'Tasdiqlang'}
               </h3>
-              <button onClick={() => close(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => close(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>

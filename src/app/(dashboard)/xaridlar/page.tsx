@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
+import { tolovQisqa, tolovBadge, tolovKanallari } from '@/lib/tolov-usullari'
 import { Receipt, Phone, User, Calendar, Search, Download, X, Wallet, CreditCard, RotateCcw } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -23,6 +24,8 @@ interface Sotuv {
   tolovUsuli: string
   naqdTolangan: number
   kartaTolangan: number
+  clickTolangan: number
+  bankTolangan: number
   mijoz: { ism: string; telefon: string | null } | null
   kassir: { ism: string }
   tarkiblar: SotuvTarkibiItem[]
@@ -34,17 +37,6 @@ interface Sotuv {
 type Yozuv =
   | { turi: 'sotuv'; sana: string; sotuv: Sotuv }
   | { turi: 'qaytarish'; sana: string; qaytarish: Qaytarish; asl: Sotuv }
-
-const TOLOV_LABEL: Record<string, string> = {
-  NAQD: 'Naqd', KARTA: 'Karta', ARALASH: 'Aralash', NASIYA: 'Nasiya', SHERIK: 'Sherik',
-}
-const TOLOV_RANG: Record<string, string> = {
-  NAQD: 'bg-green-50 dark:bg-green-950/30 text-green-600',
-  KARTA: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600',
-  ARALASH: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600',
-  NASIYA: 'bg-red-50 dark:bg-red-950/30 text-red-600',
-  SHERIK: 'bg-purple-50 dark:bg-purple-950/30 text-purple-600',
-}
 
 export default function XaridlarPage() {
   const [sotuvlar, setSotuvlar] = useState<Sotuv[]>([])
@@ -113,22 +105,22 @@ export default function XaridlarPage() {
       {/* KPI */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-400 dark:text-gray-600 text-xs">Jami xaridlar</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Jami xaridlar</p>
           <p className="text-gray-900 dark:text-gray-100 font-bold text-xl mt-1">{jami} ta</p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-400 dark:text-gray-600 text-xs">Jami summa</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Jami summa</p>
           <p className="text-green-600 font-bold text-xl mt-1">{formatSum(jamiSumma)}</p>
         </div>
       </div>
 
       {/* Cards */}
       {yuklanmoqda ? (
-        <p className="text-gray-400 dark:text-gray-600 text-center py-12">Yuklanmoqda...</p>
+        <p className="text-gray-500 dark:text-gray-400 text-center py-12">Yuklanmoqda...</p>
       ) : korsatiladigan.length === 0 ? (
         <div className="text-center py-16">
           <Search size={36} className="mx-auto mb-3 text-gray-300 dark:text-gray-700" />
-          <p className="text-gray-400 dark:text-gray-600">Xaridlar topilmadi</p>
+          <p className="text-gray-500 dark:text-gray-400">Xaridlar topilmadi</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -142,11 +134,11 @@ export default function XaridlarPage() {
                   <span className="flex items-center gap-1.5 text-sm font-mono text-gray-600 dark:text-gray-300">
                     <Receipt size={15} />{y.sotuv.chekRaqami}
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TOLOV_RANG[y.sotuv.tolovUsuli] || 'bg-gray-100 text-gray-600'}`}>
-                    {TOLOV_LABEL[y.sotuv.tolovUsuli] || y.sotuv.tolovUsuli}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tolovBadge(y.sotuv.tolovUsuli)}`}>
+                    {tolovQisqa(y.sotuv.tolovUsuli)}
                   </span>
                 </div>
-                <p className="text-gray-500 dark:text-gray-500 text-sm mt-1.5 flex items-center gap-1">
+                <p className="text-gray-500 dark:text-gray-400 text-sm mt-1.5 flex items-center gap-1">
                   <Calendar size={13} />{formatSanaVaVaqt(y.sotuv.sana)}
                 </p>
               </div>
@@ -175,7 +167,7 @@ export default function XaridlarPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-gray-500 dark:text-gray-500 text-sm">Kassir: {y.sotuv.kassir.ism}</span>
+                  <span className="text-gray-500 dark:text-gray-400 text-sm">Kassir: {y.sotuv.kassir.ism}</span>
                   <span className="text-green-600 font-bold text-lg">{formatSum(y.sotuv.yakuniySumma)}</span>
                 </div>
               </div>
@@ -191,7 +183,7 @@ export default function XaridlarPage() {
                   </span>
                   <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{y.asl.chekRaqami}</span>
                 </div>
-                <p className="text-gray-500 dark:text-gray-500 text-sm mt-1.5 flex items-center gap-1">
+                <p className="text-gray-500 dark:text-gray-400 text-sm mt-1.5 flex items-center gap-1">
                   <Calendar size={13} />{formatSanaVaVaqt(y.qaytarish.yaratilgan)}
                 </p>
               </div>
@@ -220,11 +212,11 @@ export default function XaridlarPage() {
                 </div>
 
                 {y.qaytarish.sabab && (
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">Sabab: {y.qaytarish.sabab}</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">Sabab: {y.qaytarish.sabab}</p>
                 )}
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-gray-500 dark:text-gray-500 text-sm">Kassir: {y.qaytarish.kassir.ism}</span>
+                  <span className="text-gray-500 dark:text-gray-400 text-sm">Kassir: {y.qaytarish.kassir.ism}</span>
                   <span className="text-amber-600 font-bold text-lg">-{formatSum(y.qaytarish.jamiSumma)}</span>
                 </div>
               </div>
@@ -241,7 +233,7 @@ export default function XaridlarPage() {
 
       {/* Batafsil ma'lumot modali */}
       {tafsilot && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4" onClick={() => setTafsilot(null)}>
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4" onClick={() => setTafsilot(null)}>
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3 shrink-0">
               <div>
@@ -249,19 +241,19 @@ export default function XaridlarPage() {
                   <Receipt size={18} className="text-primary" />
                   {tafsilot.chekRaqami}
                 </h3>
-                <p className="text-gray-400 dark:text-gray-600 text-xs mt-1 flex items-center gap-1">
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 flex items-center gap-1">
                   <Calendar size={11} />{formatSanaVaVaqt(tafsilot.sana)}
                 </p>
               </div>
-              <button onClick={() => setTafsilot(null)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
+              <button onClick={() => setTafsilot(null)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
                 <X size={18} />
               </button>
             </div>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
               <div className="flex flex-wrap gap-2 text-sm">
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-lg font-medium ${TOLOV_RANG[tafsilot.tolovUsuli] || 'bg-gray-100 text-gray-600'}`}>
-                  {TOLOV_LABEL[tafsilot.tolovUsuli] || tafsilot.tolovUsuli}
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-lg font-medium ${tolovBadge(tafsilot.tolovUsuli)}`}>
+                  {tolovQisqa(tafsilot.tolovUsuli)}
                 </span>
                 {tafsilot.mijoz && (
                   <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-neutral-800 px-2.5 py-1 rounded-lg font-medium">
@@ -278,23 +270,21 @@ export default function XaridlarPage() {
                 </span>
               </div>
 
-              {/* To'lov usuli aralash bo'lsa — naqd/karta bo'linmasi */}
+              {/* Aralash to'lovda har bir kanal alohida — naqd, karta,
+                  Click yoki bank o'tkazmasi (qaysi biri ishlatilgan bo'lsa) */}
               {tafsilot.tolovUsuli === 'ARALASH' && (
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 flex items-center gap-2">
-                    <Wallet size={16} className="text-green-600 shrink-0" />
-                    <div>
-                      <p className="text-gray-400 dark:text-gray-600 text-[11px]">Naqd</p>
-                      <p className="text-gray-900 dark:text-gray-100 font-semibold text-sm">{formatSum(tafsilot.naqdTolangan)}</p>
+                  {tolovKanallari(tafsilot).map(kanal => (
+                    <div key={kanal.usul} className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 flex items-center gap-2">
+                      {kanal.usul === 'NAQD'
+                        ? <Wallet size={16} className="text-green-600 shrink-0" />
+                        : <CreditCard size={16} className="text-blue-600 shrink-0" />}
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400 text-[11px]">{tolovQisqa(kanal.usul)}</p>
+                        <p className="text-gray-900 dark:text-gray-100 font-semibold text-sm">{formatSum(kanal.summa)}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 flex items-center gap-2">
-                    <CreditCard size={16} className="text-blue-600 shrink-0" />
-                    <div>
-                      <p className="text-gray-400 dark:text-gray-600 text-[11px]">Karta</p>
-                      <p className="text-gray-900 dark:text-gray-100 font-semibold text-sm">{formatSum(tafsilot.kartaTolangan)}</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               )}
 
@@ -307,7 +297,7 @@ export default function XaridlarPage() {
                     <div key={t.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
                       <div className="min-w-0 flex-1">
                         <p className="text-gray-900 dark:text-gray-100 truncate">{t.tovar.nomi}</p>
-                        <p className="text-gray-400 dark:text-gray-600 text-xs">{t.miqdor} {t.tovar.birlik.toLowerCase()} × {formatSum(t.birlikNarxi)}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">{t.miqdor} {t.tovar.birlik.toLowerCase()} × {formatSum(t.birlikNarxi)}</p>
                       </div>
                       <span className="text-gray-700 dark:text-gray-300 font-medium shrink-0">{formatSum(t.jami)}</span>
                     </div>
@@ -317,12 +307,12 @@ export default function XaridlarPage() {
 
               <div className="border-t border-gray-200 dark:border-neutral-800 pt-3 space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400 dark:text-gray-600">Summa</span>
+                  <span className="text-gray-500 dark:text-gray-400">Summa</span>
                   <span className="text-gray-700 dark:text-gray-300">{formatSum(tafsilot.jamiSumma)}</span>
                 </div>
                 {tafsilot.chegirma > 0 && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400 dark:text-gray-600">Chegirma</span>
+                    <span className="text-gray-500 dark:text-gray-400">Chegirma</span>
                     <span className="text-red-500">-{formatSum(tafsilot.chegirma)}</span>
                   </div>
                 )}

@@ -56,7 +56,7 @@ export function UmumiyTab({ filtrlar, isKassir }: Props) {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-600 gap-3">
+      <div className="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-3">
         <Loader2 className="animate-spin w-6 h-6 text-red-500" />
         <span>Yuklanmoqda...</span>
       </div>
@@ -114,10 +114,10 @@ export function UmumiyTab({ filtrlar, isKassir }: Props) {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-gray-500 dark:text-gray-500 text-xs">{s.sarlavha}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs">{s.sarlavha}</p>
                     <p className={`text-xl font-bold mt-1 ${s.rang}`}>{s.qiymat}</p>
                     {'qosh' in s && s.qosh && (
-                      <p className="text-gray-400 dark:text-gray-600 text-xs">{s.qosh}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs">{s.qosh}</p>
                     )}
                   </div>
                   <div
@@ -165,7 +165,7 @@ export function UmumiyTab({ filtrlar, isKassir }: Props) {
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">
           <h2 className="text-gray-900 dark:text-gray-100 font-semibold mb-4">Top 10 tovar</h2>
           {data.topTovarlar.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
               Ma&apos;lumot yo&apos;q
             </p>
           ) : (

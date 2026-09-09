@@ -91,7 +91,7 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-600 gap-3">
+      <div className="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-3">
         <Loader2 className="animate-spin w-6 h-6 text-red-500" />
         <span>Yuklanmoqda...</span>
       </div>
@@ -101,7 +101,7 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
   if (!data) {
     return (
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-8 text-center">
-        <p className="text-gray-400 dark:text-gray-600">Ma&apos;lumot topilmadi</p>
+        <p className="text-gray-500 dark:text-gray-400">Ma&apos;lumot topilmadi</p>
       </div>
     )
   }
@@ -116,18 +116,18 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Jami sotuv</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Jami sotuv</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {formatSum(data.jamiSotuv)}
           </p>
-          <p className="text-gray-400 dark:text-gray-600 text-xs">{data.sotuvSoni} ta sotuv</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">{data.sotuvSoni} ta sotuv</p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Peak soat</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Peak soat</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {peakSoat !== null ? `${peakSoat.soat}:00` : '—'}
           </p>
-          <p className="text-gray-400 dark:text-gray-600 text-xs">
+          <p className="text-gray-500 dark:text-gray-400 text-xs">
             {peakSoat !== null ? formatSum(peakSoat.sotuv) : ''}
           </p>
         </div>
@@ -139,7 +139,7 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
           Soatlik sotuv (peak hours)
         </h2>
         {data.soatlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -184,7 +184,7 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
           Kunlik sotuv dinamikasi
         </h2>
         {data.kunlik.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -227,11 +227,11 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
-                  <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">Sana</th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">Sana</th>
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Sotuvlar
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Summa
                   </th>
                 </tr>
@@ -261,18 +261,18 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
             <h2 className="text-gray-900 dark:text-gray-100 font-semibold">
               Kategoriya bo&apos;yicha sotuv
             </h2>
-            <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">
+            <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
               Revenue, foyda va margin kategoriya kesimida
             </p>
           </div>
 
           {kategoriya.yuklanmoqda ? (
-            <div className="flex items-center justify-center h-24 gap-2 text-gray-400 dark:text-gray-600">
+            <div className="flex items-center justify-center h-24 gap-2 text-gray-500 dark:text-gray-400">
               <Loader2 className="animate-spin w-4 h-4 text-red-500" />
               <span className="text-sm">Yuklanmoqda...</span>
             </div>
           ) : !kategoriya.data || kategoriya.data.kategoriyalar.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
               Ma&apos;lumot yo&apos;q
             </p>
           ) : (
@@ -318,19 +318,19 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 dark:border-neutral-800">
-                      <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                      <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                         Kategoriya
                       </th>
-                      <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                      <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                         Revenue
                       </th>
-                      <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                      <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                         Qty
                       </th>
-                      <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                      <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                         Foyda
                       </th>
-                      <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                      <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                         Margin
                       </th>
                     </tr>
@@ -341,7 +341,7 @@ export function SotuvTab({ filtrlar, isKassir }: Props) {
                         <td className="py-2.5 text-gray-700 dark:text-gray-300 max-w-[140px] truncate">
                           <div>{k.nomi}</div>
                           {k.topProducts.length > 0 && (
-                            <div className="text-xs text-gray-400 dark:text-gray-600 truncate">
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                               {k.topProducts[0].nomi}
                             </div>
                           )}

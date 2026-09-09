@@ -32,9 +32,9 @@ function StatCard({
   const body = (
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
-        <p className="text-gray-500 dark:text-gray-500 text-[10px] sm:text-xs font-mono uppercase tracking-wide truncate">{sarlavha}</p>
+        <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs font-mono uppercase tracking-wide truncate">{sarlavha}</p>
         <p className={`text-lg sm:text-2xl font-bold mt-1 sm:mt-1.5 font-mono tabular-nums truncate ${rang}`}>{qiymat}</p>
-        {qoshimcha && <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-xs mt-0.5 sm:mt-1 truncate">{qoshimcha}</p>}
+        {qoshimcha && <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs mt-0.5 sm:mt-1 truncate">{qoshimcha}</p>}
       </div>
       <div className={`w-8 h-8 sm:w-11 sm:h-11 ${iconBg} rounded-lg sm:rounded-xl flex items-center justify-center shrink-0`}>
         <Icon size={16} className="text-white sm:hidden" />
@@ -77,7 +77,7 @@ export default function DashboardPage() {
   if (yuklanmoqda) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400 dark:text-gray-600 flex items-center gap-3">
+        <div className="text-gray-500 dark:text-gray-400 flex items-center gap-3">
           <Loader2 className="animate-spin w-6 h-6 text-primary" />
           <span>Yuklanmoqda...</span>
         </div>
@@ -163,7 +163,7 @@ export default function DashboardPage() {
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">
         <h2 className="text-gray-900 dark:text-gray-100 font-semibold mb-4">Top sotilgan tovarlar</h2>
         {!data.topTovarlar || data.topTovarlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">Hali sotuv yo&apos;q</p>
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">Hali sotuv yo&apos;q</p>
         ) : (
           <div className="space-y-3">
             {data.topTovarlar.map((tovar, i) => (
@@ -173,7 +173,7 @@ export default function DashboardPage() {
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-gray-800 dark:text-gray-200 text-sm font-medium truncate">{tovar.nomi}</p>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs">{tovar.jami_miqdor} dona sotildi</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">{tovar.jami_miqdor} dona sotildi</p>
                 </div>
                 <span className="text-green-600 text-sm font-semibold shrink-0">
                   {formatSum(tovar.jami_summa)}

@@ -11,7 +11,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   cookies: {
     sessionToken: {
       name: 'next-auth.session-token',
-      options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: false },
+      options: {
+        httpOnly: true,
+        sameSite: 'lax' as const,
+        path: '/',
+        // Productionda (HTTPS) cookie faqat shifrlangan kanal orqali
+        // yuboriladi. Localhostda HTTPS yo'q — u yerda false bo'lishi shart,
+        // aks holda tizimga umuman kirib bo'lmaydi.
+        secure: process.env.NODE_ENV === 'production',
+      },
     },
   },
   pages: {

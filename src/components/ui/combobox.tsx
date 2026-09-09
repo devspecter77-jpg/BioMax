@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Check, ChevronDown, X, Search } from 'lucide-react'
+import { Check, ChevronDown, X, Search, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface ComboboxOption {
@@ -19,6 +19,13 @@ interface ComboboxProps {
   emptyMessage?: string
   disabled?: boolean
   className?: string
+  /** Ro'yxatda yo'q qiymatni qo'lda yozishga ruxsat beradi (masalan
+   *  ro'yxatga kirmagan qishloq nomi). Yoqilganda: qidiruvga yozilgan
+   *  matn "qo'shish" qatori sifatida chiqadi, Enter ham ishlaydi, va
+   *  tanlangan erkin qiymat tugmada o'z holicha ko'rinadi. */
+  allowCustom?: boolean
+  /** allowCustom yoqilganda "qo'shish" qatorining matni. */
+  customLabel?: (matn: string) => string
 }
 
 export default function Combobox({
@@ -27,7 +34,9 @@ export default function Combobox({
   searchPlaceholder = "Qidirish...",
   emptyMessage = "Topilmadi",
   disabled = false,
-  className
+  className,
+  allowCustom = false,
+  customLabel = (matn) => `"${matn}" — qo'shish`,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -37,6 +46,20 @@ export default function Combobox({
   const filtered = options.filter(o =>
     o.label.toLowerCase().includes(search.toLowerCase())
   )
+  // Erkin yozilgan qiymat ro'yxatda yo'q — tugmada o'z holicha ko'rsatiladi,
+  // aks holda tanlangan qiymat ko'rinmay, placeholder chiqib qolardi.
+  const korsatiladiganMatn = selected?.label ?? (value || '')
+  const tozaQidiruv = search.trim()
+  const qoshishMumkin =
+    allowCustom &&
+    tozaQidiruv.length > 0 &&
+    !options.some(o => o.label.toLowerCase() === tozaQidiruv.toLowerCase())
+
+  function erkinQiymatniQabulQil() {
+    if (!qoshishMumkin) return
+    onChange(tozaQidiruv)
+    setOpen(false)
+  }
 
   useEffect(() => {
     if (open) {
@@ -58,8 +81,8 @@ export default function Combobox({
             className
           )}
         >
-          <span className={selected ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-600'}>
-            {selected ? selected.label : placeholder}
+          <span className={cn('truncate text-left', korsatiladiganMatn ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400')}>
+            {korsatiladiganMatn || placeholder}
           </span>
           <div className="flex items-center gap-1 shrink-0">
             {value && (
@@ -93,6 +116,9 @@ export default function Combobox({
                 ref={searchRef}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); erkinQiymatniQabulQil() }
+                }}
                 placeholder={searchPlaceholder}
                 className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 outline-none"
               />
@@ -106,8 +132,18 @@ export default function Combobox({
 
           {/* Options list */}
           <div className="max-h-52 overflow-y-auto py-1">
-            {filtered.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-600 text-sm py-4">{emptyMessage}</p>
+            {qoshishMumkin && (
+              <button
+                type="button"
+                onClick={erkinQiymatniQabulQil}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition font-medium"
+              >
+                <Plus size={14} className="shrink-0" />
+                <span className="truncate">{customLabel(tozaQidiruv)}</span>
+              </button>
+            )}
+            {filtered.length === 0 && !qoshishMumkin ? (
+              <p className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">{emptyMessage}</p>
             ) : filtered.map(option => (
               <button
                 key={option.value}

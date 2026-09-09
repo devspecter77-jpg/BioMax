@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
         kelishNarxi: t.kelishNarxi,
         valyuta: t.valyuta,
         minimalQoldiq: t.minimalQoldiq,
+        keltirilganManzil: t.keltirilganManzil,
         omborQoldiq: qoldiqYashirilgan ? null : stock.omborQoldiq,
         dokonQoldiq: qoldiqYashirilgan ? null : stock.dokonQoldiq,
         qoldiq: Math.max(0, jami),

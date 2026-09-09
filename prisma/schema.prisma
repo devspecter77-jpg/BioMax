@@ -16,6 +16,10 @@ model Filial {
   manzil     String?
   telefon    String?
   faol       Boolean  @default(true)
+  // Xaritadagi joylashuvi. Ega filialni xaritada belgilaydi yoki
+  // filial oldida turib "shu yerdaman" tugmasi bilan oladi.
+  lokatsiyaLat Float?
+  lokatsiyaLng Float?
   yaratilgan DateTime @default(now())
 
   xodimlar   Foydalanuvchi[]
@@ -25,6 +29,11 @@ model Filial {
   taminotchilar Taminotchi[]
   sotuvlar      Sotuv[]
   xarajatlar    Xarajat[]
+  buyurtmalar   Buyurtma[]
+  taminotchiSorovlari  TaminotchiSorov[]
+  xodimTolovlari       XodimTolov[]
+  yuborilganOtkazmalar Otkazma[] @relation("OtkazmaManba")
+  qabulOtkazmalar      Otkazma[] @relation("OtkazmaQabul")
 
   @@map("filiallar")
 }
@@ -40,6 +49,9 @@ model Foydalanuvchi {
   rol          Rol      @default(KASSIR)
   faol         Boolean  @default(true)
   telefon      String?
+  // Belgilangan oylik maosh (so'mda). To'lovlar `XodimTolov` da alohida
+  // yoziladi — bu faqat "kelishilgan summa" ko'rsatkichi.
+  oylikMaosh   Decimal? @db.Decimal(12, 2)
   filialId     String?
   yaratilgan   DateTime @default(now())
   yangilangan  DateTime @updatedAt
@@ -76,6 +88,14 @@ model Foydalanuvchi {
   buyurtmalar  Buyurtma[]
   ruxsatlar    Ruxsat[]
   yashirilganMaydonlar MaydonYashirish[]
+  sodiqlikHarakatlari  SodiqlikHarakati[]
+  otkazmalar           Otkazma[]
+  ozBuyurtmalari       Buyurtma[] @relation("BuyurtmaEgasi")
+  kunlikHisobotlar     KunlikHisobotLog[] @relation("KunlikHisobotlar")
+  taminotchiSorovlari  TaminotchiSorov[]  @relation("TaminotchiSorovlari")
+  tolovlari            XodimTolov[]       @relation("XodimTolovlari")
+  yaratganTolovlari    XodimTolov[]       @relation("XodimTolovYaratgan")
+  ozTaminotchiSorovlari TaminotchiSorov[] @relation("TaminotchiSorovEgasi")
 
   @@index([filialId])
   @@index([ulashilganEgaId])
@@ -146,6 +166,26 @@ model Tovar {
   bolishNarxi   Decimal?  @db.Decimal(12, 2)
   birlik        Birlik    @default(DONA)
   minimalQoldiq Int       @default(5)
+  // Mahsulotni yetkazib beruvchi. Ixtiyoriy: "bu tovar kimdan keladi"
+  // degan savolga javob beradi va qayta buyurtma berishda ishlatiladi.
+  // Har bir yetkazib berish esa OmborHarakati.taminotchiId da alohida
+  // yoziladi (bir tovar turli paytda boshqa ta'minotchidan kelishi mumkin).
+  taminotchiId  String?
+  // Tovar qayerdan keltirilgani — erkin matn (bozor, ombor, shahar, do'kon
+  // nomi va h.k.). `taminotchiId` "kim yetkazib berdi" degan savolga javob
+  // beradi, bu esa "qayerdan olib kelindi" degan savolga: ba'zi tovarlar
+  // ro'yxatdagi ta'minotchisiz, oddiy bozordan olib kelinadi.
+  keltirilganManzil String?
+  // Mahsulot YARATILGAN paytdagi USD kursi (Markaziy bank).
+  // Keyin kurs o'zgarsa ham "shu tovar qanday kursda kiritilgan edi"
+  // degan savolga javob beradi. Eski qatorlarda null bo'lib qoladi —
+  // ular kurs saqlana boshlaguncha yaratilgan.
+  yaratilganKursi Decimal? @db.Decimal(12, 2)
+  // Qulflangan tovar SOTUVDA ko'rinmaydi va sotib bo'lmaydi, lekin
+  // katalogda, omborda va hisobotlarda o'z joyida qoladi.
+  // `holati=ARXIVLANGAN` dan farqi: arxivlash — tovarni butunlay
+  // ishdan chiqarish, qulflash esa vaqtinchalik va bir bosishda qaytariladi.
+  qulflangan    Boolean   @default(false)
   rasmlar       String[]  @default([])
   yaroqlilikMuddati DateTime?
   valyuta       Valyuta   @default(UZS)
@@ -154,6 +194,7 @@ model Tovar {
   yangilangan   DateTime  @updatedAt
 
   kategoriya       Kategoriya         @relation(fields: [kategoriyaId], references: [id])
+  taminotchi       Taminotchi?        @relation(fields: [taminotchiId], references: [id])
   filial           Filial?            @relation(fields: [filialId], references: [id])
   ega              Foydalanuvchi?     @relation("TovarEgasi", fields: [egaId], references: [id])
   omborHarakati    OmborHarakati[]
@@ -162,10 +203,15 @@ model Tovar {
   sherikdanOlishlar SherikdanOlish[]
   buyurtmaTarkibi  BuyurtmaTarkibi[]
   xaridTarkibi     XaridTarkibi[]
+  otkazmaManbasi   OtkazmaTarkibi[] @relation("OtkazmaManbaTovar")
+  otkazmaQabuli    OtkazmaTarkibi[] @relation("OtkazmaQabulTovar")
+  sorovTarkibi     TaminotchiSorovTarkibi[]
 
   @@unique([shtrixKod, filialId])
   @@index([holati])
+  @@index([holati, qulflangan])
   @@index([kategoriyaId])
+  @@index([taminotchiId])
   @@index([filialId])
   @@index([egaId])
   @@map("tovarlar")
@@ -218,6 +264,7 @@ model OmborHarakati {
   narx            Decimal        @db.Decimal(12, 2)
   taminotchiId    String?
   sotuvId         String?
+  otkazmaId       String?
   izoh            String?
   sana            DateTime       @default(now())
   foydalanuvchiId String
@@ -225,11 +272,13 @@ model OmborHarakati {
   tovar           Tovar          @relation(fields: [tovarId], references: [id])
   taminotchi      Taminotchi?    @relation(fields: [taminotchiId], references: [id])
   sotuv           Sotuv?         @relation(fields: [sotuvId], references: [id])
+  otkazma         Otkazma?       @relation(fields: [otkazmaId], references: [id])
   foydalanuvchi   Foydalanuvchi  @relation(fields: [foydalanuvchiId], references: [id])
 
   @@index([tovarId])
   @@index([tovarId, turi, joy])
   @@index([sotuvId])
+  @@index([otkazmaId])
   @@index([sana])
   @@map("ombor_harakati")
 }
@@ -239,7 +288,13 @@ enum HarakatTuri {
   CHIQIM
   QAYTARISH
   YOQOTISH
+  // Filial ICHIDA: ombordan do'konga ko'chirish (bitta mahsulot ichida).
   OTKAZMA
+  // Filiallar ORASIDA o'tkazma. Ataylab alohida turlar: OTKAZMA'ni
+  // qayta ishlatib bo'lmaydi, chunki qoldiq hisobida u joy'ga qaramay
+  // do'kon qoldig'ini oshiradi — manba mahsulot yolg'ondan boyib ketardi.
+  OTKAZMA_CHIQIM
+  OTKAZMA_KIRIM
 }
 
 enum Joylashuv {
@@ -254,12 +309,26 @@ model Mijoz {
   id            String   @id @default(cuid())
   ism           String
   telefon       String?
+  // Ikkinchi raqam — ko'pincha Telegram ulangan raqam yoki qarindoshining
+  // raqami. Asosiy raqam javob bermaganda bog'lanish uchun.
+  telefon2      String?
+  // Hudud qo'lda belgilanadi: ro'yxatdan tanlanadi yoki erkin yoziladi
+  // (ro'yxatda yo'q joy nomi ham yo'qolib qolmasin). manzil esa ko'cha/uy
+  // darajasidagi tafsilot uchun qoladi.
+  viloyat       String?
+  tuman         String?
   manzil        String?
   // GPS orqali qo'lda belgilangan joylashuv (masalan mijoz oldiga borib olingan) —
   // manzil matni bilan bir qatorda, mustaqil ixtiyoriy maydon.
   lokatsiyaLat  Float?
   lokatsiyaLng  Float?
   izoh          String?
+  // Sodiqlik dasturi — IKKITA mustaqil hisob. Balans shu yerda saqlanadi,
+  // har bir o'zgarish esa SodiqlikHarakati jurnalida (audit izi bilan).
+  // Balansni jurnaldan qayta hisoblash mumkin, lekin har o'qishda
+  // yig'indi hisoblamaslik uchun tayyor ustun ham yuritiladi.
+  ballBalans    Decimal  @default(0) @db.Decimal(12, 2)
+  keshbekBalans Decimal  @default(0) @db.Decimal(12, 2)
   maxsus_kod    String?  @unique
   telegram_id   String?  @unique
   // Telegram'da topilmagan mijozlar uchun flag — qayta urinmaslik (PEER_FLOOD risk).
@@ -279,9 +348,11 @@ model Mijoz {
   nasiyalar       Nasiya[]
   bildirishnomlar BildirishnomLog[]
   buyurtmalar     Buyurtma[]
+  sodiqlikHarakatlari SodiqlikHarakati[]
 
   @@index([filialId])
   @@index([egaId])
+  @@index([viloyat])
   @@map("mijozlar")
 }
 
@@ -296,8 +367,18 @@ model Sotuv {
   chegirma       Decimal     @default(0) @db.Decimal(12, 2)
   yakuniySumma   Decimal     @db.Decimal(12, 2)
   tolovUsuli     TolovUsuli  @default(NAQD)
+  // Pul qaysi kanal orqali tushgani. Bitta usulli sotuvda faqat bittasi
+  // to'ladi, ARALASH'da esa naqd + tanlangan ikkinchi kanal bo'linadi.
+  // NASIYA/SHERIK'da hammasi 0 — pul sotuv paytida tushmaydi.
   naqdTolangan   Decimal     @default(0) @db.Decimal(12, 2)
   kartaTolangan  Decimal     @default(0) @db.Decimal(12, 2)
+  clickTolangan  Decimal     @default(0) @db.Decimal(12, 2)
+  bankTolangan   Decimal     @default(0) @db.Decimal(12, 2)
+  // Shu sotuvda sodiqlik hisobidan qoplangan qism. Chegirmadan ALOHIDA
+  // yuritiladi — aks holda hisobotlarda "chegirma berdik" bilan "mijoz
+  // o'z ballini ishlatdi" bir-biriga qo'shilib ketardi.
+  ballIshlatilgan    Decimal @default(0) @db.Decimal(12, 2)
+  keshbekIshlatilgan Decimal @default(0) @db.Decimal(12, 2)
   kassirId       String
   holati         SotuvHolati @default(YAKUNLANGAN)
   sana           DateTime    @default(now())
@@ -316,6 +397,7 @@ model Sotuv {
   omborHarakati  OmborHarakati[]
   qaytarishlar       Qaytarish[]
   sherikdanOlishlar  SherikdanOlish[]
+  sodiqlikHarakatlari SodiqlikHarakati[]
 
   @@index([filialId])
   @@index([egaId])
@@ -325,6 +407,8 @@ model Sotuv {
 enum TolovUsuli {
   NAQD
   KARTA
+  CLICK
+  BANK
   ARALASH
   NASIYA
   SHERIK
@@ -435,9 +519,11 @@ model Taminotchi {
   filial        Filial?  @relation(fields: [filialId], references: [id])
   ega           Foydalanuvchi? @relation("TaminotchiEgasi", fields: [egaId], references: [id])
   xaridlar      Xarid[]
+  tovarlar      Tovar[]
   omborHarakati OmborHarakati[]
   sherikdanOlishlar      SherikdanOlish[]
   sherikdanOlishTolovlar SherikdanOlishTolov[]
+  sorovlar               TaminotchiSorov[]
 
   @@index([filialId])
   @@index([egaId])
@@ -534,6 +620,7 @@ model Xarajat {
   foydalanuvchi   Foydalanuvchi    @relation(fields: [foydalanuvchiId], references: [id])
   filial          Filial?          @relation(fields: [filialId], references: [id])
   ega             Foydalanuvchi?   @relation("XarajatEgasi", fields: [egaId], references: [id])
+  xodimTolovi     XodimTolov?
 
   @@index([filialId])
   @@index([egaId])
@@ -719,19 +806,35 @@ model QaytarishTarkibi {
 // ========================
 // BUYURTMALAR (SOTUVCHI → KASSIR)
 // ========================
+// Saqlab qo'yilgan savat ("zakaz"): kassir mijoz uchun mahsulot yig'ib
+// qo'yadi, keyin o'sha savatni qaytarib yuklab savdoni davom ettiradi.
+//
+// Ataylab serverda saqlanadi (brauzer xotirasida emas): boshqa kassir
+// yoki boshqa qurilmadan ham ochib davom ettirish mumkin bo'lsin.
 model Buyurtma {
   id          String         @id @default(cuid())
   sotuvchiId  String
   mijozId     String?
   holati      BuyurtmaHolati @default(KUTILMOQDA)
   jamiSumma   Decimal        @db.Decimal(12, 2)
+  // "Kimga va nima uchun" — saqlashda yoziladi, ro'yxatda ko'rinib turadi.
   izoh        String?
+  // Doiralash — Sotuv bilan bir xil naqsh. Busiz bir do'konning saqlangan
+  // zakazlari boshqasining kassasida ko'rinib qolardi.
+  filialId    String?
+  egaId       String?
   yaratilgan  DateTime       @default(now())
+  yangilangan DateTime       @updatedAt
 
   sotuvchi    Foydalanuvchi  @relation(fields: [sotuvchiId], references: [id])
   mijoz       Mijoz?         @relation(fields: [mijozId], references: [id])
+  filial      Filial?        @relation(fields: [filialId], references: [id])
+  ega         Foydalanuvchi? @relation("BuyurtmaEgasi", fields: [egaId], references: [id])
   tarkiblar   BuyurtmaTarkibi[]
 
+  @@index([holati, yaratilgan])
+  @@index([filialId])
+  @@index([egaId])
   @@map("buyurtmalar")
 }
 
@@ -781,4 +884,223 @@ model BildirishnomLog {
   @@index([status, keyingiUrinish])
   @@index([xabarTuri])
   @@map("bildirishnom_loglar")
+}
+
+// ========================
+// SODIQLIK (BALLAR VA KESHBEKLAR)
+// ========================
+// Har bir o'zgarish shu jurnalga yoziladi: sotuvdan to'plangan, kassada
+// sarflangan yoki admin qo'lda tuzatgan. `balansKeyin` — harakatdan keyingi
+// balans, ya'ni har qatorga qarab "o'shanda qancha edi" deb aytish mumkin.
+model SodiqlikHarakati {
+  id          String          @id @default(cuid())
+  mijozId     String
+  hisob       SodiqlikHisobi
+  /** Musbat — qo'shildi, manfiy — sarflandi. */
+  miqdor      Decimal         @db.Decimal(12, 2)
+  balansKeyin Decimal         @db.Decimal(12, 2)
+  sabab       SodiqlikSabab
+  sotuvId     String?
+  izoh        String?
+  foydalanuvchiId String?
+  sana        DateTime        @default(now())
+
+  mijoz         Mijoz          @relation(fields: [mijozId], references: [id], onDelete: Cascade)
+  sotuv         Sotuv?         @relation(fields: [sotuvId], references: [id])
+  foydalanuvchi Foydalanuvchi? @relation(fields: [foydalanuvchiId], references: [id])
+
+  @@index([mijozId, sana])
+  @@index([sotuvId])
+  @@index([sana])
+  @@map("sodiqlik_harakatlari")
+}
+
+enum SodiqlikHisobi {
+  BALL
+  KESHBEK
+}
+
+enum SodiqlikSabab {
+  SOTUVDAN      // xariddan to'plandi
+  SARFLANDI     // kassada chegirma sifatida ishlatildi
+  QAYTARISHDAN  // tovar qaytarilgani uchun bekor qilindi
+  QOLDA         // admin qo'lda tuzatdi
+}
+
+// ========================
+// FILIALLARARO O'TKAZMA
+// ========================
+// Bir omborda ortib qolgan tovarni boshqasiga o'tkazish. Bir bosqichli:
+// tasdiqlash kutilmaydi, hujjat yaratilishi bilan ikkala tomonning qoldig'i
+// darhol o'zgaradi.
+//
+// Hujjat (Otkazma + OtkazmaTarkibi) va zaxira jurnali (OmborHarakati)
+// alohida yuritiladi — Sotuv/SotuvTarkibi bilan aynan bir xil naqsh.
+model Otkazma {
+  id             String    @id @default(cuid())
+  // null = Ega markaziy ombori (filialsiz katalog)
+  manbaFilialId  String?
+  qabulFilialId  String?
+  manbaJoy       Joylashuv @default(OMBOR)
+  qabulJoy       Joylashuv @default(OMBOR)
+  izoh           String?
+  sana           DateTime  @default(now())
+  foydalanuvchiId String
+  egaId          String?
+
+  manbaFilial    Filial?       @relation("OtkazmaManba", fields: [manbaFilialId], references: [id])
+  qabulFilial    Filial?       @relation("OtkazmaQabul", fields: [qabulFilialId], references: [id])
+  foydalanuvchi  Foydalanuvchi @relation(fields: [foydalanuvchiId], references: [id])
+  tarkiblar      OtkazmaTarkibi[]
+  harakatlar     OmborHarakati[]
+
+  @@index([sana])
+  @@index([manbaFilialId])
+  @@index([qabulFilialId])
+  @@index([egaId])
+  @@map("otkazmalar")
+}
+
+// Hujjat qatori. Manba va qabul mahsulot AYRIM qatorlar (har filialning
+// o'z katalogi bor), shuning uchun ikkalasi ham saqlanadi — faqat
+// harakatlardan qaysi mahsulot qaysiga o'tganini aniqlab bo'lmasdi.
+model OtkazmaTarkibi {
+  id           String  @id @default(cuid())
+  otkazmaId    String
+  manbaTovarId String
+  qabulTovarId String
+  miqdor       Decimal @db.Decimal(12, 3)
+  // Manbaning kelish narxi — tannarx filiallar orasida sun'iy o'zgarmasin.
+  narx         Decimal @db.Decimal(12, 2)
+
+  otkazma      Otkazma @relation(fields: [otkazmaId], references: [id], onDelete: Cascade)
+  manbaTovar   Tovar   @relation("OtkazmaManbaTovar", fields: [manbaTovarId], references: [id])
+  qabulTovar   Tovar   @relation("OtkazmaQabulTovar", fields: [qabulTovarId], references: [id])
+
+  @@index([otkazmaId])
+  @@map("otkazma_tarkibi")
+}
+
+// Adminga ketadigan kunlik hisobot jurnali.
+//
+// BildirishnomLog'dan alohida: u MIJOZga ketadigan xabarlar uchun
+// (`mijozId` majburiy), bu esa XODIMga (Ega/Admin) ketadigan ichki hisobot.
+//
+// `kunKaliti` — Toshkent vaqti bo'yicha "YYYY-MM-DD". Qabul qiluvchi bilan
+// birgalikda unique: bir kunda bir adminга hisobot bir marta ketadi.
+// Muvaffaqiyatsiz urinish shu qatorni yangilaydi (upsert), shuning uchun
+// keyingi urinish takroriy xabar yubormaydi.
+model KunlikHisobotLog {
+  id              String   @id @default(cuid())
+  kunKaliti       String
+  qabulQiluvchiId String
+  telefon         String?
+  status          String   @default("pending") // pending | sent | failed | skipped
+  xato            String?
+  kamQolganSoni   Int      @default(0)
+  tugaganSoni     Int      @default(0)
+  matn            String?
+  urinishSoni     Int      @default(0)
+  sana            DateTime @default(now())
+  yuborilganSana  DateTime?
+
+  qabulQiluvchi   Foydalanuvchi @relation("KunlikHisobotlar", fields: [qabulQiluvchiId], references: [id], onDelete: Cascade)
+
+  @@unique([kunKaliti, qabulQiluvchiId])
+  @@index([sana])
+  @@map("kunlik_hisobot_loglar")
+}
+
+// Ta'minotchiga yuborilgan mahsulot so'rovi (buyurtma).
+//
+// `Xarid` — mahsulot ALLAQACHON kelgandan keyingi hujjat (pul, qarz, qoldiq).
+// Bu esa undan OLDINGI qadam: "menga shu narsalar kerak" degan xabar.
+// Alohida model, chunki so'rov qoldiqqa ham, pulga ham ta'sir qilmaydi —
+// u faqat aloqa hujjati va keyin nima buyurtma qilinganini eslab qolish uchun.
+model TaminotchiSorov {
+  id              String   @id @default(cuid())
+  taminotchiId    String
+  // Yuborilgan xabarning TO'LIQ matni. Keyin mahsulot nomi o'zgarsa ham
+  // ta'minotchi aynan nimani olganini ko'rish uchun o'zgarmas nusxa.
+  matn            String
+  // Kassir qo'lda yozgan qo'shimcha qism (ixtiyoriy)
+  qoshimchaIzoh   String?
+  telefon         String?
+  status          String   @default("pending") // pending | sent | failed
+  xato            String?
+  urinishSoni     Int      @default(0)
+  sana            DateTime @default(now())
+  yuborilganSana  DateTime?
+  foydalanuvchiId String
+  filialId        String?
+  egaId           String?
+
+  taminotchi      Taminotchi     @relation(fields: [taminotchiId], references: [id], onDelete: Cascade)
+  foydalanuvchi   Foydalanuvchi  @relation("TaminotchiSorovlari", fields: [foydalanuvchiId], references: [id])
+  filial          Filial?        @relation(fields: [filialId], references: [id])
+  ega             Foydalanuvchi? @relation("TaminotchiSorovEgasi", fields: [egaId], references: [id])
+  tarkiblar       TaminotchiSorovTarkibi[]
+
+  @@index([taminotchiId, sana])
+  @@index([filialId])
+  @@index([egaId])
+  @@map("taminotchi_sorovlari")
+}
+
+// So'rov qatori. `tovarId` ixtiyoriy: katalogda yo'q narsani qo'lda
+// yozib qo'shish ham mumkin. `nomi` har doim nusxa sifatida saqlanadi —
+// tovar keyin o'chirilsa ham so'rov tarixi o'qilishi kerak.
+model TaminotchiSorovTarkibi {
+  id       String  @id @default(cuid())
+  sorovId  String
+  tovarId  String?
+  nomi     String
+  miqdor   Decimal @db.Decimal(12, 3)
+  birlik   String  @default("DONA")
+  izoh     String?
+
+  sorov    TaminotchiSorov @relation(fields: [sorovId], references: [id], onDelete: Cascade)
+  tovar    Tovar?          @relation(fields: [tovarId], references: [id], onDelete: SetNull)
+
+  @@index([sorovId])
+  @@map("taminotchi_sorov_tarkibi")
+}
+
+enum XodimTolovTuri {
+  OYLIK   // oylik maosh to'lovi
+  BONUS   // mukofot
+  AVANS   // oylikdan oldindan berilgan pul
+  JARIMA  // ushlab qolingan summa
+}
+
+// Xodimga qilingan to'lov yoki undan ushlab qolingan summa.
+//
+// OYLIK/BONUS/AVANS — do'kondan chiqqan pul, shuning uchun ular
+// `Xarajat` (kategoriya=MAOSH) yozuvini ham yaratadi va moliyaviy
+// hisobotlarga tushadi. JARIMA esa pul chiqimi emas — u faqat xodim
+// hisobini kamaytiradi, xarajat yaratmaydi.
+model XodimTolov {
+  id         String         @id @default(cuid())
+  xodimId    String
+  turi       XodimTolovTuri
+  summa      Decimal        @db.Decimal(12, 2)
+  // Qaysi oy uchun — "2026-09" ko'rinishida. Bonus/avans uchun ixtiyoriy.
+  davr       String?
+  izoh       String?
+  sana       DateTime       @default(now())
+  yaratganId String
+  filialId   String?
+  egaId      String?
+  // Yaratilgan xarajat yozuvi — to'lov o'chirilsa u ham o'chiriladi.
+  xarajatId  String?        @unique
+
+  xodim      Foydalanuvchi  @relation("XodimTolovlari", fields: [xodimId], references: [id], onDelete: Cascade)
+  yaratgan   Foydalanuvchi  @relation("XodimTolovYaratgan", fields: [yaratganId], references: [id])
+  filial     Filial?        @relation(fields: [filialId], references: [id])
+  xarajat    Xarajat?       @relation(fields: [xarajatId], references: [id], onDelete: SetNull)
+
+  @@index([xodimId, sana])
+  @@index([filialId])
+  @@index([davr])
+  @@map("xodim_tolovlari")
 }

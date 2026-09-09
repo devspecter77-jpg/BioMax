@@ -74,15 +74,15 @@ export default function MobileNav() {
                   'flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ease-out',
                   isMoreActive
                     ? 'bg-primary-light dark:bg-[#132B20] text-primary dark:text-[#2E9B6B] -translate-y-0.5 shadow-sm shadow-primary/20'
-                    : 'text-gray-400 dark:text-gray-600 group-active:scale-90'
+                    : 'text-gray-500 dark:text-gray-400 group-active:scale-90'
                 )}
               >
                 <Grid3x3 size={20} strokeWidth={isMoreActive ? 2.4 : 2} />
               </span>
               <span
                 className={cn(
-                  'text-[10px] font-medium leading-none transition-colors duration-200',
-                  isMoreActive ? 'text-primary dark:text-[#2E9B6B]' : 'text-gray-400 dark:text-gray-600'
+                  'text-[11px] font-medium leading-none transition-colors duration-200',
+                  isMoreActive ? 'text-primary dark:text-[#2E9B6B]' : 'text-gray-500 dark:text-gray-400'
                 )}
               >
                 Barchasi
@@ -111,15 +111,15 @@ function NavTab({ item, active }: { item: NavItem; active: boolean }) {
           'flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ease-out',
           active
             ? 'bg-primary-light dark:bg-[#132B20] text-primary dark:text-[#2E9B6B] -translate-y-0.5 shadow-sm shadow-primary/20'
-            : 'text-gray-400 dark:text-gray-600'
+            : 'text-gray-500 dark:text-gray-400'
         )}
       >
         <Icon size={20} strokeWidth={active ? 2.4 : 2} />
       </span>
       <span
         className={cn(
-          'text-[10px] font-medium leading-none truncate max-w-[64px] transition-colors duration-200',
-          active ? 'text-primary dark:text-[#2E9B6B]' : 'text-gray-400 dark:text-gray-600'
+          'text-[11px] font-medium leading-none truncate max-w-[64px] transition-colors duration-200',
+          active ? 'text-primary dark:text-[#2E9B6B]' : 'text-gray-500 dark:text-gray-400'
         )}
       >
         {item.label}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { balansOzgartir } from '@/lib/sodiqlik-server'
 
 export async function GET(req: NextRequest) {
   try {
@@ -158,6 +159,39 @@ export async function POST(req: NextRequest) {
             holati: yangiHolat,
           },
         })
+      }
+
+      // 4. Sodiqlik: shu xariddan olingan ball/keshbek PROPORSIONAL
+      //    qaytarib olinadi. Aks holda mijoz tovarni qaytarib, u uchun
+      //    berilgan ballni o'zida saqlab qolardi.
+      //    Balans allaqachon sarflangan bo'lsa manfiyga ketmaydi —
+      //    balansOzgartir bor bo'lganini ayiradi.
+      if (aslSotuv.mijozId) {
+        const sotuvSummasi = Number(aslSotuv.yakuniySumma)
+        if (sotuvSummasi > 0) {
+          const ulush = Math.min(1, jamiSumma / sotuvSummasi)
+          const toplanganlar = await tx.sodiqlikHarakati.findMany({
+            where: { sotuvId: aslSotuvId, sabab: 'SOTUVDAN' },
+            select: { hisob: true, miqdor: true },
+          })
+          for (const t of toplanganlar) {
+            const qaytariladi = Number(t.miqdor) * ulush
+            const yaxlit = t.hisob === 'BALL'
+              ? Math.floor(qaytariladi * 100) / 100
+              : Math.floor(qaytariladi)
+            if (yaxlit > 0) {
+              await balansOzgartir(tx, {
+                mijozId: aslSotuv.mijozId,
+                hisob: t.hisob,
+                miqdor: -yaxlit,
+                sabab: 'QAYTARISHDAN',
+                sotuvId: aslSotuvId,
+                izoh: `Qaytarish (${Math.round(ulush * 100)}%)`,
+                foydalanuvchiId: kassirId,
+              })
+            }
+          }
+        }
       }
 
       return qaytarish

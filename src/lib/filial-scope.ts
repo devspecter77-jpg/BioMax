@@ -40,3 +40,24 @@ export function egaFilialWhere(session: Session | null): { filialId: string } | 
   if (filialId) return { filialId }
   return { filialId: null, egaId: sessionEgaId(session) }
 }
+
+/** `egaFilialWhere` uchun kerak bo'ladigan minimal foydalanuvchi maydonlari. */
+export interface DoiraFoydalanuvchi {
+  id: string | null
+  filialId: string | null
+  ulashilganEgaId: string | null
+}
+
+/**
+ * `egaFilialWhere` bilan AYNAN bir xil qoida, lekin sessiyasiz — baza
+ * yozuvidan. Fon jarayonlari (kunlik hisobot, cron) sessiyaga ega emas,
+ * lekin foydalanuvchining ko'rish doirasi o'zgarmasligi kerak.
+ *
+ * `ulashilganEgaId || id` — `sessionEgaId` dagi qoidaning aynan o'zi:
+ * ulashilgan admin ulashgan Eganing katalogini ko'radi, boshqalar o'zinikini.
+ * Ikkalasi o'zgarsa birga o'zgarishi kerak.
+ */
+export function foydalanuvchiFilialWhere(u: DoiraFoydalanuvchi): { filialId: string } | { filialId: null; egaId: string | null } {
+  if (u.filialId) return { filialId: u.filialId }
+  return { filialId: null, egaId: u.ulashilganEgaId || u.id }
+}

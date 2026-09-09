@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { tolovQisqa, tolovKanallari } from '@/lib/tolov-usullari'
 
 // ─── Turlar ──────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,8 @@ interface ChekData {
   tolovUsuli: string
   naqdTolangan: number
   kartaTolangan: number
+  clickTolangan: number
+  bankTolangan: number
   kassir: string
   mijoz: { ism: string } | null
   tarkiblar: {
@@ -57,14 +60,6 @@ function fSana(s: string) {
 function fSanaQisqa(s: string) {
   const d = new Date(s)
   return d.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-const TOLOV_NOMLARI: Record<string, string> = {
-  NAQD: 'Naqd',
-  KARTA: 'Karta',
-  ARALASH: 'Aralash',
-  NASIYA: 'Nasiya',
-  SHERIK: 'Sherik',
 }
 
 const BIRLIK_NOMLARI: Record<string, string> = {
@@ -143,7 +138,7 @@ export default function PublicChekPage() {
             <div className="flex items-center justify-between mb-3">
               <h1 className="text-xl font-bold tracking-tight">{data.dokon.nomi}</h1>
               <span className="bg-white/20 px-2.5 py-0.5 rounded-lg text-xs font-medium backdrop-blur-sm">
-                {TOLOV_NOMLARI[data.tolovUsuli] || data.tolovUsuli}
+                {tolovQisqa(data.tolovUsuli)}
               </span>
             </div>
             {data.dokon.manzil && (
@@ -194,7 +189,7 @@ export default function PublicChekPage() {
                       <p className="text-gray-900 text-sm font-medium leading-snug flex items-center gap-1.5">
                         {t.tovar}
                         {bonusmi && (
-                          <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full shrink-0">Bonus</span>
+                          <span className="text-[11px] font-semibold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full shrink-0">Bonus</span>
                         )}
                       </p>
                       {!bonusmi && (
@@ -242,18 +237,12 @@ export default function PublicChekPage() {
             {/* To'lov tafsilotlari */}
             {data.tolovUsuli === 'ARALASH' && (
               <div className="pt-2 space-y-1">
-                {Number(data.naqdTolangan) > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-400">Naqd to'langan</span>
-                    <span className="text-gray-600">{fSum(Number(data.naqdTolangan))}</span>
+                {tolovKanallari(data).map(kanal => (
+                  <div key={kanal.usul} className="flex justify-between text-xs">
+                    <span className="text-gray-400">{tolovQisqa(kanal.usul)} to&apos;langan</span>
+                    <span className="text-gray-600">{fSum(kanal.summa)}</span>
                   </div>
-                )}
-                {Number(data.kartaTolangan) > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-400">Karta to'langan</span>
-                    <span className="text-gray-600">{fSum(Number(data.kartaTolangan))}</span>
-                  </div>
-                )}
+                ))}
               </div>
             )}
           </div>
@@ -301,7 +290,7 @@ export default function PublicChekPage() {
           )}
 
           <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 text-center">
-            <p className="text-gray-400 text-[10px]">BioMax — Do'kon boshqaruv tizimi</p>
+            <p className="text-gray-400 text-[11px]">BioMax — Do'kon boshqaruv tizimi</p>
           </div>
         </div>
       </div>

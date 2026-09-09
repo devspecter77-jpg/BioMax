@@ -13,7 +13,7 @@ export function ReportSection({ sarlavha, izoh, actions, children }: Props) {
         <div>
           <h2 className="text-gray-900 dark:text-gray-100 font-semibold">{sarlavha}</h2>
           {izoh && (
-            <p className="text-gray-400 dark:text-gray-600 text-xs mt-0.5">{izoh}</p>
+            <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">{izoh}</p>
           )}
         </div>
         {actions}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
+import { tolovQisqa } from '@/lib/tolov-usullari'
 
 export async function GET() {
   try {
@@ -39,6 +40,7 @@ export async function GET() {
       'Kelish narxi': Number(t.kelishNarxi),
       'Sotish narxi': Number(t.sotishNarxi),
       'Minimal qoldiq': t.minimalQoldiq,
+      'Keltirilgan manzil': t.keltirilganManzil || '',
       'Holati': t.holati,
     }))
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tovarData), 'Tovarlar')
@@ -48,11 +50,13 @@ export async function GET() {
       'Chek raqami': s.chekRaqami,
       'Sana': new Date(s.sana).toLocaleString('uz-UZ'),
       'Kassir': s.kassir?.ism || '',
-      "To'lov usuli": s.tolovUsuli,
+      "To'lov usuli": tolovQisqa(s.tolovUsuli),
       'Jami summa': Number(s.yakuniySumma),
       'Chegirma': Number(s.chegirma),
       'Naqd': Number(s.naqdTolangan),
       'Karta': Number(s.kartaTolangan),
+      'Click': Number(s.clickTolangan),
+      "Bank o'tkazmasi": Number(s.bankTolangan),
       'Mijoz': s.mijoz?.ism || '',
       'Tovarlar': s.tarkiblar.map(t => `${t.tovar?.nomi} x${Number(t.miqdor)}`).join(', '),
     }))

@@ -41,7 +41,7 @@ export default function LoginForm() {
 
       <div className="mb-7">
         <h2 className="text-xl font-bold text-primary">Tizimga kirish</h2>
-        <p className="text-gray-500 dark:text-gray-500 text-sm mt-1">Hisobingizga kiring</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Hisobingizga kiring</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -111,7 +111,7 @@ export default function LoginForm() {
         </button>
       </form>
 
-      <p className="text-gray-400 dark:text-gray-600 text-xs text-center mt-6">
+      <p className="text-gray-500 dark:text-gray-400 text-xs text-center mt-6">
         Muammo bo&apos;lsa, administrator bilan bog&apos;laning
       </p>
     </div>

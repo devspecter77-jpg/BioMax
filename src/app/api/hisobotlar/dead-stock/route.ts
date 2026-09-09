@@ -58,10 +58,12 @@ export async function GET(_req: NextRequest) {
         const m = Number(h.miqdor)
         if (h.turi === 'KIRIM' || h.turi === 'QAYTARISH') {
           qoldiq += m
-        } else if (h.turi === 'CHIQIM' || h.turi === 'YOQOTISH') {
+        } else if (h.turi === 'OTKAZMA_KIRIM') {
+          qoldiq += m
+        } else if (h.turi === 'CHIQIM' || h.turi === 'YOQOTISH' || h.turi === 'OTKAZMA_CHIQIM') {
           qoldiq -= m
         }
-        // OTKAZMA - e'tiborga olinmaydi (ichki ko'chirish)
+        // OTKAZMA - e'tiborga olinmaydi (filial ichida ombor->do'kon)
       }
 
       if (qoldiq <= 0) continue // Qoldiq yo'q tovarlar dead stock emas

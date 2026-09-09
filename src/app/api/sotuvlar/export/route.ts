@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { tolovQisqa } from '@/lib/tolov-usullari'
 import { egaFilialWhere } from '@/lib/filial-scope'
 
 export async function GET(req: NextRequest) {
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
         Kassir: s.kassir.ism,
         Mijoz: s.mijoz?.ism ?? '\u2014',
         Telefon: s.mijoz?.telefon ?? '',
-        "To'lov usuli": s.tolovUsuli,
+        "To'lov usuli": tolovQisqa(s.tolovUsuli),
         Summa: jamiSumma,
         Chegirma: Number(s.chegirma),
         'Chegirma %': chegirmaFoizi,

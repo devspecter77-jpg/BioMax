@@ -70,7 +70,7 @@ export default function MoneyInput({
         className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 outline-none min-w-0"
       />
       {suffix && displayValue && (
-        <span className="text-gray-400 dark:text-gray-600 text-sm shrink-0 whitespace-nowrap">{suffix}</span>
+        <span className="text-gray-500 dark:text-gray-400 text-sm shrink-0 whitespace-nowrap">{suffix}</span>
       )}
     </div>
   )

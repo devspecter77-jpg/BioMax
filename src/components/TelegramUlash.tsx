@@ -146,7 +146,7 @@ export default function TelegramUlash() {
           </div>
           <div className="text-left">
             <p className="text-gray-900 dark:text-gray-100 font-semibold text-sm">Telegram bildirishnomalar</p>
-            <p className="text-gray-400 dark:text-gray-600 text-xs">
+            <p className="text-gray-500 dark:text-gray-400 text-xs">
               {status?.ulangan ? `Ulangan: ${status.foydalanuvchi || status.telefon}` : "Ulanmagan — mijozlarga xabar yuborilmaydi"}
             </p>
           </div>
@@ -181,7 +181,7 @@ export default function TelegramUlash() {
             </div>
           ) : bosqich === 'ulash' ? (
             <form onSubmit={ulanish} className="space-y-3 pt-3">
-              <p className="text-gray-400 dark:text-gray-600 text-xs">
+              <p className="text-gray-500 dark:text-gray-400 text-xs">
                 API ID va API Hash ni <span className="text-blue-500">my.telegram.org</span> saytidan oling. Bu — mijozlarga chek yuboriladigan Telegram akkaunt (bot emas, real telefon raqam).
               </p>
               <input required value={apiId} onChange={e => setApiId(e.target.value)} placeholder="API ID" className={inputCls} />
@@ -194,7 +194,7 @@ export default function TelegramUlash() {
             </form>
           ) : (
             <form onSubmit={tasdiqlash} className="space-y-3 pt-3">
-              <p className="text-gray-400 dark:text-gray-600 text-xs">Telegram&apos;ga kelgan tasdiqlash kodini kiriting.</p>
+              <p className="text-gray-500 dark:text-gray-400 text-xs">Telegram&apos;ga kelgan tasdiqlash kodini kiriting.</p>
               <input required value={code} onChange={e => setCode(e.target.value)} placeholder="Kod" className={inputCls} />
               <input value={password} onChange={e => setPassword(e.target.value)} placeholder="2FA parol (agar yoqilgan bo'lsa)" type="password" className={inputCls} />
               <div className="flex gap-2">

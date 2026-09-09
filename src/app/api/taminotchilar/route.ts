@@ -11,7 +11,7 @@ export async function GET() {
     const taminotchilar = await prisma.taminotchi.findMany({
       where: egaFilialWhere(session),
       include: {
-        _count: { select: { xaridlar: true } },
+        _count: { select: { xaridlar: true, tovarlar: true } },
         xaridlar: { select: { qoldiqQarz: true } },
       },
       orderBy: { nomi: 'asc' },
@@ -34,9 +34,10 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const data = await req.json()
+    if (!data.nomi?.trim()) return NextResponse.json({ xato: 'Nomi majburiy' }, { status: 400 })
     const tam = await prisma.taminotchi.create({
       data: {
-        nomi: data.nomi,
+        nomi: data.nomi.trim(),
         kontaktShaxs: data.kontaktShaxs,
         telefon: data.telefon,
         manzil: data.manzil,

@@ -43,7 +43,7 @@ export function ReportFilter({ tur, dan, gacha, onChange }: Props) {
           className={`${inputCls} flex-1 min-w-0 sm:flex-none`}
           aria-label="Boshlanish sanasi"
         />
-        <span className="text-gray-400 dark:text-gray-600 shrink-0">—</span>
+        <span className="text-gray-500 dark:text-gray-400 shrink-0">—</span>
         <input
           type="date"
           value={gacha}

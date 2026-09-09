@@ -47,3 +47,11 @@ coverage/
 playwright-report/
 test-results/
 .vitest-cache/
+
+# Vaqtinchalik va zaxira fayllar — repoda saqlanmasin
+# (deploy.sh.bak ichida eski AUTH_SECRET qolgan edi)
+*.bak
+*.bak-*
+add_tovarlar_temp.js
+__*.ts
+__*.mjs

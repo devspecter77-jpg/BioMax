@@ -72,7 +72,7 @@ export function NasiyaDrillDownModal({
             >
               {sarlavha}
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               {BUCKET_LABELS[bucket] ?? bucket} &bull; {soni} ta &bull; Jami
               qoldiq:{' '}
               <span className="font-medium text-red-600">
@@ -90,13 +90,13 @@ export function NasiyaDrillDownModal({
         </header>
         <div className="flex-1 overflow-y-auto p-4">
           {nasiyalar.length === 0 ? (
-            <p className="text-center py-12 text-gray-400 dark:text-gray-600">
+            <p className="text-center py-12 text-gray-500 dark:text-gray-400">
               Bu bucketda nasiya yo&apos;q
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-gray-500 dark:text-gray-500 border-b border-gray-200 dark:border-neutral-800">
+                <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-neutral-800">
                   <th className="text-left py-2 px-2">Mijoz</th>
                   <th className="text-left py-2 px-2">Telefon</th>
                   <th className="text-right py-2 px-2">Qoldiq</th>

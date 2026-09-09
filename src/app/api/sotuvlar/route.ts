@@ -1,9 +1,11 @@
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { generateChekRaqami } from '@/lib/utils'
-import { nasiyaYaratildiXabarToliq, sotuvChekiXabar } from '@/lib/telegram'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { tolovTaqsimoti, tolovUsuliMi, aralashTekshir, type AralashKiritma } from '@/lib/tolov-usullari'
+import { sarflashniHisobla, sotuvdanToplanadi, ballSomda } from '@/lib/sodiqlik'
+import { sodiqlikSozlamasi, balansOzgartir } from '@/lib/sodiqlik-server'
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,7 +20,8 @@ export async function GET(req: NextRequest) {
     const chekRaqami = searchParams.get('chekRaqami')
     const kassirId = searchParams.get('kassirId')
     const mijozId = searchParams.get('mijozId')
-    const tolovUsuli = searchParams.get('tolovUsuli') as 'NAQD' | 'KARTA' | 'ARALASH' | 'NASIYA' | 'SHERIK' | null
+    const tolovUsuliParam = searchParams.get('tolovUsuli')
+    const tolovUsuli = tolovUsuliMi(tolovUsuliParam) ? tolovUsuliParam : null
     const q = searchParams.get('q')
     const sort = searchParams.get('sort')
     const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
@@ -104,6 +107,100 @@ export async function POST(req: NextRequest) {
     const data = await req.json()
     const kassirId = (session.user as any).id
 
+    // To'lov usuli — enum'da yo'q qiymat kelsa sotuv butunlay yiqilardi
+    // (Prisma xatosi), shuning uchun oldindan tekshiramiz.
+    if (!tolovUsuliMi(data.tolovUsuli)) {
+      return NextResponse.json({ xato: "Noma'lum to'lov usuli" }, { status: 400 })
+    }
+
+    const yakuniySumma = parseFloat(data.yakuniySumma)
+    if (!Number.isFinite(yakuniySumma) || yakuniySumma < 0) {
+      return NextResponse.json({ xato: "Noto'g'ri yakuniy summa" }, { status: 400 })
+    }
+
+    // ── Sodiqlik: sarflashni SERVERDA qayta hisoblash ──
+    // Brauzer yuborgan qiymatga ishonib bo'lmaydi — balansdan ortiq
+    // sarflash yoki chegarani chetlab o'tish mumkin bo'lardi. Shuning
+    // uchun mijozning haqiqiy balansidan qayta hisoblanadi va client
+    // ko'rsatgan yakuniy summa shunga MOS kelishi talab qilinadi.
+    const sodiqlikSozlama = await sodiqlikSozlamasi()
+    const soralganSarf = (data.sodiqlikSarf ?? {}) as { ball?: number; keshbek?: number }
+    const sarfSoralgan = (Number(soralganSarf.ball) || 0) > 0 || (Number(soralganSarf.keshbek) || 0) > 0
+
+    let sarflash = { ball: 0, keshbek: 0, jamiChegirma: 0 }
+    if (sarfSoralgan) {
+      if (!data.mijozId) {
+        return NextResponse.json({ xato: 'Ball/keshbek sarflash uchun mijoz tanlanishi kerak' }, { status: 400 })
+      }
+      const mijozBalans = await prisma.mijoz.findFirst({
+        where: { id: data.mijozId, ...egaFilialWhere(session) },
+        select: { ballBalans: true, keshbekBalans: true },
+      })
+      if (!mijozBalans) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
+
+      // Sodiqlikdan oldingi chek summasi = jami - chegirma
+      const chekSummasi = (parseFloat(data.jamiSumma) || 0) - (parseFloat(data.chegirma) || 0)
+      const hisob = sarflashniHisobla({
+        chekSummasi,
+        ballBalans: Number(mijozBalans.ballBalans),
+        keshbekBalans: Number(mijozBalans.keshbekBalans),
+        soralgan: soralganSarf,
+        sozlama: sodiqlikSozlama,
+      })
+
+      // Client ko'rsatgan summa server hisobiga mos kelmasa — to'xtatamiz.
+      // Jimgina "to'g'rilab" yuborish kassirga bir summa, mijozga boshqa
+      // summa ko'rsatilishiga olib kelardi.
+      const kutilganYakuniy = chekSummasi - hisob.jamiChegirma
+      if (Math.abs(kutilganYakuniy - yakuniySumma) >= 1) {
+        return NextResponse.json({
+          xato: `Ball/keshbek balansi o'zgargan — sahifani yangilang. Hozirgi balans bo'yicha to'lov: ${Math.round(kutilganYakuniy).toLocaleString('uz-UZ')} so'm`,
+        }, { status: 409 })
+      }
+      sarflash = { ball: hisob.ball, keshbek: hisob.keshbek, jamiChegirma: hisob.jamiChegirma }
+    }
+
+    // Ball so'mda qancha qoplagani — chekda va hisobotlarda shu ko'rinadi
+    const sarflanganBallSom = ballSomda(sarflash.ball, sodiqlikSozlama)
+
+    // Aralash to'lovda kanal summalarining yig'indisi yakuniy summaga teng
+    // bo'lishi SHART. Bu tekshiruv brauzerda ham bor, lekin so'rovni to'g'ridan
+    // to'g'ri yuborib chetlab o'tish mumkin — u holda kassa hisoboti jimgina
+    // noto'g'ri bo'lib qolardi (masalan 100 000 lik sotuvda 30 000 qayd etilib).
+    const aralash = data.aralash as AralashKiritma | undefined
+    if (data.tolovUsuli === 'ARALASH') {
+      const natija = aralashTekshir(aralash, yakuniySumma)
+      if (!natija.ok) return NextResponse.json({ xato: natija.xato }, { status: 400 })
+    }
+
+    // Kanal summalari (naqd/karta/click/bank) — bitta usulli sotuvda
+    // yakuniy summadan, aralashda esa kassir kiritgan qiymatlardan
+    // (yuqorida yig'indisi tekshirilgan) hisoblanadi.
+    const kanalSummalari = tolovTaqsimoti({
+      tolovUsuli: data.tolovUsuli,
+      yakuniySumma,
+      aralash,
+    })
+
+    // Qulflangan tovarni sotib bo'lmaydi. Bu HAQIQIY himoya: POS ro'yxati
+    // va skaner allaqachon ularni ko'rsatmaydi, lekin savatda tovar turgan
+    // paytda qulflansa yoki so'rov to'g'ridan-to'g'ri yuborilsa shu yerda
+    // to'xtatiladi.
+    const sotilayotganIdlar = [...new Set(
+      (data.tarkiblar as { tovarId: string }[]).map(t => t.tovarId).filter(Boolean),
+    )]
+    if (sotilayotganIdlar.length > 0) {
+      const qulflanganlar = await prisma.tovar.findMany({
+        where: { id: { in: sotilayotganIdlar }, qulflangan: true },
+        select: { nomi: true },
+      })
+      if (qulflanganlar.length > 0) {
+        return NextResponse.json({
+          xato: `Qulflangan mahsulot sotilmaydi: ${qulflanganlar.map(t => t.nomi).join(', ')}`,
+        }, { status: 400 })
+      }
+    }
+
     // Tranzaksiya: sotuv + ombor harakati + nasiya
     const sotuv = await prisma.$transaction(async (tx) => {
       // 1. Sotuv yaratish
@@ -114,10 +211,13 @@ export async function POST(req: NextRequest) {
           sherikDokonId: data.sherikDokonId || null,
           jamiSumma: parseFloat(data.jamiSumma),
           chegirma: parseFloat(data.chegirma || 0),
-          yakuniySumma: parseFloat(data.yakuniySumma),
+          yakuniySumma,
           tolovUsuli: data.tolovUsuli,
-          naqdTolangan: parseFloat(data.naqdTolangan || 0),
-          kartaTolangan: parseFloat(data.kartaTolangan || 0),
+          ...kanalSummalari,
+          // Sodiqlik hisobidan qoplangan qism — ikkalasi ham SO'MDA.
+          // Ball soni (ochko) esa harakatlar jurnalida saqlanadi.
+          ballIshlatilgan: sarflanganBallSom,
+          keshbekIshlatilgan: sarflash.keshbek,
           kassirId,
           ...egaFilialWhere(session),
         },
@@ -192,6 +292,50 @@ export async function POST(req: NextRequest) {
         })
       }
 
+      // 5. Sodiqlik: avval SARFLANGANI ayiriladi, keyin yangi to'planadi.
+      //    Ikkalasi ham sotuv bilan BIR tranzaksiyada — sotuv bekor bo'lsa
+      //    ball ham qolib ketmaydi.
+      if (data.mijozId) {
+        if (sarflash.keshbek > 0) {
+          await balansOzgartir(tx, {
+            mijozId: data.mijozId, hisob: 'KESHBEK', miqdor: -sarflash.keshbek,
+            sabab: 'SARFLANDI', sotuvId: yangiSotuv.id,
+            izoh: `Chek ${yangiSotuv.chekRaqami}`, foydalanuvchiId: kassirId,
+          })
+        }
+        if (sarflash.ball > 0) {
+          await balansOzgartir(tx, {
+            mijozId: data.mijozId, hisob: 'BALL', miqdor: -sarflash.ball,
+            sabab: 'SARFLANDI', sotuvId: yangiSotuv.id,
+            izoh: `Chek ${yangiSotuv.chekRaqami}`, foydalanuvchiId: kassirId,
+          })
+        }
+
+        // To'plash bazasidan ballar bilan qoplangan qism chiqariladi —
+        // keshbek o'z ustiga keshbek bermasin.
+        const toplanadi = sotuvdanToplanadi({
+          yakuniySumma,
+          sarflanganKeshbek: sarflash.keshbek,
+          sarflanganBallSomda: sarflanganBallSom,
+          tolovUsuli: data.tolovUsuli,
+          sozlama: sodiqlikSozlama,
+        })
+        if (toplanadi.ball > 0) {
+          await balansOzgartir(tx, {
+            mijozId: data.mijozId, hisob: 'BALL', miqdor: toplanadi.ball,
+            sabab: 'SOTUVDAN', sotuvId: yangiSotuv.id,
+            izoh: `Chek ${yangiSotuv.chekRaqami}`, foydalanuvchiId: kassirId,
+          })
+        }
+        if (toplanadi.keshbek > 0) {
+          await balansOzgartir(tx, {
+            mijozId: data.mijozId, hisob: 'KESHBEK', miqdor: toplanadi.keshbek,
+            sabab: 'SOTUVDAN', sotuvId: yangiSotuv.id,
+            izoh: `Chek ${yangiSotuv.chekRaqami}`, foydalanuvchiId: kassirId,
+          })
+        }
+      }
+
       return yangiSotuv
     })
 
@@ -205,44 +349,11 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Telegram bildirishnoma — mijozga xabar (nasiya bo'lsa qarz tafsiloti bilan,
-    // aks holda oddiy xarid cheki bilan — ikkalasi ham mahsulotlar+summasini o'z ichiga oladi).
-    // `after()` — javob darhol qaytadi, xabar esa fon vazifasi sifatida yuboriladi
-    // (Vercel kabi serverless muhitda ham to'liq bajarilishini kafolatlaydi).
-    if (toliSotuv?.mijoz) {
-      const mijoz = toliSotuv.mijoz
-      const nasiya = toliSotuv.nasiya
-      after(async () => {
-        if (nasiya) {
-          await nasiyaYaratildiXabarToliq(
-            nasiya.id,
-            mijoz.id,
-            {
-              chekRaqami: toliSotuv.chekRaqami,
-              summasi: Number(toliSotuv.yakuniySumma),
-              qoldiqQarz: Number(nasiya.qoldiq),
-              muddat: nasiya.muddat,
-              sotuvId: toliSotuv.id,
-              chegirma: Number(toliSotuv.chegirma),
-              jamiSumma: Number(toliSotuv.jamiSumma),
-            }
-          ).catch(e => console.error('[Telegram] Nasiya xabar xatosi:', e))
-        } else {
-          await sotuvChekiXabar(
-            toliSotuv.id,
-            mijoz.id,
-            {
-              chekRaqami: toliSotuv.chekRaqami,
-              summasi: Number(toliSotuv.yakuniySumma),
-              tolovUsuli: toliSotuv.tolovUsuli,
-              mijozIsm: mijoz.ism,
-              chegirma: Number(toliSotuv.chegirma),
-              jamiSumma: Number(toliSotuv.jamiSumma),
-            }
-          ).catch(e => console.error('[Telegram] Sotuv cheki xabar xatosi:', e))
-        }
-      })
-    }
+    // Telegram xabari ATAYLAB avtomatik yuborilmaydi.
+    // Kassir chek oynasidagi "Telegramga yuborish" tugmasi orqali
+    // o'zi qaror qiladi (POST /api/sotuvlar/[id]/chek-yuborish).
+    // Sabab: har sotuvda avtomatik yuborish mijozni ham bezovta qilardi,
+    // ham Telegram akkauntini spam filtriga yaqinlashtirardi.
 
     return NextResponse.json(toliSotuv, { status: 201 })
   } catch (e) {

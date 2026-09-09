@@ -55,10 +55,17 @@ if [ ! -f .env ]; then
   cat > .env << 'ENVEOF'
 DATABASE_URL="postgresql://postgres:YOUR_DB_PASSWORD@localhost:5432/erp_dokon?schema=public"
 NEXTAUTH_URL="https://qaqnus222.biznesjon.uz"
-AUTH_SECRET="WnKzQvT5XncBgoZx+W0WsKBmckmdZT+rESj1olFiJxY="
+AUTH_SECRET="__SETUP_PAYTIDA_YARATILADI__"
 TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
 ENVEOF
-  echo ">>> .env yaratildi — parol va tokenlarni o'zgartiring!"
+  # Sirni SHU YERDA yaratamiz — repoda saqlangan sir hammaga ma'lum bo'ladi
+  # va u bilan istalgan foydalanuvchi nomidan sessiya yasash mumkin.
+  YANGI_SIR="$(openssl rand -base64 32)"
+  sed -i "s|__SETUP_PAYTIDA_YARATILADI__|${YANGI_SIR}|" .env
+  # Cron marshrutlari uchun ham alohida sir
+  echo "CRON_SECRET=\"$(openssl rand -hex 24)\"" >> .env
+  echo ">>> .env yaratildi. AUTH_SECRET va CRON_SECRET avtomatik yaratildi."
+  echo ">>> DATABASE_URL va TELEGRAM_BOT_TOKEN ni qo'lda to'ldiring!"
 fi
 
 echo "=== 5. Database ==="

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, Barcode, Tag, Calendar, Check } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, LayoutGrid, Search, Lock, Unlock, QrCode, Printer, Check } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
@@ -12,6 +12,9 @@ import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
 import BarcodeScanner from '@/components/BarcodeScanner'
+import TovarTafsilot from '@/components/TovarTafsilot'
+import { yorliqlarHtml, STANDART_YORLIQ, type QrYorliq } from '@/lib/qr-kod'
+import { chekChopEtish } from '@/lib/chek-print'
 import { useConfirm } from '@/components/ConfirmProvider'
 import { YASHIRILADIGAN_MAYDONLAR } from '@/lib/maydon-katalogi'
 
@@ -23,7 +26,12 @@ interface Tovar {
   birlik: string; minimalQoldiq: number; shtrixKod: string | null
   holati: string; qoldiq: number | null; rasmlar: string[]
   yaroqlilikMuddati: string | null
+  taminotchi: { id: string; nomi: string } | null
+  keltirilganManzil: string | null
+  qulflangan: boolean
 }
+
+interface Taminotchi { id: string; nomi: string }
 
 const MAX_RASM = 3
 const BIRLIKLAR = ['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI']
@@ -81,6 +89,7 @@ export default function TovarlarPage() {
   const [filiallar, setFiliallar] = useState<{ id: string; nomi: string }[]>([])
   const [tanlanganFilial, setTanlanganFilial] = useState('')
   const [kategoriyalar, setKategoriyalar] = useState<Kategoriya[]>([])
+  const [taminotchilar, setTaminotchilar] = useState<Taminotchi[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
   const [modal, setModal] = useState(false)
@@ -89,6 +98,22 @@ export default function TovarlarPage() {
   const [importYuklanmoqda, setImportYuklanmoqda] = useState(false)
   const [view, setView] = useState<'table' | 'card'>('table')
   const [aktifKategoriya, setAktifKategoriya] = useState<string | null>(null)
+  // Kategoriya chiplari ekrandan chiqib ketganda suzuvchi tanlagich chiqadi —
+  // ro'yxatning o'rtasida turib kategoriya almashtirish uchun tepaga
+  // qaytishning hojati qolmaydi.
+  const kategoriyaPaneliRef = useRef<HTMLDivElement>(null)
+  const [kategoriyaKorinmayapti, setKategoriyaKorinmayapti] = useState(false)
+  const [kategoriyaVarag, setKategoriyaVarag] = useState(false)
+  const [kategoriyaQidiruv, setKategoriyaQidiruv] = useState('')
+  const [qulflanmoqda, setQulflanmoqda] = useState<string | null>(null)
+  // Faqat qulflanganlarni ko'rsatish — qulflangan tovarni topib ochish uchun
+  const [faqatQulflangan, setFaqatQulflangan] = useState(false)
+  // QR yorliq chop etish — tanlangan mahsulotlar
+  const [tanlangan, setTanlangan] = useState<Set<string>>(new Set())
+  const [qrModal, setQrModal] = useState(false)
+  const [qrUstun, setQrUstun] = useState(STANDART_YORLIQ.ustunlar)
+  const [qrNusxa, setQrNusxa] = useState(STANDART_YORLIQ.nusxa)
+  const [qrTayyorlanmoqda, setQrTayyorlanmoqda] = useState(false)
   const [katModal, setKatModal] = useState(false)
   const [katNomi, setKatNomi] = useState('')
   const [katYuklanmoqda, setKatYuklanmoqda] = useState(false)
@@ -98,14 +123,15 @@ export default function TovarlarPage() {
   const [katOchirilayotganId, setKatOchirilayotganId] = useState<string | null>(null)
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [detailTovar, setDetailTovar] = useState<Tovar | null>(null)
-  useBodyScrollLock(modal || katModal || korinishModal || !!detailTovar || !!rasmModal)
+  // detailTovar uchun scroll lock TovarTafsilot komponentining o'zida
+  useBodyScrollLock(modal || katModal || korinishModal || !!rasmModal || kategoriyaVarag || qrModal)
   const [kursi, setKursi] = useState<number | null>(null)
   const [kursSana, setKursSana] = useState<string | null>(null)
   const [kursYangilanmoqda, setKursYangilanmoqda] = useState(false)
   const [form, setForm] = useState({
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
     sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
-    rasmlar: [] as string[], yaroqlilikMuddati: '',
+    rasmlar: [] as string[], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '',
   })
 
   // Kelish narxi / ustama foiz / sotish narxi — uchtasi bir-biriga bog'liq.
@@ -130,6 +156,8 @@ export default function TovarlarPage() {
 
   // Render limit
   const [renderLimit, setRenderLimit] = useState(50)
+  // Qulf filtri almashganda ro'yxat boshidan ko'rsatiladi
+  useEffect(() => { setRenderLimit(50) }, [faqatQulflangan])
 
   useEffect(() => {
     const saved = localStorage.getItem('view-preference') as 'table' | 'card' | null
@@ -149,16 +177,32 @@ export default function TovarlarPage() {
       ...(aktifKategoriya ? { kategoriya: aktifKategoriya } : {}),
       ...(tanlanganFilial ? { filialId: tanlanganFilial } : {}),
     })
-    const [tv, kt] = await Promise.all([
+    const [tv, kt, tm] = await Promise.all([
       fetch(`/api/tovarlar?${params}`).then(r => r.json()),
       fetch('/api/kategoriyalar').then(r => r.json()),
+      fetch('/api/taminotchilar').then(r => r.json()).catch(() => []),
     ])
     setTovarlar(tv.tovarlar || [])
     setKategoriyalar(kt || [])
+    setTaminotchilar(Array.isArray(tm) ? tm : [])
     setYuklanmoqda(false)
   }
 
   useEffect(() => { yuklash() }, [qidiruv, aktifKategoriya, tanlanganFilial])
+
+  // IntersectionObserver — scroll hodisasidan farqli o'laroq tartib
+  // (layout) o'zgarsa ham to'g'ri ishlaydi va desktopda ham, mobilda ham
+  // bir xil: panel ko'rinmay qolsa tanlagich paydo bo'ladi.
+  useEffect(() => {
+    const el = kategoriyaPaneliRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const kuzatuvchi = new IntersectionObserver(
+      ([yozuv]) => setKategoriyaKorinmayapti(!yozuv.isIntersecting),
+      { threshold: 0.1 },
+    )
+    kuzatuvchi.observe(el)
+    return () => kuzatuvchi.disconnect()
+  }, [])
 
   // Haqiqiy Ega — Tovarlar sahifasida qaysi filialni ko'rish uchun tanlash imkoniyati
   useEffect(() => {
@@ -285,14 +329,115 @@ export default function TovarlarPage() {
         minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: tovar.rasmlar || [],
         yaroqlilikMuddati: tovar.yaroqlilikMuddati ? tovar.yaroqlilikMuddati.slice(0, 10) : '',
+        taminotchiId: tovar.taminotchi?.id || '',
+        keltirilganManzil: tovar.keltirilganManzil || '',
       })
     } else {
       setTahrirlash(null)
       setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
         kelishNarxi: '', sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
-        rasmlar: [], yaroqlilikMuddati: '' })
+        rasmlar: [], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '' })
     }
     setModal(true)
+  }
+
+  // Qulflash/ochish — bitta maydonli qisman yangilash.
+  // PUT payloadda YO'Q maydonlarga tegmaydi, shuning uchun boshqa
+  // ma'lumotlar (rasm, ta'minotchi, narxlar) o'z joyida qoladi.
+  async function qulfToggle(t: Tovar) {
+    const yangiHolat = !t.qulflangan
+    setQulflanmoqda(t.id)
+    try {
+      const res = await fetch(`/api/tovarlar/${t.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qulflangan: yangiHolat }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.xato || 'Xatolik yuz berdi')
+        return
+      }
+      setTovarlar(prev => prev.map(x => x.id === t.id ? { ...x, qulflangan: yangiHolat } : x))
+      // Tafsilot oynasi ochiq bo'lsa uning nusxasi ham yangilanadi —
+      // aks holda ikkinchi bosishda eski holat ishlatilardi.
+      setDetailTovar(d => d && d.id === t.id ? { ...d, qulflangan: yangiHolat } : d)
+      toast.success(yangiHolat
+        ? `"${t.nomi}" qulflandi — sotuvda ko'rinmaydi`
+        : `"${t.nomi}" ochildi — sotuvga qaytdi`)
+    } catch {
+      toast.error('Tarmoq xatosi')
+    } finally {
+      setQulflanmoqda(null)
+    }
+  }
+
+  function tanlashTogla(id: string) {
+    setTanlangan(p => {
+      const n = new Set(p)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  // QR yorliqlarni tayyorlab chop etish oynasini ochadi.
+  // QR ichida `{origin}/qr/{kod}` manzili — telefon kamerasi ham,
+  // POS skaneri ham bir xil QR'ni tushunadi.
+  async function qrChopEt() {
+    const royxat = tovarlar.filter(t => tanlangan.has(t.id))
+    if (royxat.length === 0) { toast.error('Avval mahsulot tanlang'); return }
+
+    setQrTayyorlanmoqda(true)
+    try {
+      // Shtrix-kodsiz mahsulot uchun QR ma'nosiz — o'tkazib yuboriladi
+      const kodlar = royxat.map(t => (t.shtrixKod || '').trim()).filter(Boolean)
+      if (kodlar.length === 0) {
+        toast.error("Tanlangan mahsulotlarda shtrix-kod yo'q")
+        return
+      }
+
+      // QR rasmlari SERVERDA yaratiladi (mijozda kutubxona yuklanmaydi)
+      const r = await fetch('/api/tovarlar/qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kodlar, origin: window.location.origin }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.xato || 'QR yaratilmadi'); return }
+
+      const yorliqlar: QrYorliq[] = []
+      for (const t of royxat) {
+        const kod = (t.shtrixKod || '').trim()
+        const qrRasm = kod ? j.rasmlar?.[kod] : null
+        if (!qrRasm) continue
+        yorliqlar.push({
+          id: t.id,
+          nomi: t.nomi,
+          shtrixKod: kod,
+          narx: narxKorsat(t.sotishNarxi, t.valyuta),
+          qrRasm,
+        })
+      }
+
+      if (yorliqlar.length === 0) {
+        toast.error("Tanlangan mahsulotlarda shtrix-kod yo'q")
+        return
+      }
+      const otkazilgan = royxat.length - yorliqlar.length
+      if (otkazilgan > 0) toast.info(`${otkazilgan} ta mahsulot shtrix-kodsiz — o'tkazib yuborildi`)
+
+      chekChopEtish(yorliqlarHtml(yorliqlar, {
+        ustunlar: qrUstun,
+        nusxa: qrNusxa,
+        dokonNomi: '',
+      }))
+      setQrModal(false)
+    } catch {
+      toast.error('QR yaratishda xatolik')
+    } finally {
+      setQrTayyorlanmoqda(false)
+    }
   }
 
   async function saqlash(e: React.FormEvent) {
@@ -321,6 +466,12 @@ export default function TovarlarPage() {
               minimalQoldiq: natija.minimalQoldiq,
               rasmlar: natija.rasmlar,
               yaroqlilikMuddati: natija.yaroqlilikMuddati,
+              // Bu ikkisi ham yangilanishi SHART: tahrirlash formasi
+              // ro'yxatdagi qatordan to'ldiriladi, eskirgan qiymat qolsa
+              // keyingi saqlashda ustidan yozilib ketardi.
+              taminotchi: natija.taminotchi ?? null,
+              keltirilganManzil: natija.keltirilganManzil ?? null,
+              qulflangan: natija.qulflangan ?? false,
               sotishNarxi: natija.sotishNarxi,
               optomNarxi: natija.optomNarxi,
               bolishNarxi: natija.bolishNarxi,
@@ -463,6 +614,11 @@ export default function TovarlarPage() {
     }
   }
 
+  const qulflanganSoni = tovarlar.filter(t => t.qulflangan).length
+  // Qulf filtri MIJOZ tomonda qo'llanadi: ro'yxat allaqachon to'liq
+  // yuklangan, shuning uchun serverga qayta murojaat qilish shart emas.
+  const korinadiganTovarlar = faqatQulflangan ? tovarlar.filter(t => t.qulflangan) : tovarlar
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -541,10 +697,53 @@ export default function TovarlarPage() {
       </div>
 
       {/* Category navbar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* Tanlash paneli — kamida bitta mahsulot belgilanganda chiqadi */}
+      {tanlangan.size > 0 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/20">
+          <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+            {tanlangan.size} ta mahsulot tanlandi
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTanlangan(new Set(tovarlar.map(t => t.id)))}
+              className="text-xs text-primary hover:underline"
+            >
+              Hammasini tanlash ({tovarlar.length})
+            </button>
+            <button onClick={() => setTanlangan(new Set())} className="text-xs text-gray-500 hover:underline">
+              Bekor
+            </button>
+            <button
+              onClick={() => setQrModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:opacity-90 transition"
+            >
+              <QrCode size={15} /> QR chop etish
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Qulflanganlar filtri — qulflangan tovarni tez topib, qulfini
+          ochish uchun. Qulflangan tovar bo'lmasa tugma ham chiqmaydi. */}
+      {qulflanganSoni > 0 && (
+        <button
+          onClick={() => setFaqatQulflangan(v => !v)}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition w-fit ${
+            faqatQulflangan
+              ? 'bg-amber-500 text-white'
+              : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/40'
+          }`}
+        >
+          <Lock size={14} />
+          Qulflangan ({qulflanganSoni})
+          {faqatQulflangan && <X size={13} className="opacity-80" />}
+        </button>
+      )}
+
+      <div ref={kategoriyaPaneliRef} className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         <button
           onClick={() => setAktifKategoriya(null)}
-          className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+          className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition whitespace-nowrap ${
             aktifKategoriya === null
               ? 'bg-red-600 text-white'
               : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
@@ -561,7 +760,7 @@ export default function TovarlarPage() {
                 : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
             }`}
           >
-            <button onClick={() => setAktifKategoriya(k.id)} className="pl-4 pr-1 py-1.5">
+            <button onClick={() => setAktifKategoriya(k.id)} className="pl-4 pr-1 py-2">
               {k.nomi}
             </button>
             {/* Chip'ning o'zida — modalni ochmasdan darhol tahrirlash/o'chirish */}
@@ -584,7 +783,7 @@ export default function TovarlarPage() {
         ))}
         <button
           onClick={() => { setKatNomi(''); setKatTahrirId(null); setKatModal(true) }}
-          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400 transition font-bold text-lg leading-none"
+          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400 transition font-bold text-lg leading-none"
           title="Kategoriyalarni boshqarish"
         >
           +
@@ -593,7 +792,7 @@ export default function TovarlarPage() {
 
       {/* Table view */}
       {(() => {
-        const filteredTovarlar = tovarlar.slice(0, renderLimit)
+        const filteredTovarlar = korinadiganTovarlar.slice(0, renderLimit)
         return (<>
       {view === 'table' && (
         <div className="hidden sm:block bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
@@ -601,28 +800,87 @@ export default function TovarlarPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-800">
-                  <th className="text-left text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Tovar nomi</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Miqdori</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Kelish narxi</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Sotish narxi</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Kategoriya</th>
-                  <th className="text-right text-gray-500 dark:text-gray-500 text-xs font-medium px-4 py-3 whitespace-nowrap">Amal</th>
+                  <th className="w-10 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Hammasini tanlash"
+                      checked={filteredTovarlar.length > 0 && filteredTovarlar.every(t => tanlangan.has(t.id))}
+                      onChange={e => setTanlangan(e.target.checked
+                        ? new Set(filteredTovarlar.map(t => t.id))
+                        : new Set())}
+                      className="w-4 h-4 accent-red-600"
+                    />
+                  </th>
+                  <th className="text-left text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Tovar nomi</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Miqdori</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Kelish narxi</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Sotish narxi</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Kategoriya</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Amal</th>
                 </tr>
               </thead>
               <tbody>
                 {yuklanmoqda ? (
-                  <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-600 py-12">Yuklanmoqda...</td></tr>
+                  <tr><td colSpan={7} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
                 ) : filteredTovarlar.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-600 py-12">Tovarlar topilmadi</td></tr>
+                  <tr><td colSpan={7} className="py-12">
+                    <div className="text-center">
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">
+                        {qidiruv || aktifKategoriya || faqatQulflangan ? 'Shu shart bo\'yicha tovar topilmadi' : 'Hali tovar qo\'shilmagan'}
+                      </p>
+                      {qidiruv || aktifKategoriya || faqatQulflangan ? (
+                        <button
+                          onClick={() => { setQidiruv(''); setAktifKategoriya(null); setFaqatQulflangan(false) }}
+                          className="mt-3 px-4 py-2 rounded-xl border border-gray-300 dark:border-neutral-700 text-sm text-gray-600 dark:text-gray-400 hover:border-primary/50 hover:text-primary transition"
+                        >
+                          Filtrni tozalash
+                        </button>
+                      ) : tahrirRuxsat ? (
+                        <button
+                          onClick={() => ochModal()}
+                          className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:opacity-90 transition"
+                        >
+                          <Plus size={15} /> Birinchi tovarni qo&apos;shish
+                        </button>
+                      ) : null}
+                    </div>
+                  </td></tr>
                 ) : filteredTovarlar.map((t, idx) => (
-                  <tr key={t.id} className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition ${idx % 2 === 0 ? '' : 'bg-gray-50/40 dark:bg-neutral-800/40'}`}>
+                  <tr
+                    key={t.id}
+                    onClick={() => setDetailTovar(t)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailTovar(t) } }}
+                    tabIndex={0}
+                    role="button"
+                    title="Batafsil ma'lumot"
+                    className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition cursor-pointer ${idx % 2 === 0 ? '' : 'bg-gray-50/40 dark:bg-neutral-800/40'}`}
+                  >
                     {/* Tovar nomi — title for full text on hover */}
-                    <td className="px-4 py-3 whitespace-nowrap max-w-[200px]">
-                      <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate" title={t.nomi}>{t.nomi}</p>
+                    <td className="w-10 px-3 py-3" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`${t.nomi} tanlash`}
+                        checked={tanlangan.has(t.id)}
+                        onChange={() => tanlashTogla(t.id)}
+                        className="w-4 h-4 accent-red-600"
+                      />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap max-w-[220px]">
+                      <div className="flex items-center gap-1.5">
+                        {t.qulflangan && (
+                          <Lock size={12} className="text-amber-600 shrink-0" aria-label="Qulflangan" />
+                        )}
+                        <p
+                          className={`text-sm font-medium truncate ${t.qulflangan ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}
+                          title={t.qulflangan ? `${t.nomi} — qulflangan, sotuvda ko'rinmaydi` : t.nomi}
+                        >
+                          {t.nomi}
+                        </p>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {t.qoldiq === null ? (
-                        <span className="text-sm text-gray-400 dark:text-gray-600">—</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">—</span>
                       ) : (
                         <span className={`text-sm font-medium ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
                           {t.qoldiq} {t.birlik.toLowerCase()}
@@ -638,15 +896,33 @@ export default function TovarlarPage() {
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <span className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-lg font-medium" title={t.kategoriya.nomi}>{t.kategoriya.nomi}</span>
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {/* Qator bosilganda tafsilot ochiladi — amal tugmalari
+                        o'sha bosishni yuqoriga o'tkazmasligi kerak. */}
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {tahrirRuxsat && (
-                          <button onClick={() => ochModal(t)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
+                          <button
+                            onClick={() => void qulfToggle(t)}
+                            disabled={qulflanmoqda === t.id}
+                            title={t.qulflangan ? "Qulfni ochish — sotuvga qaytadi" : "Qulflash — sotuvda ko'rinmaydi"}
+                            className={`p-1.5 rounded-lg transition disabled:opacity-50 ${
+                              t.qulflangan
+                                ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                            }`}
+                          >
+                            {qulflanmoqda === t.id
+                              ? <Loader2 size={15} className="animate-spin" />
+                              : t.qulflangan ? <Lock size={15} /> : <Unlock size={15} />}
+                          </button>
+                        )}
+                        {tahrirRuxsat && (
+                          <button onClick={() => ochModal(t)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
                             <Pencil size={15} />
                           </button>
                         )}
                         {ochirishRuxsat && (
-                          <button onClick={() => ochirish(t.id)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
+                          <button onClick={() => ochirish(t.id)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
                             <Trash2 size={15} />
                           </button>
                         )}
@@ -657,9 +933,9 @@ export default function TovarlarPage() {
               </tbody>
             </table>
           </div>
-          {tovarlar.length > renderLimit && (
+          {korinadiganTovarlar.length > renderLimit && (
             <button onClick={() => setRenderLimit(r => r + 50)} className="w-full py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800 transition border-t border-gray-200 dark:border-neutral-800">
-              Yana ko&apos;rsatish ({tovarlar.length - renderLimit} ta qoldi)
+              Yana ko&apos;rsatish ({korinadiganTovarlar.length - renderLimit} ta qoldi)
             </button>
           )}
         </div>
@@ -668,16 +944,60 @@ export default function TovarlarPage() {
       {/* Card view — mobilda har doim ko'rinadi, desktopda faqat view==='card' bo'lsa */}
       <div className={`grid grid-cols-1 gap-3 sm:gap-4 ${view === 'card' ? 'lg:grid-cols-4' : 'sm:hidden'}`}>
           {yuklanmoqda ? (
-            <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Yuklanmoqda...</p>
+            <p className="text-gray-500 dark:text-gray-400 col-span-full text-center py-12">Yuklanmoqda...</p>
           ) : filteredTovarlar.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-600 col-span-full text-center py-12">Tovarlar topilmadi</p>
+            <div className="col-span-full text-center py-12">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                {qidiruv || aktifKategoriya || faqatQulflangan ? 'Shu shart bo\'yicha tovar topilmadi' : 'Hali tovar qo\'shilmagan'}
+              </p>
+              {qidiruv || aktifKategoriya || faqatQulflangan ? (
+                <button
+                  onClick={() => { setQidiruv(''); setAktifKategoriya(null); setFaqatQulflangan(false) }}
+                  className="mt-3 px-4 py-2 rounded-xl border border-gray-300 dark:border-neutral-700 text-sm text-gray-600 dark:text-gray-400 hover:border-primary/50 hover:text-primary transition"
+                >
+                  Filtrni tozalash
+                </button>
+              ) : tahrirRuxsat ? (
+                <button
+                  onClick={() => ochModal()}
+                  className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:opacity-90 transition"
+                >
+                  <Plus size={15} /> Birinchi tovarni qo&apos;shish
+                </button>
+              ) : null}
+            </div>
           ) : filteredTovarlar.map(t => (
             <div key={t.id} className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/40 transition-all">
+              {/* Rasm va matn qismi bosilsa tafsilot ochiladi; pastdagi
+                  tugmalar paneli bu joydan tashqarida qoladi. */}
+              <div
+                onClick={() => setDetailTovar(t)}
+                title="Batafsil ma'lumot"
+                className="cursor-pointer"
+              >
               {/* Mahsulot rasmi (agar bo'lsa), aks holda ikonka + yumshoq nurlanish */}
               <div className="aspect-[4/3] bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
-                <span className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 text-[10px] sm:text-[11px] bg-primary text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full font-semibold shadow-sm max-w-[70%] truncate" title={t.kategoriya.nomi}>
+                <span className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 text-[11px] sm:text-[11px] bg-primary text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full font-semibold shadow-sm max-w-[70%] truncate" title={t.kategoriya.nomi}>
                   {t.kategoriya.nomi}
                 </span>
+                {t.qulflangan && (
+                  <span className="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 text-[11px] sm:text-[11px] bg-amber-500 text-white px-2 py-1 rounded-full font-semibold shadow-sm flex items-center gap-1">
+                    <Lock size={10} /> Qulflangan
+                  </span>
+                )}
+                {/* Tanlash — QR yorliq chop etish uchun */}
+                <label
+                  onClick={e => e.stopPropagation()}
+                  className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 z-10 w-7 h-7 rounded-lg bg-white/90 dark:bg-neutral-900/90 shadow-sm flex items-center justify-center cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`${t.nomi} tanlash`}
+                    checked={tanlangan.has(t.id)}
+                    onChange={() => tanlashTogla(t.id)}
+                    className="w-4 h-4 accent-red-600"
+                  />
+                </label>
                 {t.rasmlar?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -697,13 +1017,13 @@ export default function TovarlarPage() {
 
               <div className="p-3 sm:p-4">
                 <p className="text-gray-900 dark:text-gray-100 font-bold text-sm sm:text-base truncate" title={t.nomi}>{t.nomi}</p>
-                <p className="text-gray-400 dark:text-gray-600 text-[11px] sm:text-xs mt-0.5">Mahsulot kodi: #{(t.shtrixKod || '').padStart(3, '0') || '—'}</p>
+                <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-xs mt-0.5">Mahsulot kodi: #{(t.shtrixKod || '').padStart(3, '0') || '—'}</p>
 
                 <div className="mt-2.5 sm:mt-3 grid grid-cols-3 gap-1.5 sm:gap-2 text-center bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-2 sm:py-3">
                   <div>
-                    <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Miqdori</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-[11px]">Miqdori</p>
                     {t.qoldiq === null ? (
-                      <p className="font-bold text-xs sm:text-sm mt-0.5 text-gray-400 dark:text-gray-600">—</p>
+                      <p className="font-bold text-xs sm:text-sm mt-0.5 text-gray-500 dark:text-gray-400">—</p>
                     ) : (
                       <p className={`font-bold text-xs sm:text-sm mt-0.5 ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
                         {t.qoldiq} {t.birlik.toLowerCase()}
@@ -711,20 +1031,37 @@ export default function TovarlarPage() {
                     )}
                   </div>
                   <div className="border-x border-gray-200 dark:border-neutral-700">
-                    <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Kelish</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-[11px]">Kelish</p>
                     <p className="text-gray-700 dark:text-gray-300 font-medium text-xs sm:text-sm mt-0.5">{narxKorsat(t.kelishNarxi, t.valyuta)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-400 dark:text-gray-600 text-[10px] sm:text-[11px]">Sotish</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-[11px] sm:text-[11px]">Sotish</p>
                     <p className="text-green-600 font-semibold text-xs sm:text-sm mt-0.5">{narxKorsat(t.sotishNarxi, t.valyuta)}</p>
                   </div>
                 </div>
               </div>
+              </div>
 
-              <div className={`border-t border-gray-100 dark:border-neutral-800 grid ${{ 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' }[1 + (tahrirRuxsat ? 1 : 0) + (ochirishRuxsat ? 1 : 0)]}`}>
+              <div className={`border-t border-gray-100 dark:border-neutral-800 grid ${{ 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' }[1 + (tahrirRuxsat ? 2 : 0) + (ochirishRuxsat ? 1 : 0)]}`}>
                 <button onClick={() => setDetailTovar(t)} title="Batafsil" className="flex items-center justify-center py-2.5 sm:py-3 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-neutral-800 transition border-r border-gray-100 dark:border-neutral-800">
                   <Eye size={16} />
                 </button>
+                {tahrirRuxsat && (
+                  <button
+                    onClick={() => void qulfToggle(t)}
+                    disabled={qulflanmoqda === t.id}
+                    title={t.qulflangan ? "Qulfni ochish" : "Qulflash"}
+                    className={`flex items-center justify-center py-2.5 sm:py-3 transition border-r border-gray-100 dark:border-neutral-800 disabled:opacity-50 ${
+                      t.qulflangan
+                        ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                    }`}
+                  >
+                    {qulflanmoqda === t.id
+                      ? <Loader2 size={16} className="animate-spin" />
+                      : t.qulflangan ? <Lock size={16} /> : <Unlock size={16} />}
+                  </button>
+                )}
                 {tahrirRuxsat && (
                   <button onClick={() => ochModal(t)} title="Tahrirlash" className="flex items-center justify-center py-2.5 sm:py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800">
                     <Pencil size={16} />
@@ -773,7 +1110,7 @@ export default function TovarlarPage() {
               {/* Mavjud kategoriyalar ro'yxati — tahrirlash/o'chirish */}
               <div className="border border-gray-200 dark:border-neutral-700 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800">
                 {kategoriyalar.length === 0 ? (
-                  <p className="text-center text-gray-400 dark:text-gray-600 text-sm py-6">Hali kategoriya yo&apos;q</p>
+                  <p className="text-center text-gray-500 dark:text-gray-400 text-sm py-6">Hali kategoriya yo&apos;q</p>
                 ) : kategoriyalar.map(k => (
                   <div key={k.id} className="flex items-center gap-2 px-3 py-2.5">
                     {katTahrirId === k.id ? (
@@ -796,12 +1133,12 @@ export default function TovarlarPage() {
                       <>
                         <span className="flex-1 min-w-0 text-sm text-gray-900 dark:text-gray-100 truncate">{k.nomi}</span>
                         {typeof k._count?.tovarlar === 'number' && (
-                          <span className="shrink-0 text-xs text-gray-400 dark:text-gray-600">{k._count.tovarlar} ta</span>
+                          <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">{k._count.tovarlar} ta</span>
                         )}
-                        <button onClick={() => kategoriyaTahrirBoshlash(k)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition" title="Tahrirlash">
+                        <button onClick={() => kategoriyaTahrirBoshlash(k)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition" title="Tahrirlash">
                           <Pencil size={14} />
                         </button>
-                        <button onClick={() => kategoriyaOchirish(k)} disabled={katOchirilayotganId === k.id} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50" title="O'chirish">
+                        <button onClick={() => kategoriyaOchirish(k)} disabled={katOchirilayotganId === k.id} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50" title="O'chirish">
                           {katOchirilayotganId === k.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                         </button>
                       </>
@@ -817,11 +1154,11 @@ export default function TovarlarPage() {
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold">{tahrirlash ? 'Tovarni tahrirlash' : 'Yangi tovar'}</h3>
-              <button onClick={() => setModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => setModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -865,6 +1202,42 @@ export default function TovarlarPage() {
                     searchPlaceholder="Kategoriya qidirish..."
                   />
                 )}
+              </div>
+
+              {/* Ta'minotchi — bu tovar kimdan keladi. Ixtiyoriy:
+                  belgilansa, boshlang'ich kirim ham shu ta'minotchiga
+                  bog'lanadi va ombor tarixida ko'rinadi. */}
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Ta&apos;minotchi <span className="text-gray-400 font-normal">(kimdan keladi)</span>
+                </label>
+                {taminotchilar.length === 0 ? (
+                  <p className="text-gray-500 dark:text-gray-400 text-xs px-3 py-2 border border-dashed border-gray-300 dark:border-neutral-700 rounded-xl">
+                    Hali ta&apos;minotchi qo&apos;shilmagan — &quot;Ta&apos;minotchilar&quot; bo&apos;limidan qo&apos;shing
+                  </p>
+                ) : (
+                  <Combobox
+                    options={taminotchilar.map(t => ({ value: t.id, label: t.nomi }))}
+                    value={form.taminotchiId}
+                    onChange={v => setForm(f => ({ ...f, taminotchiId: v }))}
+                    placeholder="Tanlanmagan"
+                    searchPlaceholder="Ta'minotchi qidirish..."
+                  />
+                )}
+              </div>
+              {/* Erkin matn: ro'yxatdagi ta'minotchisi bo'lmagan tovar ham
+                  qayerdan kelgani yozib qo'yilsin (bozor, shahar, do'kon nomi). */}
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Keltirilgan manzil <span className="text-gray-400 font-normal">(qayerdan olib kelindi)</span>
+                </label>
+                <input
+                  value={form.keltirilganManzil}
+                  onChange={e => setForm(f => ({ ...f, keltirilganManzil: e.target.value }))}
+                  maxLength={300}
+                  placeholder="Masalan: Chorsu bozori, 12-rasta"
+                  className="w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Valyuta</label>
@@ -910,7 +1283,7 @@ export default function TovarlarPage() {
                       placeholder={ustamaFoizYashirilgan ? 'Sizga yashirilgan' : '15'}
                     />
                     {!ustamaFoizYashirilgan && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 text-sm">%</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">%</span>
                     )}
                   </div>
                 </div>
@@ -926,7 +1299,7 @@ export default function TovarlarPage() {
                   suffix={form.valyuta === 'USD' ? '$' : 'UZS'}
                 />
                 {form.valyuta === 'USD' && kursi && form.sotishNarxi && (
-                  <p className="text-gray-400 dark:text-gray-600 text-xs mt-1">
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                     ≈ {formatSum(Math.round((parseFloat(form.sotishNarxi) || 0) * kursi))} (joriy kurs: {formatSum(kursi)}/$)
                   </p>
                 )}
@@ -982,7 +1355,7 @@ export default function TovarlarPage() {
                   {form.rasmlar.length < MAX_RASM && (
                     <label className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-neutral-700 hover:border-primary dark:hover:border-primary flex flex-col items-center justify-center gap-1 cursor-pointer text-gray-400 hover:text-primary transition">
                       <ImagePlus size={20} />
-                      <span className="text-[10px]">Qo&apos;shish</span>
+                      <span className="text-[11px]">Qo&apos;shish</span>
                       <input type="file" accept="image/*" className="hidden" onChange={rasmTanlash} />
                     </label>
                   )}
@@ -990,7 +1363,7 @@ export default function TovarlarPage() {
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
-                  Yaroqlilik muddati <span className="text-gray-400 dark:text-gray-600 font-normal">(ixtiyoriy)</span>
+                  Yaroqlilik muddati <span className="text-gray-500 dark:text-gray-400 font-normal">(ixtiyoriy)</span>
                 </label>
                 <input
                   type="date"
@@ -1014,9 +1387,9 @@ export default function TovarlarPage() {
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
                     {QOLDIQ_QOSHISH_LABEL[form.birlik] || "Yana necha dona qo'shmoqchisiz?"}
-                    <span className="text-gray-400 dark:text-gray-600 font-normal"> (ixtiyoriy)</span>
+                    <span className="text-gray-500 dark:text-gray-400 font-normal"> (ixtiyoriy)</span>
                   </label>
-                  <p className="text-gray-400 dark:text-gray-600 text-xs mb-1.5">
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mb-1.5">
                     Hozirgi qoldiq: <span className="font-medium text-gray-600 dark:text-gray-400">{tahrirlash.qoldiq} {form.birlik.toLowerCase()}</span> — kiritilgan miqdor shunga qo&apos;shiladi.
                   </p>
                   <MoneyInput
@@ -1082,14 +1455,14 @@ export default function TovarlarPage() {
 
       {/* Ko'rinish sozlamalari — bog'langan admindan mahsulot yashirish */}
       {korinishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4" onClick={() => setKorinishModal(false)}>
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4" onClick={() => setKorinishModal(false)}>
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
                 <EyeOff size={18} className="text-primary" />
                 Ko&apos;rinish sozlamalari
               </h3>
-              <button onClick={() => setKorinishModal(false)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => setKorinishModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
@@ -1112,7 +1485,7 @@ export default function TovarlarPage() {
                   </div>
                 ) : (
                   <div>
-                    <p className="text-gray-400 dark:text-gray-600 text-xs mb-2">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs mb-2">
                       Belgilangan maydonlar shu admin hisobiga BARCHA mahsulotlarda yashiriladi (masalan kelish narxi).
                     </p>
                     <div className="border border-gray-200 dark:border-neutral-700 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800">
@@ -1129,7 +1502,7 @@ export default function TovarlarPage() {
                       ))}
                     </div>
 
-                    <p className="text-gray-400 dark:text-gray-600 text-xs mb-2 mt-4">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs mb-2 mt-4">
                       Ushbu admin ulashilgan mahsulotlar ustida qanday amallarni bajara oladi.
                     </p>
                     <div className="border border-gray-200 dark:border-neutral-700 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800">
@@ -1172,99 +1545,186 @@ export default function TovarlarPage() {
       )}
 
       {/* Mahsulot batafsil ma'lumoti */}
-      {detailTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4" onClick={() => setDetailTovar(null)}>
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
+      {/* ── QR yorliqlarni chop etish ── */}
+      {qrModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+          onClick={() => setQrModal(false)}>
+          <div onClick={e => e.stopPropagation()}
+            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-md">
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                <Eye size={18} className="text-primary" />
-                Mahsulot ma&apos;lumotlari
+                <QrCode size={18} className="text-primary" /> QR yorliqlar
               </h3>
-              <button onClick={() => setDetailTovar(null)} className="p-1.5 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+              <button onClick={() => setQrModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
                 <X size={18} />
               </button>
             </div>
-            <div className="p-5 space-y-4">
-              {detailTovar.rasmlar?.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {detailTovar.rasmlar.map((rasm, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={i}
-                      src={rasm}
-                      alt={`${detailTovar.nomi} ${i + 1}`}
-                      className="aspect-square object-cover rounded-xl border border-gray-200 dark:border-neutral-700 cursor-zoom-in"
-                      onClick={() => setRasmModal({ rasmlar: detailTovar.rasmlar, nomi: detailTovar.nomi, index: i })}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="aspect-[4/3] bg-gradient-to-br from-primary-light to-white dark:from-primary/15 dark:to-neutral-800 rounded-xl flex items-center justify-center">
-                  <Package size={56} className="text-primary" strokeWidth={1.5} />
-                </div>
-              )}
-
-              <div>
-                <p className="text-gray-900 dark:text-gray-100 font-bold text-lg">{detailTovar.nomi}</p>
-                <span className="inline-block mt-1 text-xs bg-red-50 dark:bg-red-950/30 text-red-600 px-2.5 py-1 rounded-full font-medium">{detailTovar.kategoriya.nomi}</span>
-              </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-semibold text-gray-900 dark:text-gray-100">{tanlangan.size} ta</span> mahsulot
+                tanlandi. Har bir yorliqda QR, nomi, narxi va kodi bo&apos;ladi.
+              </p>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
-                  <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Kelish narxi</p>
-                  <p className="text-gray-900 dark:text-gray-100 font-semibold mt-0.5">{narxKorsat(detailTovar.kelishNarxi, detailTovar.valyuta)}</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Bir qatorda
+                  </label>
+                  <select value={qrUstun} onChange={e => setQrUstun(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500">
+                    {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} ta</option>)}
+                  </select>
+                  <p className="text-gray-500 dark:text-gray-400 text-[11px] mt-1">yorliq kattaligi</p>
                 </div>
-                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
-                  <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Sotish narxi</p>
-                  <p className="text-green-600 font-semibold mt-0.5">{narxKorsat(detailTovar.sotishNarxi, detailTovar.valyuta)}</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Har biridan
+                  </label>
+                  <input type="number" min={1} max={50} value={qrNusxa}
+                    onChange={e => setQrNusxa(Math.min(50, Math.max(1, Number(e.target.value) || 1)))}
+                    className="w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <p className="text-gray-500 dark:text-gray-400 text-[11px] mt-1">nusxa</p>
                 </div>
-                {detailTovar.optomNarxi !== null && (
-                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
-                    <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Optom narxi</p>
-                    <p className="text-blue-600 font-semibold mt-0.5">{narxKorsat(detailTovar.optomNarxi, detailTovar.valyuta)}</p>
-                  </div>
-                )}
-                {detailTovar.bolishNarxi !== null && (
-                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
-                    <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Tag size={11} /> Bo&apos;lish narxi</p>
-                    <p className="text-amber-600 font-semibold mt-0.5">{narxKorsat(detailTovar.bolishNarxi, detailTovar.valyuta)}</p>
-                  </div>
-                )}
-                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
-                  <p className="text-gray-400 dark:text-gray-600 text-[11px]">Miqdori</p>
-                  {detailTovar.qoldiq === null ? (
-                    <p className="font-semibold mt-0.5 text-gray-400 dark:text-gray-600">—</p>
-                  ) : (
-                    <p className={`font-semibold mt-0.5 ${detailTovar.qoldiq <= detailTovar.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
-                      {detailTovar.qoldiq} {detailTovar.birlik.toLowerCase()}
-                    </p>
-                  )}
-                </div>
-                <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
-                  <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Barcode size={11} /> Shtrix-kod</p>
-                  <p className="text-gray-900 dark:text-gray-100 font-semibold mt-0.5">#{(detailTovar.shtrixKod || '').padStart(3, '0') || '—'}</p>
-                </div>
-                {detailTovar.yaroqlilikMuddati && (
-                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3 col-span-2">
-                    <p className="text-gray-400 dark:text-gray-600 text-[11px] flex items-center gap-1"><Calendar size={11} /> Yaroqlilik muddati</p>
-                    <p className="text-gray-900 dark:text-gray-100 font-semibold mt-0.5">{detailTovar.yaroqlilikMuddati.slice(0, 10)}</p>
-                  </div>
-                )}
               </div>
 
-              <div className="flex gap-3 pt-2">
-                {tahrirRuxsat && (
-                  <button onClick={() => { setDetailTovar(null); ochModal(detailTovar) }} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                    <Pencil size={15} /> Tahrirlash
-                  </button>
-                )}
-                <button onClick={() => setDetailTovar(null)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+              <p className="text-gray-500 dark:text-gray-400 text-[11px]">
+                Jami {tanlangan.size * qrNusxa} ta yorliq chiqadi. QR skanerlanganda
+                mahsulot nomi va narxi ko&apos;rinadi.
+              </p>
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => void qrChopEt()} disabled={qrTayyorlanmoqda}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+                  {qrTayyorlanmoqda ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
+                  Chop etish
+                </button>
+                <button onClick={() => setQrModal(false)}
+                  className="px-5 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl font-medium">
                   Yopish
                 </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Suzuvchi kategoriya tanlagich ──
+          Mahsulotlar ro'yxati uzun bo'lgani uchun pastga tushilganda tepadagi
+          chiplar ko'rinmay qoladi. Shu tugma o'sha paytda paydo bo'ladi va
+          bosilganda ro'yxat pastdan chiqadi — kategoriyalar ko'p bo'lsa
+          ro'yxatning o'zi aylantiriladi (sig'masligi muammo emas). */}
+      {kategoriyaKorinmayapti && !kategoriyaVarag && !modal && !katModal && !detailTovar && !rasmModal && (
+        <button
+          onClick={() => { setKategoriyaQidiruv(''); setKategoriyaVarag(true) }}
+          title="Kategoriya tanlash"
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 lg:bottom-8 lg:right-8 z-30 flex items-center gap-2.5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30 transition active:scale-95 pl-4 pr-5 py-3.5 max-w-[70vw]"
+        >
+          <LayoutGrid size={18} className="shrink-0" />
+          <div className="text-left leading-tight min-w-0">
+            <span className="block text-[11px] font-medium opacity-90">Kategoriya</span>
+            <span className="block text-sm font-bold truncate">
+              {aktifKategoriya
+                ? (kategoriyalar.find(k => k.id === aktifKategoriya)?.nomi ?? 'Barchasi')
+                : 'Barchasi'}
+            </span>
+          </div>
+        </button>
+      )}
+
+      {/* Kategoriya varag'i — mobilda pastdan chiqadi, desktopda markazda */}
+      {kategoriyaVarag && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+          onClick={() => setKategoriyaVarag(false)}
+        >
+          <div
+            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-md max-h-[80dvh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between gap-3 shrink-0">
+              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
+                <LayoutGrid size={17} className="text-primary" /> Kategoriya tanlash
+              </h3>
+              <button
+                onClick={() => setKategoriyaVarag(false)}
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Kategoriyalar ko'p bo'lsa qidiruv bilan topiladi */}
+            {kategoriyalar.length > 8 && (
+              <div className="px-4 pt-3 shrink-0">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={kategoriyaQidiruv}
+                    onChange={e => setKategoriyaQidiruv(e.target.value)}
+                    placeholder="Kategoriya qidirish..."
+                    autoFocus
+                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-y-auto flex-1 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-3">
+              <button
+                onClick={() => { setAktifKategoriya(null); setKategoriyaVarag(false) }}
+                className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
+                  aktifKategoriya === null
+                    ? 'bg-red-600 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
+                }`}
+              >
+                <span>Barchasi</span>
+                {aktifKategoriya === null && <Check size={15} />}
+              </button>
+
+              {kategoriyalar
+                .filter(k => !kategoriyaQidiruv.trim() || normalizeUzbek(k.nomi).includes(normalizeUzbek(kategoriyaQidiruv)))
+                .map(k => (
+                  <button
+                    key={k.id}
+                    onClick={() => { setAktifKategoriya(k.id); setKategoriyaVarag(false) }}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition mt-1 ${
+                      aktifKategoriya === k.id
+                        ? 'bg-red-600 text-white'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
+                    }`}
+                  >
+                    <span className="truncate text-left">{k.nomi}</span>
+                    <span className="flex items-center gap-2 shrink-0">
+                      {k._count?.tovarlar !== undefined && (
+                        <span className={`text-[11px] tabular-nums ${aktifKategoriya === k.id ? 'opacity-80' : 'text-gray-500 dark:text-gray-400'}`}>
+                          {k._count.tovarlar}
+                        </span>
+                      )}
+                      {aktifKategoriya === k.id && <Check size={15} />}
+                    </span>
+                  </button>
+                ))}
+
+              {kategoriyalar.length > 0 &&
+                kategoriyalar.filter(k => !kategoriyaQidiruv.trim() || normalizeUzbek(k.nomi).includes(normalizeUzbek(kategoriyaQidiruv))).length === 0 && (
+                <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">Topilmadi</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailTovar && (
+        <TovarTafsilot
+          key={detailTovar.id}
+          tovarId={detailTovar.id}
+          onYopish={() => setDetailTovar(null)}
+          onTahrir={tahrirRuxsat ? () => { const t = detailTovar; setDetailTovar(null); ochModal(t) } : undefined}
+          onRasmOch={(rasmlar, nomi, index) => setRasmModal({ rasmlar, nomi, index })}
+          onQulfTogla={tahrirRuxsat ? async () => { await qulfToggle(detailTovar) } : undefined}
+        />
       )}
     </div>
   )

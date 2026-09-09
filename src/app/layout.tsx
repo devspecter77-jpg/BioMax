@@ -18,7 +18,13 @@ import { ThemeProvider } from '@/components/ThemeContext'
 import ConfirmProvider from '@/components/ConfirmProvider'
 
 export const metadata: Metadata = {
-  title: 'BioMax',
+  // `template` — har bir bo'lim o'z nomini beradi, oxiriga do'kon nomi
+  // qo'shiladi: "Sotuv (POS) — BioMax". `default` esa sarlavhasiz
+  // sahifalar uchun.
+  title: {
+    default: 'BioMax',
+    template: '%s — BioMax',
+  },
   description: "Do'kon boshqaruv tizimi — BioMax",
   manifest: '/manifest.json',
   icons: {

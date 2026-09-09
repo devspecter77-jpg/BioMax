@@ -10,6 +10,28 @@ export default auth((req) => {
     return NextResponse.next()
   }
 
+  // OCHIQ sahifalar — sessiyasiz ko'riladi:
+  //   /qr/<kod>          — mahsulot QR'i skanerlanganda (nomi va narxi)
+  //   /chek/<raqam>      — mijozga berilgan chek havolasi
+  //   /api/public/...    — shu ikkalasining ma'lumot manbai
+  // Bu marshrutlar ATAYLAB faqat mijozga ko'rsatish mumkin bo'lgan
+  // maydonlarni qaytaradi: kelish narxi, qoldiq soni va foyda chiqmaydi.
+  if (
+    pathname.startsWith('/qr/') ||
+    pathname.startsWith('/chek/') ||
+    pathname.startsWith('/api/public/')
+  ) {
+    return NextResponse.next()
+  }
+
+  // Cron marshrutlari — sessiya bilan emas, CRON_SECRET bilan himoyalangan.
+  // Bu tekshiruv quyidagi `!req.auth` shartidan OLDIN turishi shart: Vercel
+  // Cron so'rovida cookie bo'lmaydi, aks holda so'rov /login ga yo'naltirilib
+  // marshrutga umuman yetib bormaydi (cron jimgina ishlamay qoladi).
+  if (pathname.startsWith('/api/cron/')) {
+    return NextResponse.next()
+  }
+
   // Tizimga kirmaganlar — login sahifasiga
   if (!req.auth) {
     return NextResponse.redirect(new URL('/login', req.url))

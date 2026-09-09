@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/nasiya-eslatma",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/kunlik-hisobot",
+      "schedule": "0 4 * * *"
     }
   ]
 }

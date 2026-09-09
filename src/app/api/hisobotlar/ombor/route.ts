@@ -44,10 +44,13 @@ export async function GET(_req: NextRequest) {
         const m = Number(h.miqdor)
         if (h.turi === 'KIRIM' || h.turi === 'QAYTARISH') {
           qoldiq += m
-        } else if (h.turi === 'CHIQIM' || h.turi === 'YOQOTISH') {
+        } else if (h.turi === 'OTKAZMA_KIRIM') {
+          // Boshqa filialdan kelgan — haqiqiy kirim
+          qoldiq += m
+        } else if (h.turi === 'CHIQIM' || h.turi === 'YOQOTISH' || h.turi === 'OTKAZMA_CHIQIM') {
           qoldiq -= m
         }
-        // OTKAZMA - e'tiborga olinmaydi
+        // OTKAZMA - e'tiborga olinmaydi (filial ichida ombor->do'kon)
       }
 
       const kelishNarxi = Number(t.kelishNarxi)

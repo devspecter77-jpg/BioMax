@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { tolovQisqa } from '@/lib/tolov-usullari'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
 import { egaFilialWhere } from '@/lib/filial-scope'
 
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
     tolovMap.set(s.tolovUsuli, bor)
   }
   const tolovRows = Array.from(tolovMap.entries()).map(([tolov, v]) => ({
-    "To'lov usuli": tolov,
+    "To'lov usuli": tolovQisqa(tolov),
     Soni: v.soni,
     Jami: v.summa,
   }))

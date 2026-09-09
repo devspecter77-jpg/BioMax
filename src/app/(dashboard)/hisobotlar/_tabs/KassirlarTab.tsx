@@ -42,7 +42,7 @@ export function KassirlarTab({ filtrlar }: Props) {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-600 gap-3">
+      <div className="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-3">
         <Loader2 className="animate-spin w-6 h-6 text-red-500" />
         <span>Yuklanmoqda...</span>
       </div>
@@ -52,7 +52,7 @@ export function KassirlarTab({ filtrlar }: Props) {
   if (!data) {
     return (
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-8 text-center">
-        <p className="text-gray-400 dark:text-gray-600">Ma&apos;lumot topilmadi</p>
+        <p className="text-gray-500 dark:text-gray-400">Ma&apos;lumot topilmadi</p>
       </div>
     )
   }
@@ -62,13 +62,13 @@ export function KassirlarTab({ filtrlar }: Props) {
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Jami sotuv</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Jami sotuv</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {formatSum(data.jamiSotuv)}
           </p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4">
-          <p className="text-gray-500 dark:text-gray-500 text-xs">Sotuvlar soni</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Sotuvlar soni</p>
           <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
             {data.sotuvSoni} ta
           </p>
@@ -81,7 +81,7 @@ export function KassirlarTab({ filtrlar }: Props) {
           Kassirlar reytingi (sotuv bo&apos;yicha)
         </h2>
         {data.kassirlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -128,7 +128,7 @@ export function KassirlarTab({ filtrlar }: Props) {
           Kassirlar tafsiloti
         </h2>
         {data.kassirlar.length === 0 ? (
-          <p className="text-gray-400 dark:text-gray-600 text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             Ma&apos;lumot yo&apos;q
           </p>
         ) : (
@@ -136,19 +136,19 @@ export function KassirlarTab({ filtrlar }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
-                  <th className="text-left pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-left pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Kassir
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Sotuvlar
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Jami sotuv
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     Daromad
                   </th>
-                  <th className="text-right pb-3 text-gray-500 dark:text-gray-500 font-medium">
+                  <th className="text-right pb-3 text-gray-500 dark:text-gray-400 font-medium">
                     O&apos;rtacha cek
                   </th>
                 </tr>
