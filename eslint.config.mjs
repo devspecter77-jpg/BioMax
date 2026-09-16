@@ -5,6 +5,20 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      // Kodda ataylab ishlatilmaydigan nom `_` bilan boshlanadi: `GET(_req)`,
+      // `const { qarzlari: _qarzlari, ...qolgan } = t`. Bu kelishuv butun
+      // loyihada amal qiladi — lint uni ogohlantirish deb hisoblamasin.
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+        destructuredArrayIgnorePattern: "^_",
+        ignoreRestSiblings: true,
+      }],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
