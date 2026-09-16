@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
       if (!ism) continue
       const telefonToza = String(row['Telefon'] || '').replace(/\D/g, '')
       const telefon2Toza = String(row["Qo'shimcha raqam"] || row['Telefon 2'] || '').replace(/\D/g, '')
+      // "Boshqa raqamlar" — vergul yoki nuqtali vergul bilan; chala raqamlar tashlanadi
+      const boshqaRaqamlar = String(row['Boshqa raqamlar'] || '').split(/[,;]/)
+        .map(r => r.replace(/\D/g, '').slice(-9)).filter(r => r.length === 9)
       const manzil = String(row['Manzil'] || '').trim() || null
       const viloyat = String(row['Viloyat'] || '').trim() || null
       const tuman = String(row['Tuman'] || '').trim() || null
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
               ism,
               manzil: manzil ?? mavjud.manzil,
               telefon2: telefon2Toza || mavjud.telefon2,
+              qoshimchaTelefonlar: boshqaRaqamlar.length ? [...new Set([...mavjud.qoshimchaTelefonlar, ...boshqaRaqamlar])].slice(0, 8) : mavjud.qoshimchaTelefonlar,
               viloyat: viloyat ?? mavjud.viloyat,
               tuman: tuman ?? mavjud.tuman,
             },
@@ -68,6 +72,7 @@ export async function POST(req: NextRequest) {
               ism,
               telefon: telefonToza || null,
               telefon2: telefon2Toza || null,
+              qoshimchaTelefonlar: [...new Set(boshqaRaqamlar)].slice(0, 8),
               viloyat, tuman, manzil,
               maxsus_kod, filialId, egaId,
             },

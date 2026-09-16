@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { egaFilialWhere } from '@/lib/filial-scope'
 import { balansOzgartir } from '@/lib/sodiqlik-server'
 
@@ -10,8 +11,9 @@ import { balansOzgartir } from '@/lib/sodiqlik-server'
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as { rol?: string }).rol !== 'ADMIN') {
-      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
+    if (!(await amalRuxsatiBormi(session, 'ballar.qolda'))) {
+      return NextResponse.json({ xato: 'Bu amalga ruxsatingiz yo‘q: «Qo‘lda ball berish»', kod: 'ruxsat_yoq' }, { status: 403 })
     }
 
     const { mijozId, hisob, miqdor, izoh } = await req.json()

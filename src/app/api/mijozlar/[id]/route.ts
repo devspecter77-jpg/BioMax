@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { telefonlarniTozala } from '@/lib/mijoz-telefon'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { foydalanuvchiYashirilganMaydonlari } from '@/lib/maydon-yashirish'
+import { joriyUsdKursi } from '@/lib/kurs'
+import { sotuvFoydasi, foydalarniYig, type FoydaQatori } from '@/lib/foyda'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,12 +25,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           orderBy: { sana: 'desc' },
           include: {
             tarkiblar: {
-              include: { tovar: { select: { nomi: true, birlik: true } } },
+              include: { tovar: { select: { nomi: true, birlik: true, kelishNarxi: true, valyuta: true } } },
             },
             kassir: { select: { ism: true, telefon: true } },
             qaytarishlar: {
               include: {
-                tarkiblar: { include: { tovar: { select: { nomi: true, birlik: true } } } },
+                tarkiblar: { include: { tovar: { select: { nomi: true, birlik: true, kelishNarxi: true, valyuta: true } } } },
                 kassir: { select: { ism: true } },
               },
               orderBy: { yaratilgan: 'desc' },
@@ -46,8 +50,58 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const soz: Record<string, string> = {}
     for (const x of sozlamalar) soz[x.kalit] = x.qiymat
 
+    // ── Mijoz keltirgan foyda ──
+    //
+    // Kelish narxi bu hisobdan YASHIRILGAN bo'lsa, foyda ham berilmaydi:
+    // foyda = sotuv narxi − tannarx, ya'ni foydani ko'rsatish tannarxni
+    // oshkor qilish bilan barobar.
+    const yashirilgan = await foydalanuvchiYashirilganMaydonlari((session.user as { id: string }).id)
+    const foydaKorinadi = !yashirilgan.has('kelishNarxi')
+
+    // USD'da narxlangan mahsulotning tannarxini so'mga o'tkazish uchun.
+    // Kurs olinmasa foyda hisoblanmaydi — noto'g'ri raqam ko'rsatgandan
+    // ko'ra hech narsa ko'rsatmagan yaxshiroq.
+    const kursi = foydaKorinadi
+      ? await joriyUsdKursi().then(k => k.kursi).catch(() => 0)
+      : 0
+
+    const qator = (t: {
+      miqdor: unknown; jami: unknown
+      tovar: { kelishNarxi: unknown; valyuta: string } | null
+    }): FoydaQatori => ({
+      miqdor: Number(t.miqdor),
+      jami: Number(t.jami),
+      kelishNarxi: t.tovar?.kelishNarxi == null ? null : Number(t.tovar.kelishNarxi),
+      valyuta: t.tovar?.valyuta ?? 'UZS',
+    })
+
+    const sotuvFoydalari = new Map<string, ReturnType<typeof sotuvFoydasi>>()
+    if (foydaKorinadi && kursi > 0) {
+      for (const s of mijoz.sotuvlar) {
+        if (s.holati !== 'YAKUNLANGAN') continue
+        sotuvFoydalari.set(s.id, sotuvFoydasi({
+          qatorlar: s.tarkiblar.map(qator),
+          chegirma: Number(s.chegirma ?? 0),
+          qaytarilgan: s.qaytarishlar.flatMap(q => q.tarkiblar.map(qator)),
+          usdKursi: kursi,
+        }))
+      }
+    }
+
+    const jamiFoyda = foydaKorinadi && kursi > 0
+      ? foydalarniYig([...sotuvFoydalari.values()])
+      : null
+
     return NextResponse.json({
       ...mijoz,
+      // Har bir chek yonida o'z foydasi ko'rsatiladi
+      sotuvlar: mijoz.sotuvlar.map(s => ({
+        ...s,
+        foyda: sotuvFoydalari.get(s.id) ?? null,
+      })),
+      foydaXulosa: jamiFoyda,
+      // Nega foyda yo'qligini UI aniq aytishi uchun
+      foydaKorinadi,
       dokon: {
         dokon_nomi: soz.dokon_nomi || "Do'kon",
         manzil: soz.manzil || '',
@@ -102,13 +156,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!mavjud) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
 
     const data = await req.json()
+    const tel = telefonlarniTozala(data.telefon, data.telefon2, data.qoshimchaTelefonlar)
+    if ('xato' in tel) return NextResponse.json({ xato: tel.xato }, { status: 400 })
 
     const mijoz = await prisma.mijoz.update({
       where: { id },
       data: {
         ism: data.ism,
-        telefon: data.telefon || null,
-        telefon2: data.telefon2 || null,
+        telefon: tel.telefon,
+        telefon2: tel.telefon2,
+        qoshimchaTelefonlar: tel.qoshimcha,
         viloyat: data.viloyat?.trim() || null,
         tuman: data.tuman?.trim() || null,
         manzil: data.manzil || null,

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import {
   Gift, Settings, Users, History, Loader2, Plus, Minus, X, Save, Percent,
@@ -15,6 +14,7 @@ import {
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useRuxsat } from '@/hooks/useRuxsat'
 
 interface BalansMijoz {
   id: string
@@ -60,8 +60,10 @@ const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gr
 type Tab = 'mijozlar' | 'harakatlar' | 'sozlamalar'
 
 export default function BallarPage() {
-  const { data: session } = useSession()
-  const admin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
+  // Qo'lda ball berish va dastur sozlamalari — Ruxsatlar bo'limidan (standartda faqat administrator)
+  const ruxsat = useRuxsat()
+  const qoldaRuxsat = ruxsat.bor('ballar.qolda')
+  const sozlamaRuxsat = ruxsat.bor('ballar.sozlama')
 
   const [tab, setTab] = useState<Tab>('mijozlar')
   const [sozlama, setSozlama] = useState<SodiqlikSozlama>(SODIQLIK_STANDART)
@@ -102,7 +104,7 @@ export default function BallarPage() {
       {sozlamaYuklandi && !sozlama.faol && (
         <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/10 p-3 text-sm text-amber-800 dark:text-amber-400">
           Dastur hozircha o&apos;chirilgan — sotuvda ball va keshbek to&apos;planmaydi.
-          {admin
+          {sozlamaRuxsat
             ? ' Yoqish uchun "Sozlamalar" bo\'limiga o\'ting.'
             : ' Yoqishni administrator bajaradi.'}
         </div>
@@ -112,7 +114,7 @@ export default function BallarPage() {
         {([
           ['mijozlar', 'Mijozlar', Users],
           ['harakatlar', 'Harakatlar', History],
-          ...(admin ? [['sozlamalar', 'Sozlamalar', Settings] as const] : []),
+          ...(sozlamaRuxsat ? [['sozlamalar', 'Sozlamalar', Settings] as const] : []),
         ] as [Tab, string, typeof Users][]).map(([kalit, label, Icon]) => (
           <button
             key={kalit}
@@ -128,9 +130,9 @@ export default function BallarPage() {
         ))}
       </div>
 
-      {tab === 'mijozlar' && <MijozlarTab sozlama={sozlama} admin={admin} />}
+      {tab === 'mijozlar' && <MijozlarTab sozlama={sozlama} admin={qoldaRuxsat} />}
       {tab === 'harakatlar' && <HarakatlarTab />}
-      {tab === 'sozlamalar' && admin && (
+      {tab === 'sozlamalar' && sozlamaRuxsat && (
         <SozlamalarTab sozlama={sozlama} onSaqlandi={setSozlama} />
       )}
     </div>

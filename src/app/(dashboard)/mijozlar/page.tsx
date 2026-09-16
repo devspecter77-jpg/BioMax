@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Eye, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Eye, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe } from 'lucide-react'
 import { buildChekHtml, buildMijozTarixHtml, chekChopEtish } from '@/lib/chek-print'
 import { tolovQisqa } from '@/lib/tolov-usullari'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -15,9 +16,14 @@ import { VILOYATLAR, viloyatTumanlari, toliqManzil } from '@/lib/hudud'
 import { formatBall } from '@/lib/sodiqlik'
 import SearchBar from '@/components/ui/search-bar'
 import { useConfirm } from '@/components/ConfirmProvider'
+import { useRuxsat } from '@/hooks/useRuxsat'
+import { XaritadaKorish } from '@/components/LokatsiyaModal'
+import OnlaynMijozlarPanel from '@/components/OnlaynMijozlarPanel'
+import { MAX_TELEFON, mijozTelefonlari } from '@/lib/mijoz-telefon'
 
 interface Mijoz {
   id: string; ism: string; telefon: string | null; telefon2: string | null
+  qoshimchaTelefonlar?: string[]
   ballBalans?: string | number; keshbekBalans?: string | number
   viloyat: string | null; tuman: string | null; manzil: string | null
   lokatsiyaLat: number | null; lokatsiyaLng: number | null
@@ -33,13 +39,26 @@ interface MijozQaytarish {
 }
 interface MijozSotuv {
   id: string; chekRaqami: string; sana: string; tolovUsuli: string
+  foyda?: { daromad: number; tannarx: number; foyda: number; foiz: number | null } | null
   jamiSumma: number; chegirma: number; yakuniySumma: number
   naqdTolangan: number; kartaTolangan: number; clickTolangan: number; bankTolangan: number
   tarkiblar: SotuvTarkibiItem[]; kassir: { ism: string; telefon: string | null }
   qaytarishlar: MijozQaytarish[]
 }
 interface DokonInfo { dokon_nomi: string; manzil: string; telefon: string; chek_matn: string }
-interface MijozDetail extends Mijoz { sotuvlar: MijozSotuv[]; dokon?: DokonInfo }
+interface FoydaNatijasi {
+  daromad: number
+  tannarx: number
+  foyda: number
+  foiz: number | null
+}
+interface MijozDetail extends Mijoz {
+  sotuvlar: MijozSotuv[]
+  dokon?: DokonInfo
+  /** Butun tarix bo'yicha yig'ma foyda. Kelish narxi yashirilgan bo'lsa null. */
+  foydaXulosa?: FoydaNatijasi | null
+  foydaKorinadi?: boolean
+}
 // Xaridlar tarixida sotuv va qaytarishlar bitta xronologik oqimda ko'rsatiladi.
 type TarixYozuvi =
   | { turi: 'sotuv'; sana: string; sotuv: MijozSotuv }
@@ -54,6 +73,14 @@ const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gr
 
 export default function MijozlarPage() {
   const confirm = useConfirm()
+  const ruxsat = useRuxsat()
+  const tahrirRuxsat = ruxsat.bor('mijozlar.tahrirlash')
+  const ochirishRuxsat = ruxsat.bor('mijozlar.ochirish')
+  const sotuvRuxsat = ruxsat.bor('sotuv')
+  // Onlayn do'kon markaziy do'konniki — filial xodimiga ko'rinmaydi (API ham rad etadi)
+  const { data: session } = useSession()
+  const onlaynRuxsat = ruxsat.bor('mijozlar.onlayn') && !(session?.user as { filialId?: string | null } | undefined)?.filialId
+  const [bolim, setBolim] = useState<'dokon' | 'onlayn'>('dokon')
   const router = useRouter()
   const [mijozlar, setMijozlar] = useState<Mijoz[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
@@ -61,7 +88,7 @@ export default function MijozlarPage() {
   const [modal, setModal] = useState(false)
   const [tahrirlash, setTahrirlash] = useState<Mijoz | null>(null)
   const [form, setForm] = useState({
-    ism: '', telefon: '', telefon2: '', viloyat: '', tuman: '', manzil: '', izoh: '',
+    ism: '', telefon: '', telefon2: '', qoshimchaTelefonlar: [''] as string[], viloyat: '', tuman: '', manzil: '', izoh: '',
     lokatsiyaLat: null as number | null, lokatsiyaLng: null as number | null,
   })
   const [joylashuvOlinmoqda, setJoylashuvOlinmoqda] = useState(false)
@@ -73,6 +100,8 @@ export default function MijozlarPage() {
         ism: mijoz.ism,
         telefon: mijoz.telefon || '',
         telefon2: mijoz.telefon2 || '',
+        // Kamida bitta bo'sh maydon — 3-raqam har doim ko'rinsin
+        qoshimchaTelefonlar: mijoz.qoshimchaTelefonlar?.length ? [...mijoz.qoshimchaTelefonlar] : [''],
         viloyat: mijoz.viloyat || '',
         tuman: mijoz.tuman || '',
         manzil: mijoz.manzil || '',
@@ -81,7 +110,7 @@ export default function MijozlarPage() {
       })
     } else {
       setTahrirlash(null)
-      setForm({ ism: '', telefon: '', telefon2: '', viloyat: '', tuman: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
+      setForm({ ism: '', telefon: '', telefon2: '', qoshimchaTelefonlar: [''], viloyat: '', tuman: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
     }
     setModal(true)
   }
@@ -237,6 +266,19 @@ export default function MijozlarPage() {
     chekChopEtish(html)
   }
 
+  // `?bolim=onlayn` — sahifa yangilansa ham tanlangan bo'lim saqlansin
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('bolim') === 'onlayn') setBolim('onlayn')
+  }, [])
+
+  function bolimniTanla(b: 'dokon' | 'onlayn') {
+    setBolim(b)
+    const url = new URL(window.location.href)
+    if (b === 'onlayn') url.searchParams.set('bolim', 'onlayn')
+    else url.searchParams.delete('bolim')
+    window.history.replaceState(null, '', url)
+  }
+
   async function mijozOch(id: string) {
     setDetailModal(true)
     setDetailYuklanmoqda(true)
@@ -311,15 +353,19 @@ export default function MijozlarPage() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, qoshimchaTelefonlar: form.qoshimchaTelefonlar.filter(t => t.trim()) })
       })
       if (res.ok) {
-        toast.success(tahrirlash ? 'Mijoz yangilandi' : "Mijoz qo'shildi")
+        const javob = await res.clone().json().catch(() => ({}))
+        toast.success(tahrirlash ? 'Mijoz yangilandi' : javob?.mavjud ? `Bu raqam bilan mijoz allaqachon bor: ${javob.ism}` : "Mijoz qo'shildi")
         setModal(false)
         setTahrirlash(null)
-        setForm({ ism: '', telefon: '', telefon2: '', viloyat: '', tuman: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
+        setForm({ ism: '', telefon: '', telefon2: '', qoshimchaTelefonlar: [''], viloyat: '', tuman: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
         yuklash()
-      } else toast.error('Xatolik yuz berdi')
+      } else {
+        const j = await res.json().catch(() => ({}))
+        toast.error(j.xato || 'Xatolik yuz berdi')
+      }
     } finally {
       setSaqlanmoqda(false)
     }
@@ -331,6 +377,28 @@ export default function MijozlarPage() {
 
   return (
     <div className="space-y-4">
+      {/* Do'kon mijozlari (kassa kartalari) va onlayn do'konda ro'yxatdan o'tganlar */}
+      {onlaynRuxsat && (
+        <div className="flex bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 gap-1 w-full sm:w-fit" role="tablist" aria-label="Mijozlar bo‘limi">
+          {([['dokon', 'Do‘kon mijozlari', Users], ['onlayn', 'Onlayn mijozlar', Globe]] as const).map(([k, label, Icon]) => (
+            <button
+              key={k} type="button" role="tab" aria-selected={bolim === k}
+              onClick={() => bolimniTanla(k)}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                bolim === k
+                  ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <Icon size={15} aria-hidden /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {bolim === 'onlayn' && onlaynRuxsat ? (
+        <OnlaynMijozlarPanel onErpKarta={id => { bolimniTanla('dokon'); void mijozOch(id) }} />
+      ) : (<>
       <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
         <SearchBar
           value={qidiruv}
@@ -342,23 +410,23 @@ export default function MijozlarPage() {
           <div className="hidden sm:block">
             <ViewToggle view={view} onChange={changeView} />
           </div>
-          <a
+          {ruxsat.bor('mijozlar.export') && <a
             href="/api/mijozlar/export"
             title="Excel export"
             className="flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
           >
             <Download size={16} />
             <span className="hidden sm:inline">Excel export</span>
-          </a>
-          <label title="Excel import" className={`flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+          </a>}
+          {ruxsat.bor('mijozlar.import') && <label title="Excel import" className={`flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
             {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
             <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
-            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
-          </label>
-          <button onClick={() => modalOchish()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
+            <input suppressHydrationWarning type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
+          </label>}
+          {ruxsat.bor('mijozlar.qoshish') && <button onClick={() => modalOchish()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
             <UserPlus size={16} />
             <span className="hidden sm:inline">Mijoz qo&apos;shish</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -452,13 +520,13 @@ export default function MijozlarPage() {
                     </td>
                     {/* Telefon */}
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-sm hidden sm:table-cell whitespace-nowrap">
-                      {m.telefon || m.telefon2 ? (
+                      {mijozTelefonlari(m).length > 0 ? (
                         <div className="flex flex-col gap-0.5">
-                          {m.telefon && (
-                            <a href={`tel:${m.telefon.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-blue-500 hover:text-blue-600"><Phone size={12} />{formatPhone(m.telefon)}</a>
-                          )}
-                          {m.telefon2 && (
-                            <a href={`tel:${m.telefon2.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-600 text-xs"><Phone size={10} />{formatPhone(m.telefon2)}</a>
+                          {mijozTelefonlari(m).slice(0, 2).map((t, i) => (
+                            <a key={t + i} href={`tel:${t.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className={`flex items-center gap-1 hover:text-blue-600 ${i === 0 ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400 text-xs'}`}><Phone size={i === 0 ? 12 : 10} />{formatPhone(t)}</a>
+                          ))}
+                          {mijozTelefonlari(m).length > 2 && (
+                            <span className="text-[11px] text-gray-400" title={mijozTelefonlari(m).slice(2).map(formatPhone).join(', ')}>+{mijozTelefonlari(m).length - 2} ta raqam</span>
                           )}
                         </div>
                       ) : <span className="text-gray-300 dark:text-gray-700">—</span>}
@@ -467,11 +535,15 @@ export default function MijozlarPage() {
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-sm hidden md:table-cell whitespace-nowrap">
                       {toliqManzil(m) ? (
                         <span className="flex items-center gap-1 truncate" title={toliqManzil(m)}>
+                          {/* Oldin to'g'ridan-to'g'ri Google'ga olib chiqardi;
+                              endi oyna ochiladi — xarita ham, Google/Yandex
+                              havolalari ham, koordinatani nusxalash ham bir joyda. */}
                           {m.lokatsiyaLat !== null && m.lokatsiyaLng !== null ? (
-                            <a href={`https://www.google.com/maps?q=${m.lokatsiyaLat},${m.lokatsiyaLng}`} target="_blank" rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()} title="Xaritada ko'rish" className="text-primary hover:text-primary-hover shrink-0">
-                              <MapPin size={12} />
-                            </a>
+                            <XaritadaKorish
+                              nomi={m.ism} tavsif={toliqManzil(m)}
+                              lat={m.lokatsiyaLat} lng={m.lokatsiyaLng} turi="mijoz"
+                              className="text-primary hover:text-primary-hover shrink-0"
+                            />
                           ) : <MapPin size={12} className="shrink-0" />}
                           <span className="truncate">{toliqManzil(m)}</span>
                         </span>
@@ -489,14 +561,14 @@ export default function MijozlarPage() {
                     </td>
                     {/* Amal */}
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button
+                      {ochirishRuxsat && <button
                         onClick={e => { e.stopPropagation(); ochirish(m) }}
                         disabled={ochirilayotganId === m.id}
                         className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50"
                         title="O'chirish"
                       >
                         {ochirilayotganId === m.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                      </button>
+                      </button>}
                     </td>
                   </tr>
                 ))}
@@ -543,18 +615,19 @@ export default function MijozlarPage() {
                       <Phone size={14} className="sm:hidden" /><Phone size={12} className="hidden sm:block" /> {formatPhone(m.telefon)}
                     </a>
                   )}
-                  {m.telefon2 && (
-                    <a href={`tel:${m.telefon2.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="text-gray-500 dark:text-gray-400 hover:text-blue-600 text-sm sm:text-xs flex items-center gap-1 mt-0.5">
-                      <Phone size={12} className="sm:hidden" /><Phone size={10} className="hidden sm:block" /> {formatPhone(m.telefon2)}
+                  {[m.telefon2, ...(m.qoshimchaTelefonlar ?? [])].filter((t): t is string => !!t).map((t, i) => (
+                    <a key={t + i} href={`tel:${t.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="text-gray-500 dark:text-gray-400 hover:text-blue-600 text-sm sm:text-xs flex items-center gap-1 mt-0.5">
+                      <Phone size={12} className="sm:hidden" /><Phone size={10} className="hidden sm:block" /> {formatPhone(t)}
                     </a>
-                  )}
+                  ))}
                   {toliqManzil(m) && (
                     <p className="text-gray-500 dark:text-gray-400 text-base sm:text-sm flex items-center gap-1 mt-1 sm:mt-0.5">
                       {m.lokatsiyaLat !== null && m.lokatsiyaLng !== null ? (
-                        <a href={`https://www.google.com/maps?q=${m.lokatsiyaLat},${m.lokatsiyaLng}`} target="_blank" rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()} title="Xaritada ko'rish" className="text-primary hover:text-primary-hover shrink-0">
-                          <MapPin size={14} className="sm:hidden" /><MapPin size={12} className="hidden sm:block" />
-                        </a>
+                        <XaritadaKorish
+                          nomi={m.ism} tavsif={toliqManzil(m)}
+                          lat={m.lokatsiyaLat} lng={m.lokatsiyaLng} turi="mijoz"
+                          className="text-primary hover:text-primary-hover shrink-0"
+                        />
                       ) : <><MapPin size={14} className="shrink-0 sm:hidden" /><MapPin size={12} className="shrink-0 hidden sm:block" /></>}
                       <span className="truncate">{toliqManzil(m)}</span>
                     </p>
@@ -581,22 +654,22 @@ export default function MijozlarPage() {
                   </p>
                 </div>
               </div>
-              <div className="mt-4 sm:mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid grid-cols-3 -mx-5 sm:-mx-4 -mb-5 sm:-mb-4">
-                <button
+              <div className={`mt-4 sm:mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 grid ${['hidden', 'grid-cols-1', 'grid-cols-2', 'grid-cols-3'][(sotuvRuxsat ? 1 : 0) + (tahrirRuxsat ? 1 : 0) + (ochirishRuxsat ? 1 : 0)]} -mx-5 sm:-mx-4 -mb-5 sm:-mb-4`}>
+                {sotuvRuxsat && <button
                   onClick={e => { e.stopPropagation(); router.push(`/sotuv?mijozId=${m.id}`) }}
                   title="Sotuvni boshlash"
                   className="flex items-center justify-center py-4 sm:py-2.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition border-r border-gray-100 dark:border-neutral-800 rounded-bl-2xl"
                 >
                   <ShoppingCart size={22} className="sm:hidden" /><ShoppingCart size={16} className="hidden sm:block" />
-                </button>
-                <button
+                </button>}
+                {tahrirRuxsat && <button
                   onClick={e => { e.stopPropagation(); modalOchish(m) }}
                   title="Tahrirlash"
                   className="flex items-center justify-center py-4 sm:py-2.5 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition border-r border-gray-100 dark:border-neutral-800"
                 >
                   <Pencil size={22} className="sm:hidden" /><Pencil size={16} className="hidden sm:block" />
-                </button>
-                <button
+                </button>}
+                {ochirishRuxsat && <button
                   onClick={e => { e.stopPropagation(); ochirish(m) }}
                   disabled={ochirilayotganId === m.id}
                   title="O'chirish"
@@ -612,7 +685,7 @@ export default function MijozlarPage() {
                   ) : (
                     <Trash2 size={16} className="hidden sm:block" />
                   )}
-                </button>
+                </button>}
               </div>
             </div>
           ))}
@@ -636,26 +709,67 @@ export default function MijozlarPage() {
                   onChange={e => setForm(prev => ({ ...prev, ism: e.target.value }))}
                   className={inputCls} />
               </div>
-              {/* Telefon — PhoneInput component */}
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Telefon</label>
-                <PhoneInput
-                  value={form.telefon}
-                  onChange={v => setForm(f => ({ ...f, telefon: v }))}
-                  placeholder="+998 (__) ___-__-__"
-                />
-              </div>
-              {/* Ikkinchi raqam — odatda Telegram ulangan raqam */}
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
-                  Qo&apos;shimcha raqam <span className="text-gray-400 font-normal">(Telegram / qarindosh)</span>
-                </label>
-                <PhoneInput
-                  value={form.telefon2}
-                  onChange={v => setForm(f => ({ ...f, telefon2: v }))}
-                  placeholder="+998 (__) ___-__-__"
-                />
-              </div>
+              {/* Telefon raqamlari: asosiy, qo'shimcha (Telegram) va 3-raqamdan boshlab — kerakicha qo'shiladi */}
+              <fieldset className="space-y-2.5">
+                <legend className="sr-only">Telefon raqamlari</legend>
+                <div>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Telefon <span className="text-gray-400 font-normal">(asosiy)</span></label>
+                  <PhoneInput
+                    value={form.telefon}
+                    onChange={v => setForm(f => ({ ...f, telefon: v }))}
+                    placeholder="+998 (__) ___-__-__"
+                  />
+                </div>
+                {/* Ikkinchi raqam — odatda Telegram ulangan raqam */}
+                <div>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                    2-raqam <span className="text-gray-400 font-normal">(Telegram / qarindosh)</span>
+                  </label>
+                  <PhoneInput
+                    value={form.telefon2}
+                    onChange={v => setForm(f => ({ ...f, telefon2: v }))}
+                    placeholder="+998 (__) ___-__-__"
+                  />
+                </div>
+                {form.qoshimchaTelefonlar.map((t, i) => (
+                  <div key={i}>
+                    <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                      {i + 3}-raqam <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <PhoneInput
+                        value={t}
+                        onChange={v => setForm(f => ({ ...f, qoshimchaTelefonlar: f.qoshimchaTelefonlar.map((x, j) => (j === i ? v : x)) }))}
+                        placeholder="+998 (__) ___-__-__"
+                        className="flex-1"
+                      />
+                      {(form.qoshimchaTelefonlar.length > 1 || t) && (
+                        <button
+                          type="button"
+                          onClick={() => setForm(f => {
+                            const qolgan = f.qoshimchaTelefonlar.filter((_, j) => j !== i)
+                            return { ...f, qoshimchaTelefonlar: qolgan.length ? qolgan : [''] }
+                          })}
+                          title="Raqamni olib tashlash"
+                          aria-label={`${i + 3}-raqamni olib tashlash`}
+                          className="shrink-0 p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.qoshimchaTelefonlar.length + 2 < MAX_TELEFON && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, qoshimchaTelefonlar: [...f.qoshimchaTelefonlar, ''] }))}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                  >
+                    <Phone size={14} aria-hidden /> + Yana raqam qo&apos;shish
+                  </button>
+                )}
+              </fieldset>
 
               {/* Hudud — ro'yxatdan tanlanadi yoki qo'lda yoziladi.
                   Viloyat o'zgarsa, unga tegishli bo'lmagan tuman tozalanadi. */}
@@ -863,6 +977,12 @@ export default function MijozlarPage() {
                       <span className="text-blue-400 text-xs">(qo&apos;shimcha)</span>
                     </a>
                   )}
+                  {(tanlanganMijoz.qoshimchaTelefonlar ?? []).map((t, i) => (
+                    <a key={t + i} href={`tel:${t.replace(/\s/g, '')}`} className="flex items-center gap-1 text-blue-500 hover:text-blue-600 bg-blue-50 dark:bg-blue-950/30 px-2.5 py-1 rounded-lg">
+                      <Phone size={12} />{formatPhone(t)}
+                      <span className="text-blue-400 text-xs">({i + 3}-raqam)</span>
+                    </a>
+                  ))}
                   {toliqManzil(tanlanganMijoz) && (
                     <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 px-2.5 py-1 rounded-lg">
                       <MapPin size={12} />{toliqManzil(tanlanganMijoz)}
@@ -893,6 +1013,45 @@ export default function MijozlarPage() {
                     </span>
                   )}
                 </div>
+
+                {/* ── Mijoz keltirgan foyda ──
+                    Sotuv narxi bilan kelish narxi taqqoslanadi. Qaytarilgan
+                    tovarlar va chegirmalar ayrilgan. */}
+                {tanlanganMijoz.foydaXulosa && tanlanganMijoz.foydaXulosa.daromad > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                      <p className="text-gray-500 dark:text-gray-400 text-[11px] flex items-center gap-1">
+                        <ShoppingBag size={11} /> Jami savdo
+                      </p>
+                      <p className="text-gray-900 dark:text-gray-100 font-semibold mt-0.5 font-mono tabular-nums text-sm truncate">
+                        {formatSum(tanlanganMijoz.foydaXulosa.daromad)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
+                      <p className="text-gray-500 dark:text-gray-400 text-[11px] flex items-center gap-1">
+                        <Tag size={11} /> Tannarx
+                      </p>
+                      <p className="text-gray-600 dark:text-gray-400 font-semibold mt-0.5 font-mono tabular-nums text-sm truncate">
+                        {formatSum(tanlanganMijoz.foydaXulosa.tannarx)}
+                      </p>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-950/20 rounded-xl p-3">
+                      <p className="text-green-700 dark:text-green-500 text-[11px] flex items-center gap-1">
+                        <TrendingUp size={11} /> Sof foyda
+                      </p>
+                      <p className={`font-bold mt-0.5 font-mono tabular-nums text-sm truncate ${
+                        tanlanganMijoz.foydaXulosa.foyda >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {formatSum(tanlanganMijoz.foydaXulosa.foyda)}
+                      </p>
+                      {tanlanganMijoz.foydaXulosa.foiz !== null && (
+                        <p className="text-green-700/70 dark:text-green-500/70 text-[11px] mt-0.5">
+                          ustama {tanlanganMijoz.foydaXulosa.foiz}%
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <p className="text-gray-700 dark:text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
@@ -945,10 +1104,28 @@ export default function MijozlarPage() {
                                 </button>
                               </div>
                             </div>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5 flex items-center gap-1">
+                            <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5 flex items-center gap-1 flex-wrap">
                               <Calendar size={11} />{formatSanaVaVaqt(y.sotuv.sana)}
                               <span className="text-gray-300 dark:text-neutral-700">&bull;</span>
                               {tolovQisqa(y.sotuv.tolovUsuli)}
+                              {/* Shu chekdan kelgan foyda — tannarx bilan taqqoslab */}
+                              {y.sotuv.foyda && (
+                                <>
+                                  <span className="text-gray-300 dark:text-neutral-700">&bull;</span>
+                                  <span
+                                    title={`Savdo ${formatSum(y.sotuv.foyda.daromad)} − tannarx ${formatSum(y.sotuv.foyda.tannarx)}`}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium ${
+                                      y.sotuv.foyda.foyda >= 0
+                                        ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-500'
+                                        : 'bg-red-50 dark:bg-red-950/30 text-red-600'
+                                    }`}
+                                  >
+                                    <TrendingUp size={10} />
+                                    foyda {formatSum(y.sotuv.foyda.foyda)}
+                                    {y.sotuv.foyda.foiz !== null && ` (${y.sotuv.foyda.foiz}%)`}
+                                  </span>
+                                </>
+                              )}
                             </p>
                             <div className="mt-2 pt-2 border-t border-gray-100 dark:border-neutral-800 space-y-1">
                               {y.sotuv.tarkiblar.map(t => (
@@ -995,6 +1172,7 @@ export default function MijozlarPage() {
           </div>
         </div>
       )}
+      </>)}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { sodiqlikSozlamasi, sodiqlikSozlamasiniSaqla } from '@/lib/sodiqlik-server'
 import { sozlamaniTasdiqla } from '@/lib/sodiqlik'
 
@@ -21,8 +22,9 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as { rol?: string }).rol !== 'ADMIN') {
-      return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
+    if (!(await amalRuxsatiBormi(session, 'ballar.sozlama'))) {
+      return NextResponse.json({ xato: 'Bu amalga ruxsatingiz yo‘q: «Sodiqlik sozlamalari»', kod: 'ruxsat_yoq' }, { status: 403 })
     }
     const sozlama = sozlamaniTasdiqla(await req.json())
     await sodiqlikSozlamasiniSaqla(sozlama)

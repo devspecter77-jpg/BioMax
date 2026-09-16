@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { telefonlarniTozala } from '@/lib/mijoz-telefon'
+import { qoshimchaTelefonBoyichaIdlar } from '@/lib/mijoz-telefon-server'
 import { toKirill, toLotin } from '@/lib/utils'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 
@@ -24,6 +26,7 @@ export async function GET(req: NextRequest) {
     const kirillVariant = toKirill(qidiruv)
     const lotinVariant = toLotin(qidiruv)
     const filialId = sessionFilialId(session)
+    const qoshimchaIdlar = qidiruv ? await qoshimchaTelefonBoyichaIdlar(qidiruv) : []
 
     const mijozlar = await prisma.mijoz.findMany({
       where: {
@@ -35,6 +38,7 @@ export async function GET(req: NextRequest) {
               ...(lotinVariant !== qidiruv ? [{ ism: { contains: lotinVariant, mode: 'insensitive' as const } }] : []),
               { telefon: { contains: qidiruv } },
               { telefon2: { contains: qidiruv } },
+              ...(qoshimchaIdlar.length ? [{ id: { in: qoshimchaIdlar } }] : []),
               { maxsus_kod: { contains: qidiruv } },
               { viloyat: { contains: qidiruv, mode: 'insensitive' as const } },
               { tuman: { contains: qidiruv, mode: 'insensitive' as const } },
@@ -80,16 +84,20 @@ export async function POST(req: NextRequest) {
     // Dublikat tekshiruvi ikkala raqam bo'yicha: bir mijoz avval asosiy
     // raqami bilan, keyin Telegram raqami bilan kiritilib, ikki marta
     // yaratilib qolmasin.
-    const telefonToza = (data.telefon || '').replace(/\D/g, '')
-    const telefon2Toza = (data.telefon2 || '').replace(/\D/g, '')
-    const raqamlar = [telefonToza, telefon2Toza].filter(r => r.length >= 9).map(r => r.slice(-9))
+    const tel = telefonlarniTozala(data.telefon, data.telefon2, data.qoshimchaTelefonlar)
+    if ('xato' in tel) return NextResponse.json({ xato: tel.xato }, { status: 400 })
+    const raqamlar = tel.hammasi
     if (raqamlar.length > 0) {
       const mavjudMijoz = await prisma.mijoz.findFirst({
         where: {
-          OR: raqamlar.flatMap(r => [
-            { telefon: { endsWith: r } },
-            { telefon2: { endsWith: r } },
-          ]),
+          OR: [
+            ...raqamlar.flatMap(r => [
+              { telefon: { endsWith: r } },
+              { telefon2: { endsWith: r } },
+            ]),
+            // Qo'shimcha raqamlar 9 raqam ko'rinishida saqlanadi — aniq moslik
+            { qoshimchaTelefonlar: { hasSome: raqamlar } },
+          ],
           ...(filialId ? { filialId } : { egaId }),
         },
       })
@@ -102,8 +110,9 @@ export async function POST(req: NextRequest) {
     const mijoz = await prisma.mijoz.create({
       data: {
         ism: data.ism,
-        telefon: data.telefon,
-        telefon2: data.telefon2 || null,
+        telefon: tel.telefon,
+        telefon2: tel.telefon2,
+        qoshimchaTelefonlar: tel.qoshimcha,
         viloyat: data.viloyat?.trim() || null,
         tuman: data.tuman?.trim() || null,
         manzil: data.manzil,

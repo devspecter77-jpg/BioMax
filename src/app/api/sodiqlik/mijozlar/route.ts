@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { qoshimchaTelefonBoyichaIdlar } from '@/lib/mijoz-telefon-server'
 import { egaFilialWhere } from '@/lib/filial-scope'
 import { toKirill, toLotin } from '@/lib/utils'
 
@@ -25,8 +26,10 @@ export async function GET(req: NextRequest) {
 
     if (qidiruv) {
       const nomlar = Array.from(new Set([qidiruv, toKirill(qidiruv), toLotin(qidiruv)]))
+      const qoshimchaIdlar = await qoshimchaTelefonBoyichaIdlar(qidiruv)
       shartlar.push({
         OR: [
+          ...(qoshimchaIdlar.length ? [{ id: { in: qoshimchaIdlar } }] : []),
           ...nomlar.map(n => ({ ism: { contains: n, mode: 'insensitive' as const } })),
           { telefon: { contains: qidiruv } },
           { telefon2: { contains: qidiruv } },

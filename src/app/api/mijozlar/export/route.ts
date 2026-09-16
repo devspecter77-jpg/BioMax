@@ -24,6 +24,7 @@ export async function GET(_req: NextRequest) {
       'Ism': m.ism,
       'Telefon': m.telefon ? formatPhone(m.telefon) : '',
       "Qo'shimcha raqam": m.telefon2 ? formatPhone(m.telefon2) : '',
+      'Boshqa raqamlar': m.qoshimchaTelefonlar.map(t => formatPhone(t)).join(', '),
       'Viloyat': m.viloyat || '',
       'Tuman': m.tuman || '',
       'Manzil': m.manzil || '',
@@ -35,7 +36,7 @@ export async function GET(_req: NextRequest) {
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 11 }, { wch: 13 }, { wch: 16 }]
+    ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 11 }, { wch: 13 }, { wch: 16 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Mijozlar')
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 
