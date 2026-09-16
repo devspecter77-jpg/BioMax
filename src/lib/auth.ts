@@ -2,7 +2,7 @@ import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from './prisma'
-import { barchaRuxsatKalitlari, rolStandartRuxsat } from './ruxsat-katalogi'
+import { hisobHolati } from './ruxsat-server'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -49,14 +49,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!parolTogri) return null
 
-        let ruxsatlar: string[] | null = null
-        if (foydalanuvchi.rol !== 'ADMIN') {
-          const overrides = await prisma.ruxsat.findMany({ where: { foydalanuvchiId: foydalanuvchi.id } })
-          const overrideMap = new Map(overrides.map(o => [o.bolim, o.korinadi]))
-          ruxsatlar = barchaRuxsatKalitlari.filter(kalit =>
-            overrideMap.has(kalit) ? overrideMap.get(kalit)! : rolStandartRuxsat(foydalanuvchi.rol, kalit)
-          )
-        }
+        // Samarali ruxsatlar (bo'lim + amallar) — keshsiz, login paytida aniq holat
+        const holat = await hisobHolati(foydalanuvchi.id, true)
+        const ruxsatlar = holat?.ruxsatlar ?? null
 
         return {
           id: foydalanuvchi.id,
@@ -84,6 +79,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.tovarTahrirlashMumkin = (user as any).tovarTahrirlashMumkin
         token.tovarOchirishMumkin = (user as any).tovarOchirishMumkin
         token.ruxsatlar = (user as any).ruxsatlar
+        token.tekshirildi = Date.now()
+        return token
+      }
+
+      // Har 30 soniyada hisob holati bazadan yangilanadi: ruxsat o'zgarsa xodim
+      // qayta kirishi shart emas, o'chirilgan (faol emas) xodim esa tizimdan chiqadi.
+      if (token.id && Date.now() - Number(token.tekshirildi ?? 0) > 30_000) {
+        const h = await hisobHolati(token.id as string).catch(() => undefined)
+        if (h === undefined) return token // baza vaqtincha javob bermadi — eski holat bilan davom
+        if (!h || !h.faol) return null
+        token.rol = h.rol
+        token.filialId = h.filialId
+        token.filialNomi = h.filialNomi
+        token.ulashilganEgaId = h.ulashilganEgaId
+        token.tovarTahrirlashMumkin = h.tovarTahrirlashMumkin
+        token.tovarOchirishMumkin = h.tovarOchirishMumkin
+        token.ruxsatlar = h.ruxsatlar
+        token.tekshirildi = Date.now()
       }
       return token
     },
