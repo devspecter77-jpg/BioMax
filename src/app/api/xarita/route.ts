@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionIsRealEga } from '@/lib/filial-scope'
+import { sessionIsRealEga, egaFilialWhere } from '@/lib/filial-scope'
 
-// Xarita bo'limi ma'lumotlari: filiallar va xodimlarning joylashuvi.
+// Xarita bo'limi ma'lumotlari: filiallar, xodimlar, mijozlar va
+// TA'MINOTCHILARNING joylashuvi. Sahifa ularni alohida ko'rinishlarga
+// ajratadi, shuning uchun hammasi bitta so'rovda qaytariladi.
 // Faqat bosh Ega ko'radi — /api/filiallar dagi bilan bir xil tekshiruv.
 function faqatEga(session: unknown): boolean {
   const s = session as { user?: { rol?: string } } | null
@@ -16,7 +18,7 @@ export async function GET() {
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
     if (!faqatEga(session)) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
 
-    const [filiallar, xodimlar] = await Promise.all([
+    const [filiallar, xodimlar, mijozlar, taminotchilar] = await Promise.all([
       prisma.filial.findMany({
         select: {
           id: true, nomi: true, manzil: true, telefon: true, faol: true,
@@ -35,11 +37,43 @@ export async function GET() {
         },
         orderBy: { lokatsiyaYangilangan: 'desc' },
       }),
+      // Mijozlar — GPS joylashuvi saqlangani. Ular xaritada ALOHIDA
+      // rangda ko'rsatiladi: do'kon egasi mijozlar qayerda joylashganini
+      // ko'rib, yetkazib berish yo'nalishini rejalashtira oladi.
+      prisma.mijoz.findMany({
+        where: {
+          lokatsiyaLat: { not: null },
+          lokatsiyaLng: { not: null },
+          ...egaFilialWhere(session),
+        },
+        select: {
+          id: true, ism: true, telefon: true, manzil: true,
+          viloyat: true, tuman: true,
+          lokatsiyaLat: true, lokatsiyaLng: true,
+        },
+        orderBy: { ism: 'asc' },
+      }),
+      // Ta'minotchilar — koordinatasi belgilangani. Yetkazib beruvchi
+      // qayerdaligini bilish xarid yo'nalishini rejalashtirishda kerak.
+      prisma.taminotchi.findMany({
+        where: {
+          lokatsiyaLat: { not: null },
+          lokatsiyaLng: { not: null },
+          ...egaFilialWhere(session),
+        },
+        select: {
+          id: true, nomi: true, telefon: true, manzil: true, kontaktShaxs: true,
+          lokatsiyaLat: true, lokatsiyaLng: true,
+        },
+        orderBy: { nomi: 'asc' },
+      }),
     ])
 
     return NextResponse.json({
       filiallar,
       xodimlar,
+      mijozlar,
+      taminotchilar,
       // Server vaqti — "necha daqiqa oldin" hisobini brauzer soatiga
       // emas, serverga nisbatan qilamiz (soatlar farq qilishi mumkin).
       hozir: new Date().toISOString(),

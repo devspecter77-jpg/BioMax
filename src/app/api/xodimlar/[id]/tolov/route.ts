@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId, egaFilialWhere } from '@/lib/filial-scope'
 import { tolovniTekshir, TOLOV_MALUMOTI } from '@/lib/xodim-oylik'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 
 // Xodimga to'lov: oylik, bonus, avans yoki jarima.
 //
@@ -14,11 +15,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    if ((session.user as unknown as { rol?: string }).rol !== 'ADMIN') {
-      return NextResponse.json({ xato: 'Faqat admin to‘lov qo‘sha oladi' }, { status: 403 })
-    }
-
     const { id } = await params
+    if (!(await amalRuxsatiBormi(session, 'xodimlar.oylik'))) {
+      return NextResponse.json({ xato: 'Oylik va bonus to‘lashga ruxsatingiz yo‘q', kod: 'ruxsat_yoq' }, { status: 403 })
+    }
+    // Administrator bo'lmagan xodim o'ziga to'lov yoza olmaydi
+    const admin = (session.user as unknown as { rol?: string }).rol === 'ADMIN'
+    if (!admin && id === (session.user as unknown as { id: string }).id) {
+      return NextResponse.json({ xato: 'O‘zingizga to‘lov yoza olmaysiz', kod: 'ruxsat_yoq' }, { status: 403 })
+    }
     const ownFilialId = sessionFilialId(session)
 
     const xodim = await prisma.foydalanuvchi.findFirst({
@@ -83,11 +88,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    if ((session.user as unknown as { rol?: string }).rol !== 'ADMIN') {
-      return NextResponse.json({ xato: 'Faqat admin o‘chira oladi' }, { status: 403 })
-    }
-
     const { id } = await params
+    if (!(await amalRuxsatiBormi(session, 'xodimlar.oylik'))) {
+      return NextResponse.json({ xato: 'Oylik va bonus to‘lashga ruxsatingiz yo‘q', kod: 'ruxsat_yoq' }, { status: 403 })
+    }
+    if ((session.user as unknown as { rol?: string }).rol !== 'ADMIN' && id === (session.user as unknown as { id: string }).id) {
+      return NextResponse.json({ xato: 'O‘z to‘lovingizni o‘chira olmaysiz', kod: 'ruxsat_yoq' }, { status: 403 })
+    }
     const tolovId = new URL(req.url).searchParams.get('tolovId')
     if (!tolovId) return NextResponse.json({ xato: 'tolovId kerak' }, { status: 400 })
 

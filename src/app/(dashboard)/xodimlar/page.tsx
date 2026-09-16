@@ -4,11 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   UsersRound, Plus, Loader2, X, Search, Wallet, Gift, Check,
-  Phone, Building, ShieldCheck, Banknote, Trash2, History,
+  Phone, Building, ShieldCheck, Banknote, Trash2, History, Package, ShoppingBag, LayoutDashboard,
 } from 'lucide-react'
 import { formatSum, formatPhone, formatSanaVaVaqt, uzSearch } from '@/lib/utils'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useConfirm } from '@/components/ConfirmProvider'
+import { XaritadaKorish } from '@/components/LokatsiyaModal'
+import XodimMulkPanel from '@/components/xodim/XodimMulkPanel'
+import XodimSotuvlarPanel from '@/components/xodim/XodimSotuvlarPanel'
+import XodimUmumiyPanel, { type XodimTafsiloti } from '@/components/xodim/XodimUmumiyPanel'
 import {
   TOLOV_TURLARI, TOLOV_MALUMOTI, tolovMalumoti, davrKaliti,
   type DavrYigindisi, type TolovTuri,
@@ -27,6 +31,14 @@ interface Xodim {
   filialId: string | null
   filial: Filial | null
   davrYigindisi: DavrYigindisi
+  /** Oxirgi ma'lum joylashuv — kartadagi "Xaritada" tugmasi uchun. */
+  lokatsiyaLat: number | null
+  lokatsiyaLng: number | null
+  lokatsiyaYangilangan: string | null
+  /** Hozir qo'lidagi biriktirilgan mulk */
+  mulk: { soni: number; qiymati: number }
+  /** Tanlangan davrdagi sotuvlari — ko'rish ruxsati bo'lmasa `null` */
+  davrSotuv: { soni: number; summa: number } | null
 }
 
 interface Tolov {
@@ -70,6 +82,9 @@ export default function XodimlarPage() {
   const [xodimlar, setXodimlar] = useState<Xodim[]>([])
   const [filiallar, setFiliallar] = useState<Filial[]>([])
   const [boshqaraOladi, setBoshqaraOladi] = useState(false)
+  const [oylikBeraOladi, setOylikBeraOladi] = useState(false)
+  const [meId, setMeId] = useState<string | null>(null)
+  const [adminmi, setAdminmi] = useState(false)
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [davr, setDavr] = useState(davrKaliti())
   const [qidiruv, setQidiruv] = useState('')
@@ -87,6 +102,11 @@ export default function XodimlarPage() {
   const [tolovSumma, setTolovSumma] = useState('')
   const [tolovIzoh, setTolovIzoh] = useState('')
   const [amalda, setAmalda] = useState(false)
+  // Xodim oynasidagi varaq
+  const [varaq, setVaraq] = useState<'umumiy' | 'oylik' | 'mulk' | 'sotuvlar'>('umumiy')
+  // Oynadagi "Umumiy" varaq ma'lumoti: joylashuv, sotuvlar xulosasi, qo'lidagi mulk
+  const [tafsilot, setTafsilot] = useState<XodimTafsiloti | null>(null)
+  const [sotuvlarKoraOladi, setSotuvlarKoraOladi] = useState(false)
 
   useBodyScrollLock(yangiModal || !!tanlangan)
 
@@ -99,6 +119,10 @@ export default function XodimlarPage() {
       setXodimlar(j.xodimlar ?? [])
       setFiliallar(j.filiallar ?? [])
       setBoshqaraOladi(!!j.boshqaraOladi)
+      setOylikBeraOladi(!!j.oylikBeraOladi)
+      setSotuvlarKoraOladi(!!j.sotuvlarKoraOladi)
+      setMeId(j.meId ?? null)
+      setAdminmi(!!j.adminmi)
     } catch {
       toast.error('Tarmoq xatosi')
     } finally {
@@ -116,18 +140,22 @@ export default function XodimlarPage() {
   }, [xodimlar, qidiruv])
 
   const jami = useMemo(() => {
-    const y = { maosh: 0, tolangan: 0, bonus: 0, jarima: 0 }
+    const y = { maosh: 0, tolangan: 0, bonus: 0, jarima: 0, mulk: 0, sotuv: 0 }
     for (const x of xodimlar) {
       if (x.faol) y.maosh += x.oylikMaosh ?? 0
       y.tolangan += x.davrYigindisi.sof
       y.bonus += x.davrYigindisi.BONUS
       y.jarima += x.davrYigindisi.JARIMA
+      y.mulk += x.mulk?.soni ?? 0
+      y.sotuv += x.davrSotuv?.summa ?? 0
     }
     return y
   }, [xodimlar])
 
-  async function xodimOch(x: Xodim) {
+  async function xodimOch(x: Xodim, boshVaraq: 'umumiy' | 'oylik' | 'mulk' | 'sotuvlar' = 'umumiy') {
     setTanlangan(x)
+    setVaraq(boshVaraq)
+    setTafsilot(null)
     setMaoshMatn(x.oylikMaosh ? String(x.oylikMaosh) : '')
     setTolovTuri('OYLIK')
     setTolovSumma(x.oylikMaosh ? String(x.oylikMaosh) : '')
@@ -135,9 +163,12 @@ export default function XodimlarPage() {
     setTolovlar([])
     setTarixYuklanmoqda(true)
     try {
-      const r = await fetch(`/api/xodimlar/${x.id}`)
+      const r = await fetch(`/api/xodimlar/${x.id}?davr=${encodeURIComponent(davr)}`, { cache: 'no-store' })
       const j = await r.json().catch(() => ({}))
-      if (r.ok) setTolovlar(j.tolovlar ?? [])
+      if (r.ok) {
+        setTolovlar(j.tolovlar ?? [])
+        setTafsilot({ xodim: j.xodim, sotuvXulosa: j.sotuvXulosa ?? null, qolidagiMulk: j.qolidagiMulk ?? [] })
+      }
     } finally {
       setTarixYuklanmoqda(false)
     }
@@ -243,7 +274,7 @@ export default function XodimlarPage() {
             Xodimlar
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">
-            Oylik, bonus va yangi xodim qo&apos;shish
+            Oylik, biriktirilgan mulk va kimga nima sotgani
           </p>
         </div>
         {boshqaraOladi && (
@@ -283,7 +314,8 @@ export default function XodimlarPage() {
           {/* Yakuniy raqamlar */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Karta belgi={<UsersRound size={13} className="text-primary" />} sarlavha="Xodimlar"
-              qiymat={String(xodimlar.filter(x => x.faol).length)} izoh={`${xodimlar.length} ta jami`} />
+              qiymat={String(xodimlar.filter(x => x.faol).length)}
+              izoh={`${xodimlar.length} ta jami${jami.mulk ? ` · ${jami.mulk} ta mulk qo‘lida` : ''}`} />
             <Karta belgi={<Banknote size={13} className="text-gray-500" />} sarlavha="Belgilangan oylik"
               qiymat={formatSum(jami.maosh)} izoh="faol xodimlar bo'yicha" />
             <Karta belgi={<Wallet size={13} className="text-green-600" />} sarlavha={`To'langan (${davr})`}
@@ -326,6 +358,9 @@ export default function XodimlarPage() {
                       <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-2.5 whitespace-nowrap">Oylik</th>
                       <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-2.5 whitespace-nowrap">To&apos;langan</th>
                       <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-2.5 whitespace-nowrap">Qoldi</th>
+                      {sotuvlarKoraOladi && (
+                        <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-2.5 whitespace-nowrap hidden md:table-cell">Sotuv ({davr})</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -338,7 +373,7 @@ export default function XodimlarPage() {
                           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void xodimOch(x) } }}
                           tabIndex={0}
                           role="button"
-                          title="Oylik belgilash va to'lov qo'shish"
+                          title="Batafsil: oylik, biriktirilgan mulk, sotuvlar"
                           className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800/40 transition ${x.faol ? '' : 'opacity-50'}`}
                         >
                           <td className="px-4 py-2.5">
@@ -348,6 +383,21 @@ export default function XodimlarPage() {
                               {x.telefon && <span className="flex items-center gap-1"><Phone size={9} />{formatPhone(x.telefon)}</span>}
                               {x.filial && <span className="flex items-center gap-1"><Building size={9} />{x.filial.nomi}</span>}
                               {!x.faol && <span className="text-red-500">nofaol</span>}
+                              {x.mulk?.soni > 0 && (
+                                <button type="button" onClick={e => { e.stopPropagation(); void xodimOch(x, 'mulk') }}
+                                  className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-400 hover:underline"
+                                  title="Biriktirilgan mulk">
+                                  <Package size={10} aria-hidden />{x.mulk.soni} ta mulk
+                                </button>
+                              )}
+                              {/* Qator bosilsa oylik oynasi ochiladi — shuning
+                                  uchun tugma bosilishini to'xtatadi (komponent ichida). */}
+                              <XaritadaKorish
+                                nomi={x.ism}
+                                tavsif={[x.rol, x.filial?.nomi ?? 'Markaziy'].join(' · ')}
+                                lat={x.lokatsiyaLat} lng={x.lokatsiyaLng}
+                                turi="xodim" matnBilan
+                              />
                             </p>
                           </td>
                           <td className="px-4 py-2.5 hidden sm:table-cell">
@@ -367,6 +417,16 @@ export default function XodimlarPage() {
                           }`}>
                             {!x.oylikMaosh ? '—' : qoldi > 0 ? formatSum(qoldi) : 'To‘liq'}
                           </td>
+                          {sotuvlarKoraOladi && (
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap hidden md:table-cell">
+                              {x.davrSotuv && x.davrSotuv.soni > 0 ? (
+                                <button type="button" onClick={e => { e.stopPropagation(); void xodimOch(x, 'sotuvlar') }} className="text-right hover:underline" title="Kimga nima sotganini ko‘rish">
+                                  <span className="block font-mono tabular-nums font-semibold text-gray-900 dark:text-gray-100">{formatSum(x.davrSotuv.summa)}</span>
+                                  <span className="block text-[11px] text-gray-500">{x.davrSotuv.soni} ta chek</span>
+                                </button>
+                              ) : <span className="text-gray-400">—</span>}
+                            </td>
+                          )}
                         </tr>
                       )
                     })}
@@ -412,7 +472,8 @@ export default function XodimlarPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Maydon label="Rol">
                   <select value={forma.rol} onChange={e => setForma(f => ({ ...f, rol: e.target.value }))} className={inputCls}>
-                    {ROLLAR.map(r => <option key={r} value={r}>{r}</option>)}
+                    {/* Administrator hisobini faqat administrator yaratadi (server ham tekshiradi) */}
+                    {ROLLAR.filter(r => adminmi || r !== 'ADMIN').map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </Maydon>
                 <Maydon label="Telefon">
@@ -428,10 +489,12 @@ export default function XodimlarPage() {
                   </select>
                 </Maydon>
               )}
-              <Maydon label="Oylik maosh" izoh="keyin ham belgilash mumkin">
-                <input value={forma.oylikMaosh} onChange={e => setForma(f => ({ ...f, oylikMaosh: e.target.value }))}
-                  inputMode="numeric" placeholder="3000000" className={inputCls} />
-              </Maydon>
+              {oylikBeraOladi && (
+                <Maydon label="Oylik maosh" izoh="keyin ham belgilash mumkin">
+                  <input value={forma.oylikMaosh} onChange={e => setForma(f => ({ ...f, oylikMaosh: e.target.value }))}
+                    inputMode="numeric" placeholder="3000000" className={inputCls} />
+                </Maydon>
+              )}
             </div>
             <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
               <button type="submit" disabled={saqlanmoqda}
@@ -453,7 +516,7 @@ export default function XodimlarPage() {
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
           onClick={() => setTanlangan(null)}>
           <div onClick={e => e.stopPropagation()}
-            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[92dvh] flex flex-col">
+            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full sm:max-w-2xl max-h-[92dvh] flex flex-col">
             <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="text-gray-900 dark:text-gray-100 font-semibold truncate">{tanlangan.ism}</h3>
@@ -469,8 +532,53 @@ export default function XodimlarPage() {
               </button>
             </div>
 
+            <div className="px-4 pt-3 shrink-0">
+              <div className="flex rounded-xl bg-gray-100 dark:bg-neutral-800 p-1 gap-1" role="tablist" aria-label="Xodim ma’lumotlari">
+                {([
+                  ['umumiy', 'Umumiy', 'Umumiy', LayoutDashboard, null],
+                  ['oylik', 'Oylik', 'Oylik', Wallet, null],
+                  ['mulk', 'Biriktirilgan mulk', 'Mulk', Package, tanlangan.mulk?.soni || null],
+                  ...(sotuvlarKoraOladi ? [['sotuvlar', 'Sotuvlar', 'Sotuvlar', ShoppingBag, null] as const] : []),
+                ] as const).map(([k, nomi, qisqa, Belgi, son]) => (
+                  <button
+                    key={k} type="button" role="tab" aria-selected={varaq === k} onClick={() => setVaraq(k)}
+                    className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs sm:text-sm font-medium transition ${
+                      varaq === k ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'
+                    }`}
+                  >
+                    <Belgi size={14} className="shrink-0" aria-hidden />
+                    <span className="truncate sm:hidden">{qisqa}</span>
+                    <span className="truncate hidden sm:inline">{nomi}</span>
+                    {son ? <span className="rounded-full bg-emerald-600 text-white text-[10px] px-1.5 tabular-nums">{son}</span> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="overflow-y-auto flex-1 p-4 space-y-4">
-              {boshqaraOladi && (
+              {varaq === 'umumiy' && (
+                <XodimUmumiyPanel
+                  ism={tanlangan.ism}
+                  rol={tanlangan.rol}
+                  tafsilot={tafsilot}
+                  yuklanmoqda={tarixYuklanmoqda}
+                  oylik={{ davr, maosh: tanlangan.oylikMaosh, tolangan: tanlangan.davrYigindisi.sof }}
+                  onVaraq={setVaraq}
+                />
+              )}
+              {varaq === 'mulk' && (
+                <XodimMulkPanel
+                  xodimId={tanlangan.id}
+                  xodimIsmi={tanlangan.ism}
+                  xodimlar={xodimlar.map(x => ({ id: x.id, ism: x.ism, faol: x.faol }))}
+                  onOzgardi={() => { void yukla(); void xodimOch(tanlangan, 'mulk') }}
+                />
+              )}
+              {varaq === 'sotuvlar' && sotuvlarKoraOladi && (
+                <XodimSotuvlarPanel xodimId={tanlangan.id} xodimIsmi={tanlangan.ism} davrlar={oxirgiDavrlar()} boshlangichDavr={davr} />
+              )}
+              {varaq === 'oylik' && (<>
+              {oylikBeraOladi && tanlangan.id !== meId && (
                 <>
                   {/* Oylik belgilash */}
                   <section>
@@ -552,7 +660,7 @@ export default function XodimlarPage() {
                             <span className={`font-mono tabular-nums text-sm font-semibold ${m.ishora > 0 ? 'text-green-600' : 'text-red-600'}`}>
                               {m.ishora > 0 ? '+' : '−'}{formatSum(t.summa)}
                             </span>
-                            {boshqaraOladi && (
+                            {oylikBeraOladi && tanlangan.id !== meId && (
                               <button onClick={() => void tolovOchir(t)} disabled={amalda}
                                 title="Bekor qilish"
                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50">
@@ -566,6 +674,7 @@ export default function XodimlarPage() {
                   </div>
                 )}
               </section>
+              </>)}
             </div>
 
             <div className="p-4 border-t border-gray-200 dark:border-neutral-800 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">

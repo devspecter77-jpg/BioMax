@@ -4,8 +4,9 @@ import type { Session } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
-import { bolimRuxsatiBormi } from '@/lib/ruxsat-server'
+import { amalRuxsatiBormi, bolimRuxsatiBormi } from '@/lib/ruxsat-server'
 import { davrKaliti, tolovlarniYigindi } from '@/lib/xodim-oylik'
+import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
 
 // Xodimlar bo'limi — oylik, bonus va yangi xodim yaratish.
 //
@@ -34,6 +35,9 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, ism: true, login: true, rol: true, faol: true, telefon: true,
         oylikMaosh: true, yaratilgan: true, filialId: true,
+        // Kartadagi "Xaritada" tugmasi shu koordinataga tayanadi —
+        // alohida so'rov yubormaslik uchun shu yerda qaytariladi.
+        lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
         filial: { select: { id: true, nomi: true } },
       },
       orderBy: [{ faol: 'desc' }, { yaratilgan: 'asc' }],
@@ -57,10 +61,41 @@ export async function GET(req: NextRequest) {
       orderBy: { yaratilgan: 'asc' },
     })
 
+    const [boshqaraOladi, oylikBeraOladi, mulkBoshqaraOladi, sotuvlarKoraOladi] = await Promise.all([
+      amalRuxsatiBormi(session, 'xodimlar.qoshish'),
+      amalRuxsatiBormi(session, 'xodimlar.oylik'),
+      amalRuxsatiBormi(session, 'xodimlar.mulk'),
+      amalRuxsatiBormi(session, 'xodimlar.sotuvlar'),
+    ])
+
+    // Qo'lidagi mulk va shu davrdagi sotuvlar — ro'yxatda bir qarashda ko'rinsin
+    const idlar = xodimlar.map(x => x.id)
+    const { dan, gacha } = sotuvDavriOraligi(davr)
+    const [mulkGuruh, sotuvGuruh] = await Promise.all([
+      prisma.xodimMulki.groupBy({
+        by: ['xodimId'], where: { xodimId: { in: idlar }, holati: 'BERILGAN' },
+        _count: { _all: true }, _sum: { qiymati: true },
+      }),
+      sotuvlarKoraOladi
+        ? prisma.sotuv.groupBy({
+            by: ['kassirId'],
+            where: { kassirId: { in: idlar }, holati: 'YAKUNLANGAN', sana: { gte: dan ?? undefined, lt: gacha ?? undefined } },
+            _count: { _all: true }, _sum: { yakuniySumma: true },
+          })
+        : Promise.resolve([]),
+    ])
+    const mulkMap = new Map(mulkGuruh.map(g => [g.xodimId, { soni: g._count._all, qiymati: Number(g._sum.qiymati ?? 0) }]))
+    const sotuvMap = new Map(sotuvGuruh.map(g => [g.kassirId, { soni: g._count._all, summa: Number(g._sum.yakuniySumma ?? 0) }]))
+
     return NextResponse.json({
       davr,
-      // Faqat ADMIN yangi xodim yarata va oylik belgilay oladi
-      boshqaraOladi: (session.user as unknown as { rol?: string }).rol === 'ADMIN',
+      // Ruxsatlar bo'limidan beriladi (ADMIN'da doim bor)
+      boshqaraOladi,
+      oylikBeraOladi,
+      mulkBoshqaraOladi,
+      sotuvlarKoraOladi,
+      meId: (session.user as { id?: string }).id ?? null,
+      adminmi: (session.user as unknown as { rol?: string }).rol === 'ADMIN',
       filiallar,
       xodimlar: xodimlar.map(x => ({
         ...x,
@@ -68,6 +103,8 @@ export async function GET(req: NextRequest) {
         davrYigindisi: tolovlarniYigindi(
           (boyicha.get(x.id) ?? []).map(t => ({ turi: t.turi, summa: Number(t.summa) })),
         ),
+        mulk: mulkMap.get(x.id) ?? { soni: 0, qiymati: 0 },
+        davrSotuv: sotuvlarKoraOladi ? sotuvMap.get(x.id) ?? { soni: 0, summa: 0 } : null,
       })),
     })
   } catch (e) {
@@ -81,8 +118,9 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    if ((session.user as unknown as { rol?: string }).rol !== 'ADMIN') {
-      return NextResponse.json({ xato: 'Faqat admin xodim qo‘sha oladi' }, { status: 403 })
+    const admin = (session.user as unknown as { rol?: string }).rol === 'ADMIN'
+    if (!(await amalRuxsatiBormi(session, 'xodimlar.qoshish'))) {
+      return NextResponse.json({ xato: 'Xodim qo‘shishga ruxsatingiz yo‘q', kod: 'ruxsat_yoq' }, { status: 403 })
     }
 
     const ownFilialId = sessionFilialId(session)
@@ -99,6 +137,11 @@ export async function POST(req: NextRequest) {
     if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI'].includes(rol)) {
       return NextResponse.json({ xato: 'Rol noto‘g‘ri' }, { status: 400 })
     }
+    // Ruxsat berilgan xodim ham administrator hisobini yarata olmaydi —
+    // aks holda o'ziga to'liq huquqli ikkinchi hisob ochib olardi
+    if (rol === 'ADMIN' && !admin) {
+      return NextResponse.json({ xato: 'Administrator hisobini faqat administrator yaratadi', kod: 'ruxsat_yoq' }, { status: 403 })
+    }
 
     // Filial egasi faqat o'z filialiga xodim qo'sha oladi
     const filialId = ownFilialId || data.filialId || null
@@ -113,7 +156,8 @@ export async function POST(req: NextRequest) {
     const mavjud = await prisma.foydalanuvchi.findUnique({ where: { login }, select: { id: true } })
     if (mavjud) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
 
-    const maosh = Number(data.oylikMaosh)
+    // Oylik belgilash — alohida ruxsat
+    const maosh = (await amalRuxsatiBormi(session, 'xodimlar.oylik')) ? Number(data.oylikMaosh) : NaN
     const parolHash = await bcrypt.hash(parol, 10)
 
     const xodim = await prisma.foydalanuvchi.create({

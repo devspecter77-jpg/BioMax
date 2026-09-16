@@ -4,8 +4,9 @@ import type { Session } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId } from '@/lib/filial-scope'
-import { bolimRuxsatiBormi } from '@/lib/ruxsat-server'
-import { tolovlarniYigindi } from '@/lib/xodim-oylik'
+import { amalRuxsatiBormi, bolimRuxsatiBormi, ruxsatKeshiniTozala } from '@/lib/ruxsat-server'
+import { davrKaliti, tolovlarniYigindi } from '@/lib/xodim-oylik'
+import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
 
 function doira(session: Session | null) {
   const filialId = sessionFilialId(session)
@@ -13,7 +14,7 @@ function doira(session: Session | null) {
 }
 
 // Bitta xodim: ma'lumoti va to'lovlar tarixi
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
@@ -28,9 +29,36 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         id: true, ism: true, login: true, rol: true, faol: true, telefon: true,
         oylikMaosh: true, yaratilgan: true, filialId: true,
         filial: { select: { id: true, nomi: true } },
+        // Oynadagi "Umumiy" varag'i uchun — ro'yxatdagi qiymat eskirgan bo'lishi mumkin
+        lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
       },
     })
     if (!xodim) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
+
+    // ── Umumiy ko'rinish: sotuvlar (bugun / davr / butun davr) va qo'lidagi mulk ──
+    const davr = new URL(req.url).searchParams.get('davr') || davrKaliti()
+    const sotuvlarKoraOladi = await amalRuxsatiBormi(session, 'xodimlar.sotuvlar')
+    const yigindi = async (oraliq: { dan: Date | null; gacha: Date | null }) => {
+      const a = await prisma.sotuv.aggregate({
+        where: {
+          kassirId: id, holati: 'YAKUNLANGAN',
+          ...(oraliq.dan || oraliq.gacha ? { sana: { gte: oraliq.dan ?? undefined, lt: oraliq.gacha ?? undefined } } : {}),
+        },
+        _sum: { yakuniySumma: true }, _count: { _all: true }, _max: { sana: true },
+      })
+      return { soni: a._count._all, summa: Number(a._sum.yakuniySumma ?? 0), oxirgi: a._max.sana?.toISOString() ?? null }
+    }
+    const [sotuvXulosa, qolidagiMulk] = await Promise.all([
+      sotuvlarKoraOladi
+        ? Promise.all([yigindi(sotuvDavriOraligi('bugun')), yigindi(sotuvDavriOraligi(davr)), yigindi(sotuvDavriOraligi('hammasi'))])
+            .then(([bugun, davrda, jami]) => ({ davr, bugun, davrda, jami }))
+        : Promise.resolve(null),
+      prisma.xodimMulki.findMany({
+        where: { xodimId: id, holati: 'BERILGAN' },
+        select: { id: true, turi: true, nomi: true, raqami: true, qiymati: true, berilganSana: true },
+        orderBy: { berilganSana: 'desc' },
+      }),
+    ])
 
     const tolovlar = await prisma.xodimTolov.findMany({
       where: { xodimId: id },
@@ -50,6 +78,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       // Umumiy yig'indi (barcha davrlar bo'yicha)
       jami: tolovlarniYigindi(tozalangan),
       boshqaraOladi: (session.user as unknown as { rol?: string }).rol === 'ADMIN',
+      sotuvXulosa,
+      qolidagiMulk: qolidagiMulk.map(m => ({ ...m, qiymati: m.qiymati === null ? null : Number(m.qiymati) })),
     })
   } catch (e) {
     console.error('[xodim]', e)
@@ -63,19 +93,43 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    if ((session.user as unknown as { rol?: string }).rol !== 'ADMIN') {
-      return NextResponse.json({ xato: 'Faqat admin o‘zgartira oladi' }, { status: 403 })
-    }
+    const admin = (session.user as unknown as { rol?: string }).rol === 'ADMIN'
+    const [qoshish, oylik] = await Promise.all([
+      amalRuxsatiBormi(session, 'xodimlar.qoshish'),
+      amalRuxsatiBormi(session, 'xodimlar.oylik'),
+    ])
 
     const { id } = await params
     const mavjud = await prisma.foydalanuvchi.findFirst({
       where: { id, ...doira(session) },
-      select: { id: true },
+      select: { id: true, rol: true },
     })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
     const data = await req.json()
     const bor = (k: string) => Object.prototype.hasOwnProperty.call(data, k)
+
+    // Qaysi maydonga qaysi ruxsat kerak: oylik — `xodimlar.oylik`, qolgani — `xodimlar.qoshish`
+    const maydonlar = Object.keys(data).filter(k => ['ism', 'telefon', 'rol', 'faol', 'oylikMaosh', 'parol'].includes(k))
+    if (maydonlar.some(k => k !== 'oylikMaosh') && !qoshish) {
+      return NextResponse.json({ xato: 'Xodimni tahrirlashga ruxsatingiz yo‘q', kod: 'ruxsat_yoq' }, { status: 403 })
+    }
+    if (maydonlar.includes('oylikMaosh') && !oylik) {
+      return NextResponse.json({ xato: 'Oylik belgilashga ruxsatingiz yo‘q', kod: 'ruxsat_yoq' }, { status: 403 })
+    }
+    if (!admin) {
+      // Huquqni oshirishning oldini olish: administrator hisobiga, o'z hisobiga
+      // (rol/faollik/parol/oylik) va ADMIN rolini berishga tegilmaydi
+      if (mavjud.rol === 'ADMIN') {
+        return NextResponse.json({ xato: 'Administrator hisobini faqat administrator o‘zgartiradi', kod: 'ruxsat_yoq' }, { status: 403 })
+      }
+      if (id === (session.user as unknown as { id: string }).id) {
+        return NextResponse.json({ xato: 'O‘z hisobingizni bu yerdan o‘zgartira olmaysiz', kod: 'ruxsat_yoq' }, { status: 403 })
+      }
+      if (bor('rol') && String(data.rol) === 'ADMIN') {
+        return NextResponse.json({ xato: 'Administrator rolini faqat administrator beradi', kod: 'ruxsat_yoq' }, { status: 403 })
+      }
+    }
     const yangi: Record<string, unknown> = {}
 
     if (bor('ism')) {
@@ -120,6 +174,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         oylikMaosh: true, filialId: true, filial: { select: { id: true, nomi: true } },
       },
     })
+
+    // Rol yoki faollik o'zgarsa — sessiya keyingi tekshiruvda yangisini olsin
+    ruxsatKeshiniTozala(id)
 
     return NextResponse.json({
       ...xodim,

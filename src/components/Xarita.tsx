@@ -16,6 +16,13 @@ import {
 /** Hech qanday nuqta bo'lmasa xarita shu yerdan boshlanadi (O'zbekiston markazi). */
 const BOSHLANGICH: [number, number] = [41.3775, 64.5853]
 const BOSHLANGICH_ZOOM = 6
+/**
+ * Bitta nuqta ko'rsatilganda ishlatiladigan masshtab.
+ * 17 — Esri sputnik tasviri O'zbekistonda hamma joyda mavjud bo'lgan eng
+ * katta daraja (`xarita-qatlamlari.ts` dagi o'lchovga qarang), shuning
+ * uchun bu yerda tasvir hali ham o'tkir.
+ */
+const YAGONA_ZOOM = 17
 
 export type Yangilik = 'jonli' | 'yaqin' | 'eski'
 
@@ -26,7 +33,9 @@ export interface XaritaNuqta {
   nomi: string
   /** Ikkinchi qator — lavozim, filial yoki manzil. */
   tavsif?: string | null
-  turi: 'filial' | 'xodim'
+  turi: 'filial' | 'xodim' | 'mijoz' | 'taminotchi'
+  /** Nuqta tepasida ko'rinadigan yozuv. Berilmasa `nomi` ishlatiladi. */
+  yorliq?: string | null
   yangilik?: Yangilik
   /** "5 daqiqa oldin" kabi matn. */
   vaqtMatni?: string | null
@@ -39,32 +48,90 @@ interface Props {
   /** Xaritaga bosilganda (filial joylashuvini belgilash rejimi). */
   onBosildi?: (lat: number, lng: number) => void
   className?: string
+  /** Nuqta yo'q paytdagi boshlang'ich ko'rinish (standart — butun O'zbekiston) */
+  boshlangich?: { markaz: [number, number]; zoom: number }
 }
 
-const RANG: Record<Yangilik, string> = {
-  jonli: '#dc2626', // qizil — hozir harakatda
-  yaqin: '#f59e0b', // sariq — yaqinda ko'ringan
+// XODIM — YASHIL, MIJOZ — QIZIL. Xaritaga bir qarashda kim kimligi
+// ajralib turishi uchun ranglar ataylab qarama-qarshi tanlangan.
+// Xodimda yashilning ohangi "qachon ko'ringani"ni bildiradi.
+const XODIM_RANG: Record<Yangilik, string> = {
+  jonli: '#16a34a', // to'q yashil — hozir harakatda
+  yaqin: '#65a30d', // och yashil — yaqinda ko'ringan
   eski: '#9ca3af',  // kulrang — ilova yopiq, eskirgan
 }
 
-/** Xodim nuqtasi: rangli dumaloq. "Jonli" bo'lsa atrofida urib turuvchi halqa. */
-function xodimIkonHtml(yangilik: Yangilik): string {
-  const rang = RANG[yangilik]
+const MIJOZ_RANG = '#dc2626'      // qizil
+// TA'MINOTCHI — TO'Q SARIQ. Qizil (mijoz) va yashil (xodim) dan
+// aniq farqlanadi, ko'r-rang foydalanuvchilar uchun ham ajraladi.
+const TAMINOTCHI_RANG = '#d97706'
+
+/** HTML matnini xavfsiz qilish — nom foydalanuvchi kiritgan matn. */
+function xavfsiz(matn: string): string {
+  return String(matn ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/**
+ * Nuqta tepasidagi nom yozuvi.
+ *
+ * Belgidan TASHQARIDA joylashadi (`bottom` manfiy emas, balandroq),
+ * shuning uchun ikon o'lchamiga ta'sir qilmaydi va nuqta o'z
+ * koordinatasida aniq turaveradi. `pointer-events:none` — yozuv
+ * bosishni to'smasin.
+ */
+function yorliqHtml(matn: string | null | undefined, pastdan: number): string {
+  const t = (matn ?? '').trim()
+  if (!t) return ''
+  return `<span style="
+    position:absolute;bottom:${pastdan}px;left:50%;transform:translateX(-50%);
+    white-space:nowrap;pointer-events:none;
+    font-size:11px;font-weight:600;line-height:1.4;
+    color:#111827;background:rgba(255,255,255,.92);
+    padding:1px 6px;border-radius:6px;
+    box-shadow:0 1px 3px rgba(0,0,0,.28);
+  ">${xavfsiz(t)}</span>`
+}
+
+/** Xodim nuqtasi: YASHIL dumaloq. "Jonli" bo'lsa atrofida urib turuvchi halqa. */
+function xodimIkonHtml(yangilik: Yangilik, yorliq?: string | null): string {
+  const rang = XODIM_RANG[yangilik]
   const puls = yangilik === 'jonli'
     ? `<span style="position:absolute;inset:-6px;border-radius:9999px;background:${rang};opacity:.35;animation:xarita-puls 1.8s ease-out infinite"></span>`
     : ''
   return `<span style="position:relative;display:block;width:14px;height:14px">
     ${puls}
     <span style="position:absolute;inset:0;border-radius:9999px;background:${rang};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></span>
+    ${yorliqHtml(yorliq, 20)}
+  </span>`
+}
+
+/** Mijoz nuqtasi: QIZIL dumaloq — xodimdan aniq farqlansin. */
+function mijozIkonHtml(yorliq?: string | null): string {
+  return `<span style="position:relative;display:block;width:14px;height:14px">
+    <span style="position:absolute;inset:0;border-radius:9999px;background:${MIJOZ_RANG};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></span>
+    ${yorliqHtml(yorliq, 20)}
+  </span>`
+}
+
+/** Ta'minotchi nuqtasi: TO'Q SARIQ romb — dumaloqlardan shakli bilan ham farqlanadi. */
+function taminotchiIkonHtml(yorliq?: string | null): string {
+  return `<span style="position:relative;display:block;width:16px;height:16px">
+    <span style="position:absolute;inset:1px;background:${TAMINOTCHI_RANG};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);transform:rotate(45deg);border-radius:3px"></span>
+    ${yorliqHtml(yorliq, 22)}
   </span>`
 }
 
 /** Filial nuqtasi: ko'k kvadrat belgi — xodim nuqtalaridan aniq farqlansin. */
-function filialIkonHtml(): string {
-  return `<span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:#4f46e5;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">
+function filialIkonHtml(yorliq?: string | null): string {
+  return `<span style="position:relative;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:#4f46e5;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/>
     </svg>
+    ${yorliqHtml(yorliq, 32)}
   </span>`
 }
 
@@ -82,19 +149,26 @@ function qatlamniQoy(
   if (eski?.ust) xarita.removeLayer(eski.ust)
 
   const q = XARITA_QATLAMLARI[kalit]
-  const asos = L.tileLayer(q.url, { attribution: q.atribut, maxZoom: q.maxZoom }).addTo(xarita)
+  // `maxNativeZoom` — provayderda tayl bor bo'lgan eng katta masshtab.
+  // Undan yaqinroqda Leaflet mavjud taylni kattalashtiradi; usiz Esri
+  // "ma'lumot yo'q" kulrang rasmini qaytarardi.
+  const asos = L.tileLayer(q.url, {
+    attribution: q.atribut, maxZoom: q.maxZoom, maxNativeZoom: q.maxNativeZoom,
+  }).addTo(xarita)
   let ust: TileLayer | null = null
   if (q.ustQatlam) {
     // Yozuvlar qatlami tayl panelida qoladi, lekin zIndex bilan sputnik
     // tasviri USTIGA chiqariladi. `overlayPane` ishlatilsa Leaflet uni
     // boshqacha joylashtiradi va tasvir bilan mos tushmay qolardi.
-    ust = L.tileLayer(q.ustQatlam.url, { maxZoom: q.ustQatlam.maxZoom, zIndex: 2 }).addTo(xarita)
+    ust = L.tileLayer(q.ustQatlam.url, {
+      maxZoom: q.ustQatlam.maxZoom, maxNativeZoom: q.ustQatlam.maxNativeZoom, zIndex: 2,
+    }).addTo(xarita)
     asos.setZIndex(1)
   }
   return { asos, ust }
 }
 
-export default function Xarita({ nuqtalar, fokus, onBosildi, className }: Props) {
+export default function Xarita({ nuqtalar, fokus, onBosildi, className, boshlangich }: Props) {
   const idishRef = useRef<HTMLDivElement>(null)
   const xaritaRef = useRef<LeafletMap | null>(null)
   const qatlamRef = useRef<LayerGroup | null>(null)
@@ -104,6 +178,7 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className }: Props)
   const kadrlandiRef = useRef(false)
   const onBosildiRef = useRef(onBosildi)
   onBosildiRef.current = onBosildi
+  const boshlangichRef = useRef(boshlangich)
 
   // Xaritani bir marta yaratish
   useEffect(() => {
@@ -115,8 +190,8 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className }: Props)
       if (bekor || !idishRef.current || xaritaRef.current) return
 
       xarita = L.map(idishRef.current, {
-        center: BOSHLANGICH,
-        zoom: BOSHLANGICH_ZOOM,
+        center: boshlangichRef.current?.markaz ?? BOSHLANGICH,
+        zoom: boshlangichRef.current?.zoom ?? BOSHLANGICH_ZOOM,
         zoomControl: true,
         attributionControl: true,
       })
@@ -158,12 +233,21 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className }: Props)
         if (!Number.isFinite(n.lat) || !Number.isFinite(n.lng)) continue
         koringan.add(n.id)
 
-        const html = n.turi === 'filial' ? filialIkonHtml() : xodimIkonHtml(n.yangilik ?? 'eski')
+        const yorliq = n.yorliq ?? n.nomi
+        const html =
+          n.turi === 'filial' ? filialIkonHtml(yorliq)
+          : n.turi === 'mijoz' ? mijozIkonHtml(yorliq)
+          : n.turi === 'taminotchi' ? taminotchiIkonHtml(yorliq)
+          : xodimIkonHtml(n.yangilik ?? 'eski', yorliq)
+        const olcham: [number, number] =
+          n.turi === 'filial' ? [26, 26]
+          : n.turi === 'taminotchi' ? [16, 16]
+          : [14, 14]
         const ikon = L.divIcon({
           html,
           className: 'xarita-ikon',
-          iconSize: n.turi === 'filial' ? [26, 26] : [14, 14],
-          iconAnchor: n.turi === 'filial' ? [13, 13] : [7, 7],
+          iconSize: olcham,
+          iconAnchor: [olcham[0] / 2, olcham[1] / 2],
         })
         const oyna =
           `<div style="min-width:150px">
@@ -193,10 +277,16 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className }: Props)
         }
       }
 
-      // Birinchi ma'lumot kelganda hamma nuqtani kadrga sig'diramiz
+      // Birinchi ma'lumot kelganda hamma nuqtani kadrga sig'diramiz.
+      // YAGONA nuqta bo'lsa (bitta obyektning joylashuvi oynasi) uzoqdan
+      // ko'rsatishning ma'nosi yo'q — sputnik tasviri aniq bo'lgan eng
+      // katta darajaga yaqinlashtiramiz, ya'ni bino ko'rinadi.
       if (!kadrlandiRef.current && markerlarRef.current.size > 0) {
         const chegara = L.latLngBounds(nuqtalar.map(n => [n.lat, n.lng] as [number, number]))
-        xarita.fitBounds(chegara, { padding: [50, 50], maxZoom: 15 })
+        xarita.fitBounds(chegara, {
+          padding: [50, 50],
+          maxZoom: nuqtalar.length === 1 ? YAGONA_ZOOM : 15,
+        })
         kadrlandiRef.current = true
       }
     }
@@ -253,8 +343,12 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className }: Props)
         }
         .leaflet-container { font-family: inherit; background: #e5e7eb; }
       `}</style>
-      <div className="relative">
-        <div ref={idishRef} className={className} />
+      {/* O'lcham TASHQI o'ramga beriladi: ichki xarita idishi `h-full`
+          bilan uni to'ldiradi. Ilgari `className` ichki divga qo'yilgan
+          edi va o'ram balandligi nol bo'lgani uchun xarita umuman
+          ko'rinmasdi. */}
+      <div className={`relative ${className ?? ''}`}>
+        <div ref={idishRef} className="h-full w-full" />
 
         {/* ── Ko'rinish tanlagich ──
             Xarita ustida suzib turadi. Leaflet'ning o'z boshqaruvi
