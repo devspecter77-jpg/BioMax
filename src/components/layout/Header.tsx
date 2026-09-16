@@ -16,7 +16,13 @@ const sahifaNomlar: Record<string, string> = {
   '/xaridlar': 'Xaridlar',
   '/hisobotlar': 'Hisobotlar',
   '/filiallar': 'Filiallar',
+  '/xodimlar': 'Xodimlar',
+  '/ruxsatlar': 'Ruxsatlar',
 }
+
+// Sessiya yuklanguncha rol yozilmaydi — ilgari hamma (administrator ham) bir lahza
+// "Kassir" bo'lib ko'rinardi, SOTUVCHI esa doim "Kassir" deb chiqardi
+const ROL_NOMI: Record<string, string> = { ADMIN: 'Administrator', KASSIR: 'Kassir', OMBORCHI: 'Omborchi', SOTUVCHI: 'Sotuvchi' }
 
 export default function Header() {
   const { data: session } = useSession()
@@ -25,8 +31,8 @@ export default function Header() {
   const { theme, toggle: toggleTheme } = useTheme()
 
   const sahifaNomi = sahifaNomlar[pathname] || "ERP Do'kon"
-  const rolMap: Record<string, string> = { ADMIN: 'Administrator', KASSIR: 'Kassir', OMBORCHI: 'Omborchi' }
-  const rolNomi = rolMap[(session?.user as any)?.rol || 'KASSIR'] || 'Kassir'
+  const rol = (session?.user as { rol?: string } | undefined)?.rol
+  const rolNomi = rol ? ROL_NOMI[rol] ?? rol : ''
   const filialNomi = (session?.user as any)?.filialNomi as string | null | undefined
   const firstLetter = session?.user?.name?.[0]?.toUpperCase() || 'U'
 

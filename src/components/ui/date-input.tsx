@@ -106,7 +106,13 @@ export default function DateInput({
       >
         <Calendar size={16} />
       </button>
+      {/* Parol menejeri kabi kengaytmalar React hidratsiyasidan OLDIN inputga
+          o'z atributini yozadi (`fdprocessedid`) — React uni server HTML'i deb
+          o'qib, nomuvofiqlik deb ogohlantiradi. Bayroq faqat SHU elementga
+          ta'sir qiladi, daraxt bo'ylab tarqalmaydi, ya'ni haqiqiy
+          nomuvofiqliklar tekshirilishda qolaveradi. */}
       <input
+        suppressHydrationWarning
         type="text"
         inputMode="numeric"
         value={formatDigits(raw)}
@@ -118,7 +124,13 @@ export default function DateInput({
         className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 outline-none"
       />
       {/* Hidden native date picker */}
+      {/* Parol menejeri kabi kengaytmalar React hidratsiyasidan OLDIN inputga
+          o'z atributini yozadi (`fdprocessedid`) — React uni server HTML'i deb
+          o'qib, nomuvofiqlik deb ogohlantiradi. Bayroq faqat SHU elementga
+          ta'sir qiladi, daraxt bo'ylab tarqalmaydi, ya'ni haqiqiy
+          nomuvofiqliklar tekshirilishda qolaveradi. */}
       <input
+        suppressHydrationWarning
         ref={pickerRef}
         type="date"
         value={value}

@@ -314,26 +314,30 @@ async function resolvePhone(client: TelegramClient, telefon: string): Promise<Ap
 // ─── Xabar yuborish (rate limited, cached, singleton) ────────────────────────
 
 // Qaytarish turlar: ok | queued (flood, keyinroq qayta urinish) | failed (doimiy xato)
+// `sabab` — mashina o'qiydigan sabab. Mavjud chaqiruvchilar faqat `ok/queued/xato`
+// ga qaraydi; `sabab` kirish kodi kabi aniq javob kerak bo'lgan joylar uchun.
+export type YuborishSababi = 'flood' | 'ulanmagan' | 'topilmadi' | 'sessiya' | 'boshqa'
+
 async function sendMessageToPhone(
   telefon: string,
   xabar: string
-): Promise<{ ok: boolean; queued?: boolean; xato?: string }> {
+): Promise<{ ok: boolean; queued?: boolean; xato?: string; sabab?: YuborishSababi }> {
   // Flood tekshiruvi
   if (isFlooded()) {
     const secs = floodSecsLeft()
-    return { ok: false, queued: true, xato: `Telegram cheklovi: ${secs}s qoldi` }
+    return { ok: false, queued: true, sabab: 'flood', xato: `Telegram cheklovi: ${secs}s qoldi` }
   }
 
   try {
     const client = await getClient()
-    if (!client) return { ok: false, xato: 'Telegram ulanmagan. Sozlamalardan telefon raqamni ulang.' }
+    if (!client) return { ok: false, sabab: 'ulanmagan', xato: 'Telegram ulanmagan. Sozlamalardan telefon raqamni ulang.' }
 
     // Rate limit kutish
     await waitForRateLimit()
 
     const user = await resolvePhone(client, telefon)
     if (!user) {
-      return { ok: false, xato: `${normalizePhone(telefon)} raqami Telegramda topilmadi` }
+      return { ok: false, sabab: 'topilmadi', xato: `${normalizePhone(telefon)} raqami Telegramda topilmadi` }
     }
 
     await client.sendMessage(user, { message: xabar })
@@ -346,7 +350,7 @@ async function sendMessageToPhone(
       const seconds = parseInt(msg.match(/(\d+)/)?.[1] || '3600')
       console.error(`[Telegram] FloodWait: ${seconds}s kutish kerak`)
       await saveFloodTimer(Date.now() + seconds * 1000)
-      return { ok: false, queued: true, xato: `Telegram cheklovi: ${seconds}s kutish kerak` }
+      return { ok: false, queued: true, sabab: 'flood', xato: `Telegram cheklovi: ${seconds}s kutish kerak` }
     }
 
     // PEER_FLOOD — akkaunt spam filtri.
@@ -355,22 +359,22 @@ async function sendMessageToPhone(
     if (msg.includes('PEER_FLOOD')) {
       console.error(`[Telegram] PEER_FLOOD — akkaunt cheklandi, ${PEER_FLOOD_HOURS} soatdan keyin qayta uriniladi`)
       await saveFloodTimer(Date.now() + PEER_FLOOD_HOURS * 60 * 60 * 1000)
-      return { ok: false, queued: true, xato: `Telegram spam filtri: ${PEER_FLOOD_HOURS} soatdan keyin avtomatik qayta yuboriladi` }
+      return { ok: false, queued: true, sabab: 'flood', xato: `Telegram spam filtri: ${PEER_FLOOD_HOURS} soatdan keyin avtomatik qayta yuboriladi` }
     }
 
     if (msg.includes('PHONE_NOT_OCCUPIED')) {
-      return { ok: false, xato: "Bu raqam Telegramda ro'yxatdan o'tmagan" }
+      return { ok: false, sabab: 'topilmadi', xato: "Bu raqam Telegramda ro'yxatdan o'tmagan" }
     }
 
     // Session buzilgan — client ni qayta yaratish
     if (msg.includes('AUTH_KEY') || msg.includes('SESSION_REVOKED') || msg.includes('USER_DEACTIVATED')) {
       _client = null
       _clientReady = false
-      return { ok: false, xato: 'Telegram sessiya tugagan. Qayta ulaning.' }
+      return { ok: false, sabab: 'sessiya', xato: 'Telegram sessiya tugagan. Qayta ulaning.' }
     }
 
     console.error('[Telegram] Xabar yuborish xatosi:', msg)
-    return { ok: false, xato: msg }
+    return { ok: false, sabab: 'boshqa', xato: msg }
   }
 }
 
@@ -388,6 +392,54 @@ export async function ichkiXabarYubor(
     return { ok: false, xato: "Telegram bildirishnomasi o'chirilgan" }
   }
   return sendMessageToPhone(telefon, xabar)
+}
+
+// ─── Onlayn do'kon: kirish kodi ──────────────────────────────────────────────
+//
+// Marketplace'da ro'yxatdan o'tish kodi mijozning Telegram profiliga shu
+// akkaunt orqali boradi (SMS provayder o'rniga).
+//
+// XAVF: kod BEGONA raqamlarga ham ketadi (hali mijoz bo'lmaganlar) — har bir
+// yangi raqam ImportContacts talab qiladi va Telegram buni spam deb baholashi
+// mumkin. PEER_FLOOD kelsa mavjud mijozlarga cheklar ham to'xtaydi. Shuning
+// uchun yangi (keshda yo'q) raqamlarga soatlik QAT'IY chegara qo'yiladi va
+// cache-only rejimida yangi raqamga umuman yuborilmaydi.
+
+const KOD_YANGI_RAQAM_SOATIGA = Math.max(1, parseInt(process.env.MP_KOD_YANGI_RAQAM_SOATIGA || '20') || 20)
+const _kodYangiRaqamVaqtlari: number[] = []
+
+export type KirishKodiNatija =
+  | { ok: true }
+  | { ok: false; sabab: 'ochirilgan' | 'ulanmagan' | 'topilmadi' | 'vaqtincha' | 'boshqa'; xato: string }
+
+export async function kirishKodiYubor(telefon: string, xabar: string): Promise<KirishKodiNatija> {
+  if (!(await isTelegramEnabled())) {
+    return { ok: false, sabab: 'ochirilgan', xato: "Telegram xabarlari o'chirilgan" }
+  }
+  // Chegaralar kesh va rejimga bog'liq — avval yuklab olamiz
+  await Promise.all([loadEntityCache(), loadFloodTimer(), loadCacheOnlyMode()])
+
+  if (!isPhoneCached(telefon)) {
+    if (isCacheOnlyMode()) {
+      return { ok: false, sabab: 'vaqtincha', xato: 'Yangi raqamlarga yuborish vaqtincha to‘xtatilgan (cache-only rejim)' }
+    }
+    const hozir = Date.now()
+    while (_kodYangiRaqamVaqtlari.length && hozir - _kodYangiRaqamVaqtlari[0] > 3_600_000) _kodYangiRaqamVaqtlari.shift()
+    if (_kodYangiRaqamVaqtlari.length >= KOD_YANGI_RAQAM_SOATIGA) {
+      console.warn(`[Telegram] Kirish kodi: yangi raqamlar soatlik chegarasi (${KOD_YANGI_RAQAM_SOATIGA}) to'ldi`)
+      return { ok: false, sabab: 'vaqtincha', xato: 'Soatlik chegara to‘ldi' }
+    }
+    _kodYangiRaqamVaqtlari.push(hozir)
+  }
+
+  const n = await sendMessageToPhone(telefon, xabar)
+  if (n.ok) return { ok: true }
+  const sabab =
+    n.sabab === 'topilmadi' ? 'topilmadi'
+    : n.sabab === 'ulanmagan' || n.sabab === 'sessiya' ? 'ulanmagan'
+    : n.sabab === 'flood' ? 'vaqtincha'
+    : 'boshqa'
+  return { ok: false, sabab, xato: n.xato || 'Yuborilmadi' }
 }
 
 // ─── Eski API uchun alias (legacy) ───────────────────────────────────────────

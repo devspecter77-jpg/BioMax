@@ -67,7 +67,11 @@ export default function LoginForm() {
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
               <Lock size={16} className="text-gray-400 dark:text-gray-500" />
             </div>
+            {/* Parol menejeri kengaytmalari aynan shu maydonga yopishadi:
+                React'dan oldin `fdprocessedid` kabi atribut qo'shadi.
+                Bayroq faqat shu elementdagi farqni e'tiborsiz qoldiradi. */}
             <input
+              suppressHydrationWarning
               type={parolKorinsin ? 'text' : 'password'}
               value={parol}
               onChange={(e) => setParol(e.target.value)}
@@ -77,6 +81,7 @@ export default function LoginForm() {
               className="w-full pl-10 pr-11 py-3 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white dark:focus:bg-neutral-800 transition-all text-sm"
             />
             <button
+              suppressHydrationWarning
               type="button"
               onClick={() => setParolKorinsin(!parolKorinsin)}
               className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -98,6 +103,7 @@ export default function LoginForm() {
 
         {/* Kirish tugmasi */}
         <button
+          suppressHydrationWarning
           type="submit"
           disabled={yuklanmoqda || !login || !parol}
           className="w-full py-3 bg-primary hover:bg-primary-hover active:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-150 shadow-md shadow-primary/25 mt-2"

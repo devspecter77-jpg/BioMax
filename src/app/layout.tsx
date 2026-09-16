@@ -62,7 +62,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="antialiased font-sans">
+      {/* Kengaytmalar <body> ga ham o'z atributlarini yozadi. <html> da
+          bu bayroq mavzu skripti uchun allaqachon bor — <body> ham shu
+          sababdan, faqat o'z atributlari uchun. */}
+      <body className="antialiased font-sans" suppressHydrationWarning>
         <ThemeProvider>
           <SessionProvider>
             <ConfirmProvider>

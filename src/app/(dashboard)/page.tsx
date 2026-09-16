@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatSum } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Receipt, ShoppingBag, Loader2 } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { visibleNavItems } from '@/components/layout/nav-items'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
@@ -57,16 +59,51 @@ function StatCard({
   return <div className={className}>{body}</div>
 }
 
+// Savdo ko'rsatkichlari ruxsati yo'q xodim (masalan omborchi) uchun bosh sahifa —
+// bo'sh ekran yoki xato o'rniga o'ziga ochiq bo'limlarga tezkor o'tish
+function TezkorBolimlar() {
+  const { data: session } = useSession()
+  const u = session?.user as { name?: string | null; rol?: string; ruxsatlar?: string[] | null; filialId?: string | null; ulashilganEgaId?: string | null } | undefined
+  const bolimlar = visibleNavItems(u?.rol, u?.ruxsatlar, u?.filialId, u?.ulashilganEgaId).filter(i => i.href !== '/')
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Xush kelibsiz{u?.name ? `, ${u.name}` : ''}</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">Sizga ochiq bo‘limlar</p>
+      </div>
+      {bolimlar.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-gray-300 dark:border-neutral-700 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+          Hozircha sizga hech qaysi bo‘lim ochilmagan. Administratorga murojaat qiling.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+          {bolimlar.map(b => (
+            <Link key={b.href} href={b.href} className="flex items-center gap-3 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 hover:border-primary/40 hover:shadow-sm transition">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/30 text-primary"><b.icon size={20} aria-hidden /></span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{b.label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<HisobotData | null>(null)
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
+  const [ruxsatYoq, setRuxsatYoq] = useState(false)
 
   useEffect(() => {
     async function yuklash() {
       try {
         const res = await fetch('/api/hisobotlar?tur=haftalik')
+        if (res.status === 403) { setRuxsatYoq(true); return }
+        if (!res.ok) return
         const json = await res.json()
         setData(json)
+      } catch {
+        // tarmoq xatosi — pastda bo'sh holat
       } finally {
         setYuklanmoqda(false)
       }
@@ -85,6 +122,7 @@ export default function DashboardPage() {
     )
   }
 
+  if (ruxsatYoq) return <TezkorBolimlar />
   if (!data) return null
 
   return (

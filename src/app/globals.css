@@ -122,6 +122,21 @@ body {
   background-color: var(--color-accent-glow);
 }
 
+/* Chip tasmalari uchun — scrollbar butunlay yashiriladi.
+   Yuqoridagi 10px'lik "suzuvchi" yo'lak gorizontal tasmalarda tugmalar
+   ostida yo'g'on chiziq bo'lib qolardi; POS'ning yopishgan panelida bu
+   har bir qatorga bekorga 10px qo'shardi. Surish chevron tugmalari va
+   barmoq bilan bajariladi (`ChipRow` komponentiga qarang). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
 /* iOS safe area */
 .safe-area-inset-bottom {
   padding-bottom: env(safe-area-inset-bottom);

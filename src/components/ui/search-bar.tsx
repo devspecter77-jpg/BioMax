@@ -22,8 +22,13 @@ export default function SearchBar({
   onScan,
 }: SearchBarProps) {
   const [local, setLocal] = useState(value)
+  // Ota-ona har renderda yangi inline `onChange` bersa ham pastdagi
+  // debounce effekti qayta ishga tushmasligi uchun ref'da eng so'nggisi
+  // saqlanadi. Render paytida ref'ga yozib bo'lmaydi (React qoidasi) —
+  // shuning uchun bu effekt, va u debounce effektidan OLDIN e'lon
+  // qilingan, ya'ni har commitda birinchi bo'lib yangilanadi.
   const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
+  useEffect(() => { onChangeRef.current = onChange }, [onChange])
 
   // Sync from parent when value resets to ''
   useEffect(() => {
@@ -42,7 +47,13 @@ export default function SearchBar({
         size={16}
         className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none"
       />
+      {/* Parol menejeri kabi kengaytmalar React hidratsiyasidan OLDIN inputga
+          o'z atributini yozadi (`fdprocessedid`) — React uni server HTML'i deb
+          o'qib, nomuvofiqlik deb ogohlantiradi. Bayroq faqat SHU elementga
+          ta'sir qiladi, daraxt bo'ylab tarqalmaydi, ya'ni haqiqiy
+          nomuvofiqliklar tekshirilishda qolaveradi. */}
       <input
+        suppressHydrationWarning
         type="text"
         value={local}
         onChange={e => setLocal(e.target.value)}

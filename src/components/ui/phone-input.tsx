@@ -71,7 +71,13 @@ export default function PhoneInput({
       className
     )}>
       <Phone size={16} className="text-gray-400 shrink-0" />
+      {/* Parol menejeri kabi kengaytmalar React hidratsiyasidan OLDIN inputga
+          o'z atributini yozadi (`fdprocessedid`) — React uni server HTML'i deb
+          o'qib, nomuvofiqlik deb ogohlantiradi. Bayroq faqat SHU elementga
+          ta'sir qiladi, daraxt bo'ylab tarqalmaydi, ya'ni haqiqiy
+          nomuvofiqliklar tekshirilishda qolaveradi. */}
       <input
+        suppressHydrationWarning
         ref={inputRef}
         type="tel"
         value={displayValue}

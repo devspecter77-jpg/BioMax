@@ -112,7 +112,13 @@ export default function Combobox({
           <div className="p-2 border-b border-gray-100 dark:border-neutral-800">
             <div className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 dark:bg-neutral-800 rounded-lg">
               <Search size={14} className="text-gray-400 shrink-0" />
+              {/* Parol menejeri kabi kengaytmalar React hidratsiyasidan OLDIN inputga
+                  o'z atributini yozadi (`fdprocessedid`) — React uni server HTML'i deb
+                  o'qib, nomuvofiqlik deb ogohlantiradi. Bayroq faqat SHU elementga
+                  ta'sir qiladi, daraxt bo'ylab tarqalmaydi, ya'ni haqiqiy
+                  nomuvofiqliklar tekshirilishda qolaveradi. */}
               <input
+                suppressHydrationWarning
                 ref={searchRef}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
