@@ -36,7 +36,11 @@ export function ReportFilter({ tur, dan, gacha, onChange }: Props) {
         ))}
       </div>
       <div className="flex items-center gap-2 sm:ml-auto">
+        {/* `suppressHydrationWarning`: parol menejeri / forma to'ldiruvchi
+            kengaytmalar React'dan oldin `fdprocessedid` atributini qo'shadi.
+            Bayroq faqat shu elementga ta'sir qiladi. */}
         <input
+          suppressHydrationWarning
           type="date"
           value={dan}
           onChange={(e) => onChange({ dan: e.target.value })}
@@ -45,6 +49,7 @@ export function ReportFilter({ tur, dan, gacha, onChange }: Props) {
         />
         <span className="text-gray-500 dark:text-gray-400 shrink-0">—</span>
         <input
+          suppressHydrationWarning
           type="date"
           value={gacha}
           onChange={(e) => onChange({ gacha: e.target.value })}

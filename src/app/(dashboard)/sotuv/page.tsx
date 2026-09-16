@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { formatSum, formatNarx, formatSanaVaVaqt, formatPhone, playBeep, uzSearch } from '@/lib/utils'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { formatSum, formatSanaVaVaqt, formatPhone, playBeep, uzSearch } from '@/lib/utils'
 import { buildChekHtml, chekChopEtish as printChek } from '@/lib/chek-print'
 import { kodniAjrat } from '@/lib/qr-kod'
 import { toast } from 'sonner'
@@ -11,6 +11,10 @@ import { jsPDF } from 'jspdf'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
 import PhoneInput from '@/components/ui/phone-input'
+import TovarNarxPaneli from '@/components/TovarNarxPaneli'
+import ChipRow from '@/components/ui/chip-row'
+import { useRuxsat } from '@/hooks/useRuxsat'
+import { minNarxSomda } from '@/lib/ruxsat-amallar'
 import {
   SODIQLIK_STANDART, sarflashniHisobla, ballSarflanadimi, formatBall,
   type SodiqlikSozlama,
@@ -28,7 +32,7 @@ interface Tovar {
   birlik: string; qoldiq: number; shtrixKod: string | null
   rasmlar?: string[]; valyuta?: string; kategoriya?: { id: string; nomi: string }
 }
-interface Kategoriya { id: string; nomi: string }
+interface Kategoriya { id: string; nomi: string; ombor?: { id: string; nomi: string; faol: boolean } | null }
 
 type NarxTuri = 'sotish' | 'optom' | 'bolish'
 const NARX_TURI_LABEL: Record<NarxTuri, string> = { sotish: 'Chakana', optom: 'Optom', bolish: "Bo'lish" }
@@ -46,7 +50,7 @@ function narxTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number): number {
     : tovar.sotishNarxi
   return tovar.valyuta === 'USD' ? Math.round(asosiy * kursi) : asosiy
 }
-interface Mijoz { id: string; ism: string; telefon: string | null; manzil?: string | null; lokatsiyaLat?: number | null; lokatsiyaLng?: number | null }
+interface Mijoz { id: string; ism: string; telefon: string | null; telefon2?: string | null; qoshimchaTelefonlar?: string[]; manzil?: string | null; lokatsiyaLat?: number | null; lokatsiyaLng?: number | null }
 interface SavatItem {
   tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number; bonus?: boolean
   narxTuri?: NarxTuri
@@ -134,12 +138,45 @@ function kirill(text: string): string {
 export default function SotuvPage() {
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
   const [kursi, setKursi] = useState<number>(12700)
+  // Xodim ruxsatlari — server ham har bir sotuvda tekshiradi (chegirma, nasiya)
+  const ruxsat = useRuxsat()
+  const chegirmaRuxsat = ruxsat.bor('sotuv.chegirma')
+  const nasiyaRuxsat = ruxsat.bor('sotuv.nasiya')
+  const qaytarishRuxsat = ruxsat.bor('sotuv.qaytarish')
+  const saqlashRuxsat = ruxsat.bor('sotuv.saqlash')
   const [tovarlarYuklanmoqda, setTovarlarYuklanmoqda] = useState(true)
   const [tovarlarXato, setTovarlarXato] = useState<string | null>(null)
   const [mijozlar, setMijozlar] = useState<Mijoz[]>([])
   const [savat, setSavat] = useState<SavatItem[]>([])
   const [qidiruv, setQidiruv] = useState('')
   const [kategoriyalar, setKategoriyalar] = useState<Kategoriya[]>([])
+  // Ombor — kategoriyalarning ustki guruhi. POS ikki bosqichli
+  // filtr beradi: avval ombor, so'ng uning ichidagi kategoriya.
+  const [aktifOmbor, setAktifOmbor] = useState<string | null>(null)
+
+  // kategoriyaId -> omborId. Mahsulotda ombor yo'q, faqat kategoriya bor,
+  // shuning uchun ombor bo'yicha filtrlash uchun shu xarita kerak.
+  const kategoriyaOmbori = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const k of kategoriyalar) if (k.ombor) m.set(k.id, k.ombor.id)
+    return m
+  }, [kategoriyalar])
+
+  // Omborlar ro'yxati — kategoriyalardan yig'iladi, alohida so'rov shart emas
+  const omborlar = useMemo(() => {
+    const m = new Map<string, string>()
+    // Nofaol ombor yorliq bermaydi — lekin uning kategoriyalari va
+    // tovarlari "Hammasi" ostida ko'rinaveradi, ya'ni zaxira
+    // kassirdan yashirilmaydi.
+    for (const k of kategoriyalar) if (k.ombor?.faol) m.set(k.ombor.id, k.ombor.nomi)
+    return [...m].map(([id, nomi]) => ({ id, nomi }))
+  }, [kategoriyalar])
+
+  // Tanlangan omborga tegishli kategoriyalar
+  const korinadiganKategoriyalar = useMemo(
+    () => aktifOmbor ? kategoriyalar.filter(k => k.ombor?.id === aktifOmbor) : kategoriyalar,
+    [kategoriyalar, aktifOmbor],
+  )
   // Bo'limlar varag'i — kategoriya ko'p bo'lganda qidirib tanlash uchun
   const [kategoriyaVaraq, setKategoriyaVaraq] = useState(false)
   const [kategoriyaQidiruv, setKategoriyaQidiruv] = useState('')
@@ -184,6 +221,13 @@ export default function SotuvPage() {
   const [kassaOchiq, setKassaOchiq] = useState(false)
   const [savatKorinmayapti, setSavatKorinmayapti] = useState(false)
   const savatUstuniRef = useRef<HTMLDivElement>(null)
+
+  // Yopishgan (sticky) asboblar paneli ekran tepasiga tegib turibdimi.
+  // Tegib turgandagina soya va ajratuvchi chiziq chiqadi — shundagina
+  // panel "ustidagi qatlam"dek o'qiladi va ostidan sirg'alib o'tayotgan
+  // kartalar nosozlikdek emas, ataylab shunday qilingandek ko'rinadi.
+  const asboblarRef = useRef<HTMLDivElement>(null)
+  const [asboblarYopishgan, setAsboblarYopishgan] = useState(false)
 
   // Mijoz ma'lumotlari (har bir sotuvda so'raladi)
   const [mijozModal, setMijozModal] = useState(false)
@@ -362,6 +406,15 @@ export default function SotuvPage() {
   }, [])
 
   useEffect(() => {
+    // Sahifa yangilanganda tiklanadigan savat va uning mijozi — URL'dagi mijoz
+    // bilan solishtirish uchun, ular state'ga yozilishidan OLDIN o'qib olinadi
+    const tiklanganSavatSoni = (() => {
+      try { const x = JSON.parse(localStorage.getItem('aktiv-savat') || '[]'); return Array.isArray(x) ? x.length : 0 } catch { return 0 }
+    })()
+    const tiklanganMijozId: string = (() => {
+      try { return JSON.parse(localStorage.getItem('aktiv-tolov') || 'null')?.mijozId || '' } catch { return '' }
+    })()
+
     async function yuklashQoshimcha() {
       try {
         const [mj, sz, kt, sd] = await Promise.all([
@@ -374,12 +427,32 @@ export default function SotuvPage() {
         setDokonInfo(sz && typeof sz === 'object' ? sz : {})
         setKategoriyalar(Array.isArray(kt) ? kt : [])
         if (sd && typeof sd === 'object' && !sd.xato) setSodiqlikSozlama(sd as SodiqlikSozlama)
-        // Mijozlar sahifasidagi "Sotuvni boshlash" tugmasi orqali kelingan
-        // bo'lsa — URL'dagi mijozId bo'yicha mijozni avtomatik tanlaymiz.
+        const royxat: Mijoz[] = Array.isArray(mj) ? mj : []
+        // Mijoz kartasidagi savatcha ("Sotuvni boshlash") orqali kelingan bo'lsa —
+        // mijoz shu zahoti tanlanadi va to'lashda qayta so'ralmaydi.
         const boshlanguvchiMijozId = new URLSearchParams(window.location.search).get('mijozId')
-        if (boshlanguvchiMijozId && Array.isArray(mj)) {
-          const topilgan = mj.find((m: Mijoz) => m.id === boshlanguvchiMijozId)
-          if (topilgan) mijozTanlash(topilgan)
+        if (boshlanguvchiMijozId) {
+          const topilgan = royxat.find(m => m.id === boshlanguvchiMijozId)
+          if (topilgan) {
+            mijozTanlash(topilgan)
+            if (tiklanganSavatSoni > 0 && tiklanganMijozId !== topilgan.id) {
+              // Oldingi (boshqa mijoz yoki mijozsiz) yig'ilgan savat tiklandi — kassir bilmasdan unga sotib yubormasin
+              toast.warning(`Savatda avval yig‘ilgan ${tiklanganSavatSoni} ta tovar bor — ular ham ${topilgan.ism} ga sotiladi`, {
+                duration: 12_000,
+                action: { label: 'Savatni tozalash', onClick: () => { setSavat([]); setAralashSummalar(aralashBoshlangich); setSarfBall(''); setSarfKeshbek('') } },
+              })
+            } else {
+              toast.success(`${topilgan.ism} uchun savdo — tovarlarni tanlang`)
+            }
+          } else {
+            toast.error('Mijoz topilmadi — u o‘chirilgan yoki boshqa filialga tegishli')
+            urlMijozniOlibTashla()
+          }
+        } else if (tiklanganMijozId) {
+          // Tiklangan savatning mijozi hali bormi — yo'q bo'lsa jimgina unga bog'lanib qolmasin
+          const tiklangan = royxat.find(m => m.id === tiklanganMijozId)
+          if (tiklangan) mijozTanlash(tiklangan)
+          else setMijozId('')
         }
       } catch {
         // qo'shimcha ma'lumotlar muhim emas — sotuv ishlay beradi
@@ -463,6 +536,7 @@ export default function SotuvPage() {
   }, [tovarlar])
 
   const filteredTovarlar = tovarlar.filter(t =>
+    (!aktifOmbor || kategoriyaOmbori.get(t.kategoriya?.id ?? '') === aktifOmbor) &&
     (!aktifKategoriya || t.kategoriya?.id === aktifKategoriya) &&
     (uzSearch(t.nomi, qidiruv) || (t.shtrixKod && t.shtrixKod.includes(qidiruv)))
   )
@@ -555,6 +629,34 @@ export default function SotuvPage() {
     return () => kuzatuvchi.disconnect()
   }, [])
 
+  // Asboblar paneli yopishgan holatga o'tganini aniqlash.
+  // IntersectionObserver o'rniga scroll: sentinel element qo'shilsa
+  // ota `flex gap-4` unga ham bo'shliq berib, panelni pastga surib
+  // qo'yardi. `requestAnimationFrame` bilan kadrga bir marta hisoblanadi.
+  useEffect(() => {
+    const el = asboblarRef.current
+    const konteyner = el?.closest('main')
+    if (!el || !konteyner) return
+    let kadr = 0
+    const tekshir = () => {
+      kadr = 0
+      // `scrollTop > 0` sharti muhim: desktopda panel manfiy margin tufayli
+      // scroll boshida ham AYNAN yuqori chetda turadi, ya'ni faqat
+      // koordinataga qarab "yopishgan" deb bo'lmaydi — soya sahifa
+      // qimirlamasdan turib chiqib qolardi.
+      const yopishgan = konteyner.scrollTop > 0
+        && el.getBoundingClientRect().top <= konteyner.getBoundingClientRect().top + 1
+      setAsboblarYopishgan(oldingi => (oldingi === yopishgan ? oldingi : yopishgan))
+    }
+    const surildi = () => { if (!kadr) kadr = requestAnimationFrame(tekshir) }
+    konteyner.addEventListener('scroll', surildi, { passive: true })
+    tekshir()
+    return () => {
+      konteyner.removeEventListener('scroll', surildi)
+      if (kadr) cancelAnimationFrame(kadr)
+    }
+  }, [])
+
   // Kassa oynasi ochiq bo'lsa orqa fon scroll bo'lmasin
   useBodyScrollLock(kassaOchiq)
 
@@ -600,7 +702,16 @@ export default function SotuvPage() {
   function narxTasdiqla(tovarId: string) {
     if (!editNarx) return
     const val = parseFloat(editNarx.val.replace(/\s/g, ''))
-    if (!isNaN(val) && val > 0) narxiOzgartir(tovarId, val)
+    if (!isNaN(val) && val > 0) {
+      // Chegirma ruxsati yo'q xodim narxni ro'yxatdagi eng past narxdan tushira olmaydi
+      const tovar = tovarlar.find(t => t.id === tovarId)
+      const min = tovar ? minNarxSomda(tovar, kursi) : null
+      if (!chegirmaRuxsat && min && min.somda > 0 && val < min.somda) {
+        toast.error(`Narxni ${formatSum(min.somda)} dan pasaytirishga ruxsatingiz yo‘q`)
+      } else {
+        narxiOzgartir(tovarId, val)
+      }
+    }
     setEditNarx(null)
   }
 
@@ -656,7 +767,28 @@ export default function SotuvPage() {
   const aralashNatija = aralashTekshir(aralashSummalar as AralashKiritma, yakuniySumma)
   const aralashXato = tolovUsuli === 'ARALASH' && !aralashNatija.ok ? aralashNatija.xato : null
 
+  // Tanlangan mijoz — faqat ro'yxatda haqiqatda bor bo'lsa (eskirgan id hisobga olinmaydi)
+  const tanlanganMijoz = mijozId ? mijozlar.find(m => m.id === mijozId) ?? null : null
+
+  /** `?mijozId=` URL'dan olib tashlanadi — sotuvdan keyin sahifa yangilansa o'sha mijoz qayta tanlanmasin */
+  function urlMijozniOlibTashla() {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('mijozId')) return
+    url.searchParams.delete('mijozId')
+    window.history.replaceState(null, '', url)
+  }
+
+  function mijozniOlibTashla() {
+    setMijozId('')
+    setMijozTelefon('')
+    setMijozIsmi('')
+    setMijozManzil('')
+    setMijozLokatsiya(null)
+    urlMijozniOlibTashla()
+  }
+
   async function sotuvYakunla() {
+    if (yuklanmoqda) return
     if (savat.length === 0) { toast.error('Savat bo\'sh!'); return }
 
     if (ortiqchaItemlar.length > 0) {
@@ -669,6 +801,13 @@ export default function SotuvPage() {
     // Jimgina “to'g'rilab” qo'yish kassirning xatosini yashirardi.
     if (aralashXato) { toast.error(aralashXato); return }
 
+    // Mijoz allaqachon tanlangan (kartadagi savatcha, saqlangan zakaz yoki
+    // tiklangan savat) — ma'lumotlar qayta so'ralmaydi, sotuv shu mijozga yoziladi
+    if (tanlanganMijoz) {
+      await sotuvYuborish(tanlanganMijoz.id)
+      return
+    }
+
     setMijozTelefon('')
     setMijozIsmi('')
     setMijozManzil('')
@@ -679,7 +818,7 @@ export default function SotuvPage() {
   // Telefon yoki ism bo'yicha mavjud mijozlarni filtrlab, tanlash uchun taklif ro'yxati.
   // Hech narsa kiritilmagan bo'lsa ham (default holat) mavjud mijozlar ko'rsatiladi.
   const telefonTaklifi = mijozTelefon.length >= 2
-    ? mijozlar.filter(m => m.telefon && m.telefon.replace(/\D/g, '').includes(mijozTelefon)).slice(0, 5)
+    ? mijozlar.filter(m => [m.telefon, m.telefon2, ...(m.qoshimchaTelefonlar ?? [])].some(x => x && x.replace(/\D/g, '').includes(mijozTelefon))).slice(0, 5)
     : mijozlar.slice(0, 8)
   const ismTaklifi = mijozIsmi.trim().length >= 1
     ? mijozlar.filter(m => uzSearch(m.ism, mijozIsmi)).slice(0, 5)
@@ -738,7 +877,7 @@ export default function SotuvPage() {
     fetch(`/api/mijozlar/${mijozId}/tarix`).then(r => r.json()).then(tarix => {
       if (bekor) return
       setMijozTarixi(tarix)
-      eslatmaKorsat(savat, tarix, mijozIsmi)
+      eslatmaKorsat(savat, tarix, mijozlar.find(m => m.id === mijozId)?.ism || mijozIsmi)
     }).catch(() => {})
     return () => { bekor = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -816,6 +955,7 @@ export default function SotuvPage() {
       setChekModal(true)
       setSavat([])
       setMijozId('')
+      urlMijozniOlibTashla()
       setAralashSummalar(aralashBoshlangich)
       setSarfBall('')
       setSarfKeshbek('')
@@ -1235,7 +1375,7 @@ export default function SotuvPage() {
               <h2 className="text-gray-900 dark:text-gray-100 font-semibold text-sm">Savat ({savat.length})</h2>
             </div>
             <div className="flex items-center gap-1">
-              {savat.length > 0 && (
+              {savat.length > 0 && saqlashRuxsat && (
                 <button
                   onClick={saqlashOynasiniOch}
                   className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 rounded-lg transition"
@@ -1244,9 +1384,9 @@ export default function SotuvPage() {
                   <Pause size={15} />
                 </button>
               )}
-              {/* Har doim ko'rinadi — kassir "zakaz bormi?" deb tekshira olsin.
+              {/* Ruxsati bor kassirga har doim ko'rinadi — "zakaz bormi?" deb tekshira olsin.
                   Oldin ro'yxat bo'sh bo'lsa tugma umuman yo'q edi. */}
-              <button
+              {saqlashRuxsat && <button
                 onClick={() => { setSaqlanganiModal(true); void zakazlarniYuklash() }}
                 className="relative p-1.5 text-gray-500 dark:text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950 rounded-lg transition"
                 title="Saqlangan zakazlar"
@@ -1255,7 +1395,7 @@ export default function SotuvPage() {
                 {saqlanganiSavatlar.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-violet-600 text-white text-[9px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">{saqlanganiSavatlar.length}</span>
                 )}
-              </button>
+              </button>}
               {oxirgiSotuv && (
                 <button
                   onClick={() => setChekModal(true)}
@@ -1265,13 +1405,13 @@ export default function SotuvPage() {
                   <Clock size={15} />
                 </button>
               )}
-              <button
+              {qaytarishRuxsat && <button
                 onClick={() => { setQaytarishModal(true); setQaytarishSotuv(null); setSotuvQidiruv(''); sotuvlarYuklash() }}
                 className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950 rounded-lg transition"
                 title="Qaytarish"
               >
                 <RotateCcw size={15} />
-              </button>
+              </button>}
               {savat.length > 0 && (
                 <button onClick={() => { setSavat([]); setAralashSummalar(aralashBoshlangich); setSarfBall(''); setSarfKeshbek('') }} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
                   <Trash2 size={15} />
@@ -1279,6 +1419,27 @@ export default function SotuvPage() {
               )}
             </div>
           </div>
+
+          {/* Tanlangan mijoz — to'lashda qayta so'ralmaydi, shuning uchun kassir aniq ko'rib tursin */}
+          {tanlanganMijoz && (
+            <div className="px-3 py-2 border-b border-gray-200 dark:border-neutral-800 bg-emerald-50/70 dark:bg-emerald-950/20 flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold" aria-hidden>
+                {tanlanganMijoz.ism.trim().charAt(0).toUpperCase() || '?'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium leading-tight text-emerald-700 dark:text-emerald-400">Mijoz uchun savdo</p>
+                <p className="text-sm font-semibold leading-tight text-gray-900 dark:text-gray-100 truncate">{tanlanganMijoz.ism}</p>
+                {tanlanganMijoz.telefon && <p className="text-xs leading-tight text-gray-500 dark:text-gray-400 truncate">{formatPhone(tanlanganMijoz.telefon)}</p>}
+              </div>
+              <button
+                type="button" onClick={mijozniOlibTashla} disabled={yuklanmoqda}
+                title="Mijozni olib tashlash" aria-label="Mijozni olib tashlash"
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
 
           {savat.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
@@ -1390,8 +1551,8 @@ export default function SotuvPage() {
               <span className="text-gray-900 dark:text-gray-100 font-medium">{formatSum(jamiSumma)}</span>
             </div>
 
-            {/* Umumiy summa o'zgartirish */}
-            <div className="flex items-center gap-2">
+            {/* Umumiy summa o'zgartirish — chegirma ruxsati bilan */}
+            {chegirmaRuxsat && <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Yakuniy summa:</span>
               <input
                 type="text"
@@ -1401,7 +1562,7 @@ export default function SotuvPage() {
                 placeholder={String(Math.round(jamiSumma))}
                 className="flex-1 px-2 py-1 text-sm text-right bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-pos text-gray-900 dark:text-gray-100 font-medium"
               />
-            </div>
+            </div>}
 
             {chegirma > 0 && (
               <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400">
@@ -1446,7 +1607,7 @@ export default function SotuvPage() {
                   </button>
                 </div>
               )}
-              {!bonusTanlashRejimi ? (
+              {!chegirmaRuxsat ? null : !bonusTanlashRejimi ? (
                 <button
                   type="button"
                   onClick={() => { setBonusTanlashRejimi(true); setMobileTab('tovarlar') }}
@@ -1547,7 +1708,7 @@ export default function SotuvPage() {
 
             {/* To'lov usuli */}
             <div className="grid grid-cols-2 gap-1.5">
-              {POS_TOLOV_USULLARI.map(usul => (
+              {POS_TOLOV_USULLARI.filter(usul => usul !== 'NASIYA' || nasiyaRuxsat).map(usul => (
                 <button
                   key={usul}
                   type="button"
@@ -1635,7 +1796,7 @@ export default function SotuvPage() {
                 className="flex-1 py-3 bg-pos-pay hover:bg-pos-pay-hover disabled:opacity-60 text-white font-bold rounded-xl transition text-sm shadow-md shadow-pos-pay/20 flex items-center justify-center gap-2"
               >
                 <CheckCircle size={18} />
-                {yuklanmoqda ? 'Amalga oshirilmoqda...' : "To'lash"}
+                {yuklanmoqda ? 'Amalga oshirilmoqda...' : tanlanganMijoz ? `To'lash · ${tanlanganMijoz.ism.split(' ')[0]}` : "To'lash"}
               </button>
             </div>
           </div>
@@ -1667,13 +1828,48 @@ export default function SotuvPage() {
 
       {/* Chap: Tovarlar */}
       <div className={`flex-1 flex flex-col gap-4 min-w-0 lg:flex ${mobileTab === 'tovarlar' ? 'flex' : 'hidden'}`}>
-        {/* ── Qidiruv va kategoriyalar TEPADA YOPISHIB turadi ──
-            Mahsulotlar ro'yxati uzun: pastga tushilganda ham kassir
-            kategoriyani almashtira oladi va qidiruv qo'l ostida qoladi.
-            Yon chetlar manfiy margin bilan kengaytirilgan, aks holda
-            mahsulotlar yopishgan panel yonidan ko'rinib o'tardi. */}
-        <div className="sticky top-0 z-20 -mx-4 px-4 lg:-mx-6 lg:px-6 -mt-4 pt-4 pb-2 bg-gray-50 dark:bg-neutral-950 flex flex-col gap-3">
-          <div className="flex gap-2">
+        {/* ── ASBOBLAR PANELI: ekran tepasida yopishib turadi ──
+            Mahsulot ro'yxati uzun. Pastga tushilganda kassirda qidiruv,
+            ombor, bo'lim VA narx turi qo'l ostida qolishi shart — narx
+            turi savatga qo'shilayotgan tovar qaysi narxda hisoblanishini
+            belgilaydi, uni ko'rmasdan bosish noto'g'ri chek demakdir.
+            Shu sababli to'rttalasi ham bitta yopishgan qatlamda.
+
+            O'lchamlar nega aynan shunday:
+            • `-top-4 lg:-top-6` — `<main>` ning ichki bo'shlig'i (p-4 / lg:p-6).
+              `top-0` da panel o'sha bo'shliqning OSTIGA yopishardi va tepada
+              16–24px lik tirqish qolardi: mahsulotlar aynan o'sha tirqishdan
+              sirg'alib o'tib ko'rinardi. Manfiy `top` panelni scroll
+              maydonining eng chetiga bosadi — tirqish yo'qoladi.
+            • Chap chet manfiy margin bilan ekran chetigacha cho'ziladi,
+              O'NG chet esa `lg` da cho'zilmaydi (`lg:mr-0`): ilgari
+              `lg:-mx-6` panelni 24px o'ngga chiqarib, 16px lik ustunlar
+              orasidan o'tib savat panelining chap chetiga 8px bosib
+              turardi. `lg` da o'ng tomonda hech narsa panel ostiga
+              kirmaydi — savat alohida ustun, uni yopish shart emas.
+            • `-mt-4 lg:-mt-6` — manfiy `top` uchun qo'shilgan `pt` oddiy
+              holatda ikki karra bo'shliq bermasin.
+            • Fon shaffofmas va sahifa foni bilan bir xil — ost tomondan
+              hech narsa sizib chiqmaydi. */}
+        <div
+          ref={asboblarRef}
+          className={`sticky -top-4 lg:-top-6 z-20 -mx-4 px-4 lg:-ml-6 lg:pl-6 lg:mr-0 lg:pr-0 -mt-4 lg:-mt-6 pt-4 lg:pt-6 pb-3 bg-gray-50 dark:bg-neutral-950 flex flex-col gap-2.5 border-b transition-[box-shadow,border-color] duration-200 ${
+            asboblarYopishgan
+              // Yopishgan holatda soya + ingichka chiziq. Kartalarning panel
+              // ostiga kirib ketishi shundagina "qatlam" bo'lib o'qiladi;
+              // busiz ular shunchaki qirqilib qolgandek ko'rinardi.
+              // Chegara har doim turadi (faqat rangi almashadi) — aks holda
+              // 1px balandlik o'zgarib, panel sakrab ketardi.
+              ? 'border-gray-200 dark:border-neutral-800 shadow-[0_10px_22px_-16px_rgba(0,0,0,0.55)]'
+              : 'border-transparent'
+          }`}
+        >
+          {/* Qidiruv qatori. `flex-wrap`: joy tor bo'lsa (masalan 1024px
+              ekranda savat ustuni 384px olib qo'yganda) narx turi o'z-o'zidan
+              pastki qatorga tushadi — qidiruv maydoni hech qachon siqilib
+              ketmaydi. Joy yetsa esa bir qatorda turib, yopishgan paneldan
+              butun bir qator balandlikni tejaydi. */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={skanerOchiq ? skanerniYopish : skanerniOchish}
               className={`shrink-0 p-2.5 rounded-xl border transition ${skanerOchiq ? 'bg-pos border-pos text-white' : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-500 dark:text-gray-400 hover:border-pos/50 hover:text-pos'}`}
@@ -1681,16 +1877,85 @@ export default function SotuvPage() {
             >
               <ScanLine size={18} />
             </button>
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-[11rem]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400" size={16} />
+              {/* `suppressHydrationWarning`: parol menejeri / forma to'ldiruvchi
+                  kengaytmalar React'dan oldin `fdprocessedid` atributini qo'shadi.
+                  Bayroq faqat shu elementga ta'sir qiladi. */}
               <input
+                suppressHydrationWarning
                 value={qidiruv}
                 onChange={e => setQidiruv(e.target.value)}
                 placeholder="Tovar qidirish yoki shtrix-kod..."
                 className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pos"
               />
             </div>
+            {/* Narx turi — savatga YANGI qo'shiladigan mahsulot shu narx
+                bilan hisoblanadi. Endi yopishgan panel ichida: pastga
+                tushib mahsulot bosilganda ham qaysi narx amal qilayotgani
+                ko'rinib turadi va bir bosishda almashtiriladi. */}
+            <div
+              role="group"
+              aria-label="Narx turi"
+              className="shrink-0 flex items-center gap-1 bg-gray-100 dark:bg-neutral-800 rounded-xl p-1"
+            >
+              {(['sotish', 'optom', 'bolish'] as NarxTuri[]).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setNarxTuri(t)}
+                  aria-pressed={narxTuri === t}
+                  className={`px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition ${narxTuri === t ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                >
+                  {NARX_TURI_LABEL[t]}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* ── OMBORLAR (katta kategoriya) ──
+              Kategoriyalardan yuqorida turadi. Ombor tanlansa quyidagi
+              kategoriya chiplari ham, mahsulotlar ham shu ombor ichidagilar
+              bilan cheklanadi. */}
+          {omborlar.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Ombor
+              </span>
+              <ChipRow label="Omborlar">
+                <button
+                  onClick={() => { setAktifOmbor(null); setAktifKategoriya(null) }}
+                  aria-pressed={aktifOmbor === null}
+                  className={`shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition whitespace-nowrap ${
+                    aktifOmbor === null
+                      ? 'bg-gray-800 dark:bg-neutral-200 text-white dark:text-neutral-900'
+                      : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                  }`}
+                >
+                  Hammasi
+                </button>
+                {omborlar.map(o => (
+                  <button
+                    key={o.id}
+                    onClick={() => {
+                      // Ombor almashganda eski kategoriya tanlovi mos
+                      // kelmasligi mumkin — shuning uchun tozalanadi.
+                      setAktifOmbor(o.id)
+                      setAktifKategoriya(null)
+                    }}
+                    aria-pressed={aktifOmbor === o.id}
+                    className={`shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition whitespace-nowrap ${
+                      aktifOmbor === o.id
+                        ? 'bg-gray-800 dark:bg-neutral-200 text-white dark:text-neutral-900'
+                        : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                    }`}
+                  >
+                    {o.nomi}
+                  </button>
+                ))}
+              </ChipRow>
+            </div>
+          )}
 
           {kategoriyalar.length > 0 && (
             <div className="flex items-center gap-2 min-w-0">
@@ -1706,9 +1971,10 @@ export default function SotuvPage() {
                   <span className="hidden sm:inline">Bo&apos;limlar</span>
                 </button>
               )}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none min-w-0">
+              <ChipRow label="Bo'limlar">
                 <button
                   onClick={() => setAktifKategoriya(null)}
+                  aria-pressed={aktifKategoriya === null}
                   className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition whitespace-nowrap ${
                     aktifKategoriya === null
                       ? 'bg-pos text-white'
@@ -1717,10 +1983,11 @@ export default function SotuvPage() {
                 >
                   Barchasi
                 </button>
-                {kategoriyalar.map(k => (
+                {korinadiganKategoriyalar.map(k => (
                   <button
                     key={k.id}
                     onClick={() => setAktifKategoriya(k.id)}
+                    aria-pressed={aktifKategoriya === k.id}
                     className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition whitespace-nowrap ${
                       aktifKategoriya === k.id
                         ? 'bg-pos text-white'
@@ -1730,24 +1997,9 @@ export default function SotuvPage() {
                     {k.nomi}
                   </button>
                 ))}
-              </div>
+              </ChipRow>
             </div>
           )}
-        </div>
-
-        {/* Narx turi — savatga yangi qo'shiladigan mahsulotlar shu narx bilan
-            hisoblanadi. Bir marta tanlanadi, shuning uchun yopishtirilmagan. */}
-        <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 w-fit">
-          {(['sotish', 'optom', 'bolish'] as NarxTuri[]).map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setNarxTuri(t)}
-              className={`px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${narxTuri === t ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-            >
-              {NARX_TURI_LABEL[t]}
-            </button>
-          ))}
         </div>
         {skanerOchiq && (
           <div className="bg-black rounded-xl overflow-hidden relative">
@@ -1807,7 +2059,14 @@ export default function SotuvPage() {
               <p className="text-xs mt-1 text-gray-500 dark:text-gray-400">&laquo;{qidiruv}&raquo; bo&apos;yicha tovar yo&apos;q</p>
             </div>
           ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 p-4">
+            {/* Ustunlar soni EKRAN eniga emas, MAVJUD joyga qarab tanlanadi.
+                Ilgari `lg:grid-cols-3` edi va savat paneli joyning uchdan
+                birini olgani uchun kartalar 137px gacha siqilardi: kategoriya
+                nomi "Z..." ga aylanib, uzun narxlar qirqilardi. `auto-fill`
+                bilan ustun faqat sig'sa qo'shiladi, karta esa hech qachon
+                180px dan tor bo'lmaydi — bu nishonlar qatori va narxning
+                o'qilishi uchun kerak bo'lgan eng kichik en. */}
             {korsatiladiganTovarlar.map(t => {
               // Oddiy va bonus qatorlari birga qo'shiladi — bitta mahsulotdan
               // ikkalasi ham bo'lishi mumkin (masalan 5ta sotuv + 1ta bonus).
@@ -1821,51 +2080,74 @@ export default function SotuvPage() {
                   disabled={tugagan}
                   className="group relative text-left bg-white dark:bg-neutral-800 rounded-2xl border border-gray-200 dark:border-neutral-700 overflow-hidden transition-all hover:border-pos hover:shadow-lg active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-gray-200 dark:disabled:hover:border-neutral-700 disabled:hover:shadow-none disabled:active:scale-100"
                 >
-                  {savatdagi > 0 && (
-                    <span className="absolute top-2 left-2 z-10 bg-pos text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow">
-                      {savatdagi}
-                    </span>
-                  )}
-                  <div className="aspect-[4/3] bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
-                    {t.kategoriya && (
-                      <span className={`absolute ${savatdagi > 0 ? 'left-9' : 'left-2'} top-2 z-10 text-[11px] bg-pos text-white px-2.5 py-1 rounded-full font-semibold shadow-sm max-w-[55%] truncate`} title={t.kategoriya.nomi}>
-                        {t.kategoriya.nomi}
-                      </span>
-                    )}
+                  <div className="aspect-[16/10] bg-gradient-to-br from-pos-light to-white dark:from-pos/15 dark:to-neutral-800 flex items-center justify-center relative overflow-hidden">
                     {t.rasmlar?.[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={t.rasmlar[0]} alt={t.nomi} className="w-full h-full object-cover" />
                     ) : (
-                      <Package size={56} className="text-pos/60 group-hover:text-pos group-hover:scale-110 transition-all" />
+                      <Package size={48} className="text-pos/60 group-hover:text-pos group-hover:scale-110 transition-all" />
                     )}
-                    <span className={`absolute top-2 right-2 text-xs px-2 py-1 rounded-lg font-semibold shadow-sm ${
-                      tugagan ? 'bg-red-500 text-white' : kamQoldi ? 'bg-amber-500 text-white' : 'bg-white/90 dark:bg-neutral-900/80 text-gray-600 dark:text-gray-300'
-                    }`}>
-                      {tugagan ? 'Tugagan' : `${t.qoldiq} ${t.birlik.toLowerCase()}`}
-                    </span>
-                  </div>
-                  <div className="p-4">
-                    <p className="text-gray-900 dark:text-gray-100 text-lg font-semibold leading-tight line-clamp-2 min-h-[2.6em]">{t.nomi}</p>
-                    <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">Mahsulot kodi: #{(t.shtrixKod || '').padStart(3, '0') || '—'}</p>
 
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center bg-gray-50 dark:bg-neutral-900/60 rounded-xl py-2.5">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-[11px]">Miqdori</p>
-                        <p className={`font-bold text-sm mt-0.5 ${kamQoldi ? 'text-amber-600' : 'text-gray-900 dark:text-gray-100'}`}>
-                          {t.qoldiq} {t.birlik.toLowerCase()}
-                        </p>
+                    {/* ── NISHONLAR BITTA QATORDA ──
+                        Ilgari uchtasi ham mustaqil `absolute` edi va kategoriya
+                        `left-9` degan sehrli siljish bilan qo'yilardi. Tor
+                        kartada (3 ustunli tarhda ~137px) kategoriya qoldiq
+                        nishoni ustiga chiqib ketardi — o'lchov bilan tasdiqlangan.
+                        Endi ular bitta flex qatorda: kategoriya qisqaradi
+                        (`min-w-0 truncate`), qoldiq esa qisqarmaydi
+                        (`shrink-0`), ya'ni to'qnashuv TUZILISH JIHATIDAN
+                        imkonsiz — kartaning eni qanday bo'lishidan qat'i nazar. */}
+                    <div className="absolute inset-x-2 top-2 z-10 flex items-start justify-between gap-2 pointer-events-none">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {savatdagi > 0 && (
+                          <span className="shrink-0 bg-pos text-white text-xs font-bold rounded-full min-w-6 h-6 px-1.5 flex items-center justify-center shadow">
+                            {savatdagi}
+                          </span>
+                        )}
+                        {t.kategoriya && (
+                          // Kategoriya — MA'LUMOT, savat soni esa HOLAT.
+                          // Ilgari ikkalasi ham bir xil qizil edi va bir-biridan
+                          // farqlanmasdi; endi kategoriya betaraf shisha chip.
+                          <span
+                            title={t.kategoriya.nomi}
+                            className="min-w-0 truncate text-[11px] bg-white/85 dark:bg-neutral-900/80 text-gray-700 dark:text-gray-200 px-2 py-1 rounded-full font-medium shadow-sm backdrop-blur-sm"
+                          >
+                            {t.kategoriya.nomi}
+                          </span>
+                        )}
                       </div>
-                      <div className="border-x border-gray-200 dark:border-neutral-700">
-                        <p className="text-gray-500 dark:text-gray-400 text-[11px]">Kelish</p>
-                        <p className="text-gray-700 dark:text-gray-300 font-medium text-sm mt-0.5">
-                          {t.kelishNarxi === null ? '—' : formatNarx(t.kelishNarxi, t.valyuta)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-[11px]">Sotish</p>
-                        <p className="text-pos font-bold text-sm mt-0.5">{formatNarx(t.sotishNarxi, t.valyuta)}</p>
-                      </div>
+                      <span className={`shrink-0 text-xs px-2 py-1 rounded-lg font-semibold shadow-sm whitespace-nowrap ${
+                        tugagan ? 'bg-red-500 text-white' : kamQoldi ? 'bg-amber-500 text-white' : 'bg-white/90 dark:bg-neutral-900/80 text-gray-600 dark:text-gray-300'
+                      }`}>
+                        {tugagan ? 'Tugagan' : `${t.qoldiq} ${t.birlik.toLowerCase()}`}
+                      </span>
                     </div>
+                  </div>
+
+                  <div className="p-3">
+                    {/* Ajratilgan joy AYNAN ikki qator: `leading-snug` = 1.375, ya'ni
+                        2.75em. Ilgari 2.6em edi — bir qatorli va ikki qatorli
+                        nomli kartalar 3px farq qilib, tarh qatorlari tekis
+                        chiqmasdi. */}
+                    <p className="text-gray-900 dark:text-gray-100 text-base font-semibold leading-snug line-clamp-2 min-h-[2.75em]">{t.nomi}</p>
+                    <p className="text-gray-400 dark:text-gray-500 text-[11px] mt-0.5 tabular-nums">
+                      #{(t.shtrixKod || '').padStart(3, '0') || '—'}
+                    </p>
+
+                    {/* Qoldiq rasm ustidagi nishonda ko'rinadi — panelda
+                        takrorlanmaydi: bir xil raqam ikki joyda turishi
+                        kartani uzaytirar va foyda bermasdi. */}
+                    <TovarNarxPaneli
+                      qoldiq={t.qoldiq}
+                      birlik={t.birlik}
+                      kamQoldi={kamQoldi}
+                      kelishNarxi={t.kelishNarxi}
+                      sotishNarxi={t.sotishNarxi}
+                      valyuta={t.valyuta}
+                      sotishRangi="text-pos"
+                      olcham="keng"
+                      miqdorKorsatilsinmi={false}
+                    />
                   </div>
                 </button>
               )
@@ -1937,7 +2219,7 @@ export default function SotuvPage() {
                 <span className="text-[11px] tabular-nums opacity-70">{tovarlar.length}</span>
               </button>
 
-              {kategoriyalar
+              {korinadiganKategoriyalar
                 .filter(k => !kategoriyaQidiruv.trim() || uzSearch(k.nomi, kategoriyaQidiruv))
                 .map(k => {
                   const soni = tovarlar.filter(t => t.kategoriya?.id === k.id).length
@@ -1962,8 +2244,8 @@ export default function SotuvPage() {
                   )
                 })}
 
-              {kategoriyalar.length > 0 &&
-                kategoriyalar.filter(k => !kategoriyaQidiruv.trim() || uzSearch(k.nomi, kategoriyaQidiruv)).length === 0 && (
+              {korinadiganKategoriyalar.length > 0 &&
+                korinadiganKategoriyalar.filter(k => !kategoriyaQidiruv.trim() || uzSearch(k.nomi, kategoriyaQidiruv)).length === 0 && (
                 <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">Topilmadi</p>
               )}
             </div>

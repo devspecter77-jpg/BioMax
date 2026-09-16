@@ -6,6 +6,10 @@ import { egaFilialWhere } from '@/lib/filial-scope'
 import { tolovTaqsimoti, tolovUsuliMi, aralashTekshir, type AralashKiritma } from '@/lib/tolov-usullari'
 import { sarflashniHisobla, sotuvdanToplanadi, ballSomda } from '@/lib/sodiqlik'
 import { sodiqlikSozlamasi, balansOzgartir } from '@/lib/sodiqlik-server'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
+import { katalogBoyicha } from '@/lib/ruxsat-katalogi'
+import { minNarxSomda, ruxsatYoqXabari, sotuvUchunKerak } from '@/lib/ruxsat-amallar'
+import { joriyUsdKursi } from '@/lib/kurs'
 
 export async function GET(req: NextRequest) {
   try {
@@ -116,6 +120,27 @@ export async function POST(req: NextRequest) {
     const yakuniySumma = parseFloat(data.yakuniySumma)
     if (!Number.isFinite(yakuniySumma) || yakuniySumma < 0) {
       return NextResponse.json({ xato: "Noto'g'ri yakuniy summa" }, { status: 400 })
+    }
+
+    // ── Amal ruxsatlari: chegirma/bonus/narx pasaytirish va nasiya ──
+    // Bo'lim ruxsatini proxy tekshirgan; bular esa so'rov mazmuniga bog'liq.
+    // Narxlar bazadan olinadi — brauzer yuborgan narxga ishonilmaydi.
+    {
+      const tarkibIdlar = [...new Set(
+        (Array.isArray(data.tarkiblar) ? data.tarkiblar as { tovarId?: unknown }[] : [])
+          .map(t => String(t.tovarId ?? '')).filter(Boolean),
+      )]
+      const narxlar = tarkibIdlar.length === 0 ? [] : await prisma.tovar.findMany({
+        where: { id: { in: tarkibIdlar } },
+        select: { id: true, sotishNarxi: true, optomNarxi: true, bolishNarxi: true, valyuta: true },
+      })
+      const kursi = narxlar.some(t => t.valyuta === 'USD') ? (await joriyUsdKursi()).kursi : 0
+      const minNarxlar = new Map(narxlar.map(t => [t.id, minNarxSomda(t, kursi)]))
+      for (const kalit of sotuvUchunKerak(data, minNarxlar)) {
+        if (!(await amalRuxsatiBormi(session, kalit))) {
+          return NextResponse.json(ruxsatYoqXabari(kalit, katalogBoyicha.get(kalit)?.label ?? kalit), { status: 403 })
+        }
+      }
     }
 
     // ── Sodiqlik: sarflashni SERVERDA qayta hisoblash ──

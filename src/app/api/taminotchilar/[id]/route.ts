@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { koordinataTogrimi } from '@/lib/xarita-havola'
 import { getStockMap } from '@/lib/stock'
 
 // Ta'minotchi kartasi: aloqa ma'lumoti, unga bog'langan mahsulotlar
@@ -155,7 +156,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
-    const { nomi, kontaktShaxs, telefon, manzil, izoh } = await req.json()
+    const tana = await req.json()
+    const { nomi, kontaktShaxs, telefon, manzil, izoh } = tana
     if (!nomi?.trim()) return NextResponse.json({ xato: 'Nomi majburiy' }, { status: 400 })
 
     const tam = await prisma.taminotchi.update({
@@ -166,6 +168,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         telefon: telefon?.trim() || null,
         manzil: manzil?.trim() || null,
         izoh: izoh?.trim() || null,
+        // Joylashuv faqat SO'ROVDA BO'LSA tegiladi: nomni o'zgartirish
+        // uchun yuborilgan so'rov koordinatani o'chirib yubormasin.
+        ...(Object.prototype.hasOwnProperty.call(tana, 'lokatsiyaLat')
+          || Object.prototype.hasOwnProperty.call(tana, 'lokatsiyaLng')
+          ? koordinataTogrimi(tana.lokatsiyaLat, tana.lokatsiyaLng)
+            ? { lokatsiyaLat: Number(tana.lokatsiyaLat), lokatsiyaLng: Number(tana.lokatsiyaLng) }
+            : { lokatsiyaLat: null, lokatsiyaLng: null }
+          : {}),
       },
     })
     return NextResponse.json(tam)

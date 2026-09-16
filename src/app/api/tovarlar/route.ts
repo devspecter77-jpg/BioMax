@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { aksiyalarniYangila } from '@/lib/vitrina-server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { normalizeUzbek, toKirill, toLotin } from '@/lib/utils'
@@ -13,6 +14,9 @@ export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
+
+    // Vaqti kelgan onlayn aksiya narxlari kassaga ham darhol o'tsin (cron'ga tayanmasdan)
+    await aksiyalarniYangila()
 
     const { searchParams } = new URL(req.url)
     const qidiruv = searchParams.get('q') || ''

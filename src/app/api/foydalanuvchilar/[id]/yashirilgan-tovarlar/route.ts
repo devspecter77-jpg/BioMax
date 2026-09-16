@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId } from '@/lib/filial-scope'
 import { YASHIRILADIGAN_MAYDONLAR } from '@/lib/maydon-yashirish'
+import { ruxsatKeshiniTozala } from '@/lib/ruxsat-server'
 
 const RUXSAT_ETILGAN_KALITLAR = new Set(YASHIRILADIGAN_MAYDONLAR.map(m => m.kalit as string))
 
@@ -69,6 +70,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }),
     ])
 
+    ruxsatKeshiniTozala(id)
     return NextResponse.json({ ok: true, soni: toza.length })
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })

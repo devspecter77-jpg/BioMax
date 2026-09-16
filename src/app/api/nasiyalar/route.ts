@@ -40,10 +40,19 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const body = await req.json()
-    const { ism, manzil, telefon, qarz, muddat, sana } = body
+    const { ism, manzil, telefon, qarz, muddat, sana, mijozId } = body
 
-    if (!ism || !qarz) {
-      return NextResponse.json({ xato: 'Ism va qarz majburiy' }, { status: 400 })
+    if (!qarz) {
+      return NextResponse.json({ xato: 'Qarz summasi majburiy' }, { status: 400 })
+    }
+    // `mijozId` berilsa ism talab qilinmaydi — mavjud mijoz tanlangan
+    if (!mijozId && !ism) {
+      return NextResponse.json({ xato: 'Mijozni tanlang yoki ism kiriting' }, { status: 400 })
+    }
+
+    const summa = Number(qarz)
+    if (!Number.isFinite(summa) || summa <= 0) {
+      return NextResponse.json({ xato: "Qarz noldan katta bo'lishi kerak" }, { status: 400 })
     }
 
     // Telefon raqamdan faqat raqamlarni olish
@@ -54,7 +63,18 @@ export async function POST(req: NextRequest) {
     const normalizeManzil = (m: string) => m.trim().toLowerCase().replace(/\s+/g, ' ')
 
     let mijoz = null
-    if (manzil) {
+
+    // Ro'yxatdan tanlangan mijoz — ism bo'yicha qidirish shart emas.
+    // Bu takroriy mijoz yaratilishining oldini oladi: ilgari faqat ism
+    // bilan qidirilardi va bir xil ismli ikkinchi mijoz paydo bo'lardi.
+    if (mijozId) {
+      mijoz = await prisma.mijoz.findFirst({
+        where: { id: String(mijozId), ...egaFilialWhere(session) },
+      })
+      if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
+    }
+
+    if (!mijoz && manzil) {
       const candidates = await prisma.mijoz.findMany({
         where: { ism: { equals: ism, mode: 'insensitive' }, ...egaFilialWhere(session) },
       })
@@ -63,7 +83,7 @@ export async function POST(req: NextRequest) {
       ) || null
     }
 
-    if (!mijoz) {
+    if (!mijoz && !mijozId) {
       // Agar telefon bor bo'lsa, telefon bo'yicha ham tekshirish
       if (finalPhone) {
         mijoz = await prisma.mijoz.findFirst({

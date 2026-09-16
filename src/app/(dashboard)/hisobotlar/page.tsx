@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
+import { useRuxsat } from '@/hooks/useRuxsat'
 import { Suspense, lazy } from 'react'
 import { Download } from 'lucide-react'
 import { useReportFilters } from './_hooks/useReportFilters'
@@ -50,12 +51,14 @@ const TAB_COMPONENTS = {
 } as const
 
 // Inner component that uses useSearchParams (via useReportFilters) — must be inside Suspense
-function HisobotlarInner({ isKassir, ruxsatlar }: { isKassir: boolean; ruxsatlar: string[] | null }) {
+function HisobotlarInner({ isKassir }: { isKassir: boolean }) {
   const { filtrlar, yangilash } = useReportFilters()
+  const ruxsat = useRuxsat()
 
-  const visibleTabs = TAB_LIST.filter((t) => ruxsatlar === null || ruxsatlar.includes('hisobotlar.' + t.key))
-  const ActiveTab =
-    TAB_COMPONENTS[filtrlar.tab as keyof typeof TAB_COMPONENTS] ?? UmumiyTab
+  const visibleTabs = TAB_LIST.filter((t) => ruxsat.bor('hisobotlar.' + t.key))
+  // Tanlangan (yoki standart «Umumiy») varaq ruxsat etilmagan bo'lsa — birinchi ochiq varaq
+  const aktivKalit = visibleTabs.some(t => t.key === filtrlar.tab) ? filtrlar.tab : visibleTabs[0]?.key
+  const ActiveTab = aktivKalit ? TAB_COMPONENTS[aktivKalit as keyof typeof TAB_COMPONENTS] ?? null : null
 
   function downloadExcel() {
     const qs = new URLSearchParams({
@@ -71,7 +74,7 @@ function HisobotlarInner({ isKassir, ruxsatlar }: { isKassir: boolean; ruxsatlar
       {/* Header + Excel button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Hisobotlar</h1>
-        {!isKassir && (
+        {ruxsat.bor('hisobotlar.export') && (
           <button
             onClick={downloadExcel}
             className="inline-flex items-center gap-2 px-3 py-2 bg-red-600 text-white text-sm rounded-xl hover:bg-red-700"
@@ -96,7 +99,7 @@ function HisobotlarInner({ isKassir, ruxsatlar }: { isKassir: boolean; ruxsatlar
             key={t.key}
             onClick={() => yangilash({ tab: t.key })}
             className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-              filtrlar.tab === t.key
+              aktivKalit === t.key
                 ? 'border-red-600 text-red-600 dark:text-red-400'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
@@ -115,7 +118,13 @@ function HisobotlarInner({ isKassir, ruxsatlar }: { isKassir: boolean; ruxsatlar
           </div>
         }
       >
-        <ActiveTab filtrlar={filtrlar} isKassir={isKassir} />
+        {ActiveTab ? (
+          <ActiveTab filtrlar={filtrlar} isKassir={isKassir} />
+        ) : ruxsat.rol ? (
+          <p className="rounded-2xl border border-dashed border-gray-300 dark:border-neutral-700 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+            Sizga hech qaysi hisobot ochilmagan. Administratorga murojaat qiling.
+          </p>
+        ) : null}
       </Suspense>
     </>
   )
@@ -124,7 +133,6 @@ function HisobotlarInner({ isKassir, ruxsatlar }: { isKassir: boolean; ruxsatlar
 export default function HisobotlarPage() {
   const { data: session } = useSession()
   const isKassir = (session?.user as { rol?: string } | undefined)?.rol === 'KASSIR'
-  const ruxsatlar = (session?.user as { ruxsatlar?: string[] | null } | undefined)?.ruxsatlar ?? null
 
   return (
     <div className="space-y-4">
@@ -136,7 +144,7 @@ export default function HisobotlarPage() {
           </div>
         }
       >
-        <HisobotlarInner isKassir={isKassir} ruxsatlar={ruxsatlar} />
+        <HisobotlarInner isKassir={isKassir} />
       </Suspense>
     </div>
   )

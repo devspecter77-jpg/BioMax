@@ -6,6 +6,7 @@ import { tolovQisqa, tolovBadge, tolovKanallari } from '@/lib/tolov-usullari'
 import { Receipt, Phone, User, Calendar, Search, Download, X, Wallet, CreditCard, RotateCcw } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useRuxsat } from '@/hooks/useRuxsat'
 
 interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
 interface QaytarishTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
@@ -39,6 +40,7 @@ type Yozuv =
   | { turi: 'qaytarish'; sana: string; qaytarish: Qaytarish; asl: Sotuv }
 
 export default function XaridlarPage() {
+  const eksportRuxsat = useRuxsat().bor('xaridlar.export')
   const [sotuvlar, setSotuvlar] = useState<Sotuv[]>([])
   const [jami, setJami] = useState(0)
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
@@ -91,14 +93,14 @@ export default function XaridlarPage() {
             title="Sana bo'yicha qidirish"
             className="flex-1 sm:flex-none px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
           />
-          <a
+          {eksportRuxsat && <a
             href={`/api/sotuvlar/export${sanaFilter ? `?dan=${sanaFilter}&gacha=${sanaFilter}` : ''}`}
             title="Excel export"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 text-xs sm:text-sm shrink-0"
           >
             <Download size={14} />
             Export
-          </a>
+          </a>}
         </div>
       </div>
 

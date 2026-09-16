@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { formatSum, formatSana, uzSearch } from '@/lib/utils'
+import DokonQarzPanel from '@/components/DokonQarzPanel'
+import XarajatPanel from '@/components/XarajatPanel'
 import { QARZ_TOLOV_USULLARI, TOLOV_MALUMOTI, tolovQisqa } from '@/lib/tolov-usullari'
 import { toast } from 'sonner'
 import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown, Download, Upload, Loader2, Calendar } from 'lucide-react'
@@ -11,6 +13,7 @@ import MoneyInput from '@/components/ui/money-input'
 import DateInput from '@/components/ui/date-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useConfirm } from '@/components/ConfirmProvider'
+import { useRuxsat } from '@/hooks/useRuxsat'
 
 interface NasiyaTolov {
   id: string
@@ -62,6 +65,10 @@ const holatiConfig = {
 
 export default function NasiyalarPage() {
   const confirm = useConfirm()
+  const ruxsat = useRuxsat()
+  const tolovRuxsat = ruxsat.bor('nasiyalar.tolov')
+  const qarzRuxsat = ruxsat.bor('nasiyalar.qarz')
+  const ochirishRuxsat = ruxsat.bor('nasiyalar.ochirish')
   const [nasiyalar, setNasiyalar] = useState<Nasiya[]>([])
   const [barchasi, setBarchasi] = useState<Nasiya[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
@@ -71,7 +78,11 @@ export default function NasiyalarPage() {
   const [tolovModal, setTolovModal] = useState<Nasiya | null>(null)
   const [tolovForm, setTolovForm] = useState({ summa: '', tolovUsuli: 'NAQD', izoh: '' })
   const [view, setView] = useState<'table' | 'card'>('table')
+  const [bolim, setBolim] = useState<'mijoz' | 'dokon' | 'xarajat'>('mijoz')
   const [qoshishModal, setQoshishModal] = useState(false)
+  // Mavjud mijozni tanlash — ism yozib takroriy mijoz yaratmaslik uchun
+  const [mijozlar, setMijozlar] = useState<{ id: string; ism: string; telefon: string | null; manzil: string | null }[]>([])
+  const [tanlanganMijozId, setTanlanganMijozId] = useState('')
   const [qoshishForm, setQoshishForm] = useState({ ism: '', manzil: '', telefon: '', qarz: '', muddat: '', sana: new Date().toISOString().slice(0, 10) })
   const [qoshishYuklash, setQoshishYuklash] = useState(false)
   const [qarzQoshishModal, setQarzQoshishModal] = useState<Nasiya | null>(null)
@@ -82,6 +93,15 @@ export default function NasiyalarPage() {
   const [tahrirlashYuklash, setTahrirlashYuklash] = useState(false)
   const [importYuklanmoqda, setImportYuklanmoqda] = useState(false)
   useBodyScrollLock(!!tolovModal || qoshishModal || !!qarzQoshishModal || !!tahrirlashModal)
+
+  // Mijozlar ro'yxati faqat modal ochilganda yuklanadi
+  useEffect(() => {
+    if (!qoshishModal || mijozlar.length > 0) return
+    fetch('/api/mijozlar?q=')
+      .then(r => r.json())
+      .then(d => setMijozlar(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [qoshishModal, mijozlar.length])
 
   async function excelTanlash(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -182,11 +202,14 @@ export default function NasiyalarPage() {
       const res = await fetch('/api/nasiyalar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(qoshishForm),
+        // Mijoz tanlangan bo'lsa uning id'si yuboriladi — server ism
+        // bo'yicha qidirib takroriy mijoz yaratmasin.
+        body: JSON.stringify({ ...qoshishForm, mijozId: tanlanganMijozId || undefined }),
       })
       if (res.ok) {
         toast.success('Nasiya muvaffaqiyatli qo\'shildi!')
         setQoshishModal(false)
+        setTanlanganMijozId('')
         setQoshishForm({ ism: '', manzil: '', telefon: '', qarz: '', muddat: '', sana: new Date().toISOString().slice(0, 10) })
         yuklash()
       } else {
@@ -292,6 +315,28 @@ export default function NasiyalarPage() {
 
   return (
     <div className="space-y-4">
+      {/* ── Ikki yo'nalishli qarz ──
+          Mijoz nasiyasi — BIZGA qarzdor; do'kon qarzi — BIZ qarzdormiz.
+          Ikkalasi bir sahifada, chunki do'kon egasi ikkalasini birga
+          ko'rib turishni xohlaydi. */}
+      <div className="flex bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 gap-1 w-full sm:w-fit">
+        {([['mijoz', 'Mijoz nasiyalari'], ['dokon', "Do'kon qarzi"], ['xarajat', 'Xarajatlar']] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setBolim(k)}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+              bolim === k
+                ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {bolim === 'dokon' ? <DokonQarzPanel /> : bolim === 'xarajat' ? <XarajatPanel /> : (
+      <>
       {/* Stats Cards = Filter */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <button onClick={() => setFilter('')}
@@ -374,25 +419,25 @@ export default function NasiyalarPage() {
         <div className="hidden sm:block">
           <ViewToggle view={view} onChange={changeView} />
         </div>
-        <a
+        {ruxsat.bor('nasiyalar.export') && <a
           href="/api/nasiyalar/export"
           title="Excel export"
           className="flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
         >
           <Download size={16} />
           <span className="hidden sm:inline">Excel export</span>
-        </a>
-        <label title="Excel import" className={`flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
+        </a>}
+        {ruxsat.bor('nasiyalar.import') && <label title="Excel import" className={`flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition cursor-pointer border ${importYuklanmoqda ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-neutral-700 text-gray-400' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'}`}>
           {importYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
           <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
-          <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
-        </label>
-        <button
+          <input suppressHydrationWarning type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
+        </label>}
+        {qarzRuxsat && <button
           onClick={() => setQoshishModal(true)}
           className="flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition">
           <Plus size={16} />
           <span className="hidden sm:inline">Nasiya qo&apos;shish</span>
-        </button>
+        </button>}
       </div>
 
       {/* TABLE VIEW — faqat desktopda */}
@@ -460,7 +505,7 @@ export default function NasiyalarPage() {
                       {/* Amal: To'lov + O'chirish buttons */}
                       <td className="px-4 py-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
-                          {n.holati !== 'YOPILGAN' && (
+                          {n.holati !== 'YOPILGAN' && tolovRuxsat && (
                             <button
                               onClick={() => openTolovModal(n)}
                               className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-green-50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium transition"
@@ -469,7 +514,7 @@ export default function NasiyalarPage() {
                               <span className="hidden lg:inline">To&apos;lov</span>
                             </button>
                           )}
-                          <button
+                          {qarzRuxsat && <><button
                             onClick={() => { setQarzQoshishModal(n); setQarzQoshishForm({ summa: '', muddat: n.muddat ? n.muddat.slice(0, 10) : '' }) }}
                             className="inline-flex items-center p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition"
                             title="Qarz qo'shish">
@@ -480,13 +525,13 @@ export default function NasiyalarPage() {
                             className="inline-flex items-center p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
                             title="Tahrirlash">
                             <Pencil size={14} />
-                          </button>
-                          <button
+                          </button></>}
+                          {ochirishRuxsat && <button
                             onClick={() => nasiyaOchirish(n.id, n.mijoz.ism)}
                             className="inline-flex items-center p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition"
                             title="O'chirish">
                             <Trash2 size={14} />
-                          </button>
+                          </button>}
                         </div>
                       </td>
                     </tr>
@@ -550,7 +595,7 @@ export default function NasiyalarPage() {
 
                 {/* Action buttons */}
                 <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
-                  {n.holati !== 'YOPILGAN' && (
+                  {n.holati !== 'YOPILGAN' && tolovRuxsat && (
                     <button
                       onClick={() => openTolovModal(n)}
                       className="flex-1 py-2 bg-green-50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50 text-green-700 dark:text-green-400 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2">
@@ -558,7 +603,7 @@ export default function NasiyalarPage() {
                       To&apos;lov
                     </button>
                   )}
-                  <button
+                  {qarzRuxsat && <><button
                     onClick={() => { setQarzQoshishModal(n); setQarzQoshishForm({ summa: '', muddat: n.muddat ? n.muddat.slice(0, 10) : '' }) }}
                     className="px-3 py-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 border border-blue-200 dark:border-blue-900/30 rounded-xl transition"
                     title="Qarz qo'shish">
@@ -569,17 +614,20 @@ export default function NasiyalarPage() {
                     className="px-3 py-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl transition"
                     title="Tahrirlash">
                     <Pencil size={15} />
-                  </button>
-                  <button
+                  </button></>}
+                  {ochirishRuxsat && <button
                     onClick={() => nasiyaOchirish(n.id, n.mijoz.ism)}
                     className="px-3 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border border-red-200 dark:border-red-900/30 rounded-xl transition">
                     <Trash2 size={15} />
-                  </button>
+                  </button>}
                 </div>
               </div>
             )
           })}
       </div>
+      </>
+      )}
+
 
       {/* Tahrirlash modal */}
       {tahrirlashModal && (
@@ -723,24 +771,67 @@ export default function NasiyalarPage() {
               </button>
             </div>
             <form onSubmit={nasiyaQoshish} className="p-5 space-y-4">
+              {/* Mavjud mijozni tanlash — ism yozib qidirish o'rniga.
+                  Ilgari faqat ism/manzil bo'yicha moslashtirilardi va bir
+                  xil ismli ikkinchi mijoz yaratilib ketishi mumkin edi. */}
+              {mijozlar.length > 0 && (
+                <div>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                    Mijozni tanlang
+                  </label>
+                  <select
+                    value={tanlanganMijozId}
+                    onChange={e => {
+                      const id = e.target.value
+                      setTanlanganMijozId(id)
+                      const m = mijozlar.find(x => x.id === id)
+                      // Tanlangach maydonlar to'ldiriladi — foydalanuvchi
+                      // kimni tanlaganini ko'rib turadi
+                      if (m) {
+                        setQoshishForm(f => ({
+                          ...f,
+                          ism: m.ism,
+                          manzil: m.manzil ?? '',
+                          telefon: m.telefon ?? '',
+                        }))
+                      }
+                    }}
+                    className={inputCls}
+                  >
+                    <option value="">— Yangi mijoz (pastda yozing) —</option>
+                    {mijozlar.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.ism}{m.telefon ? ` · ${m.telefon}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Ism {tanlanganMijozId ? '' : '*'}
+                </label>
                 <input
                   value={qoshishForm.ism}
                   onChange={e => setQoshishForm(f => ({ ...f, ism: e.target.value }))}
                   className={inputCls}
                   placeholder="Mijoz ismi"
-                  required
+                  required={!tanlanganMijozId}
+                  disabled={!!tanlanganMijozId}
                 />
               </div>
               <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Manzil *</label>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Manzil {tanlanganMijozId ? '' : '*'}
+                </label>
                 <input
                   value={qoshishForm.manzil}
                   onChange={e => setQoshishForm(f => ({ ...f, manzil: e.target.value }))}
                   className={inputCls}
                   placeholder="Manzil"
-                  required
+                  required={!tanlanganMijozId}
+                  disabled={!!tanlanganMijozId}
                 />
               </div>
               <div>

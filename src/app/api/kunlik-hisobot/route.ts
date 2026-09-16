@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { bolimRuxsatiBormi } from '@/lib/ruxsat-server'
 import { sessionFilialId } from '@/lib/filial-scope'
 import { hisobotSozlamalari, kunlikHisobotYig, hisobotOluvchilar } from '@/lib/kunlik-hisobot-server'
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
       topSoni: 20,
     }
 
-    const boshqaraOladi = u.rol === 'ADMIN'
+    const boshqaraOladi = await amalRuxsatiBormi(session, 'kunlik-hisobot.sozlama')
 
     const [hisobot, tarix, oluvchilar] = await Promise.all([
       kunlikHisobotYig(oluvchi, korinishSozlama),
@@ -89,8 +90,8 @@ export async function PUT(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    if ((session.user as unknown as { rol?: string }).rol !== 'ADMIN') {
-      return NextResponse.json({ xato: "Faqat admin o'zgartira oladi" }, { status: 403 })
+    if (!(await amalRuxsatiBormi(session, 'kunlik-hisobot.sozlama'))) {
+      return NextResponse.json({ xato: 'Bu amalga ruxsatingiz yo‘q: «Kunlik hisobot sozlamalari»', kod: 'ruxsat_yoq' }, { status: 403 })
     }
 
     const tana = await req.json()

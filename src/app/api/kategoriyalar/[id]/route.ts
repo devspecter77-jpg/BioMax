@@ -12,11 +12,47 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const mavjud = await prisma.kategoriya.findFirst({ where: { id, ...egaFilialWhere(session) }, select: { id: true } })
     if (!mavjud) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
 
-    const { nomi, tavsif } = await req.json()
+    const tana = await req.json()
+    const { nomi, tavsif } = tana
+
+    // Payloadda YO'Q maydonga tegilmaydi — omborni tegmasdan nomni
+    // o'zgartirish (yoki teskarisi) mumkin bo'lsin.
+    const yangilash: Record<string, unknown> = {}
+    if (Object.prototype.hasOwnProperty.call(tana, 'nomi')) {
+      const nomiTrim = String(nomi ?? '').trim()
+      if (!nomiTrim) return NextResponse.json({ xato: 'Kategoriya nomi majburiy' }, { status: 400 })
+      // Baza indeksi filialsiz qatorlarni ushlamaydi (NULL != NULL)
+      const takror = await prisma.kategoriya.findFirst({
+        where: {
+          id: { not: id },
+          nomi: { equals: nomiTrim, mode: 'insensitive' },
+          ...egaFilialWhere(session),
+        },
+        select: { id: true },
+      })
+      if (takror) return NextResponse.json({ xato: 'Bu nom allaqachon mavjud' }, { status: 400 })
+      yangilash.nomi = nomiTrim
+    }
+    if (Object.prototype.hasOwnProperty.call(tana, 'tavsif')) yangilash.tavsif = tavsif
+
+    if (Object.prototype.hasOwnProperty.call(tana, 'omborId')) {
+      if (!tana.omborId) {
+        yangilash.omborId = null
+      } else {
+        // Ombor so'rovchining doirasida bo'lishi shart
+        const o = await prisma.ombor.findFirst({
+          where: { id: String(tana.omborId), ...egaFilialWhere(session) },
+          select: { id: true },
+        })
+        if (!o) return NextResponse.json({ xato: 'Ombor topilmadi' }, { status: 404 })
+        yangilash.omborId = o.id
+      }
+    }
 
     const kat = await prisma.kategoriya.update({
       where: { id },
-      data: { nomi, tavsif },
+      data: yangilash,
+      include: { ombor: { select: { id: true, nomi: true } } },
     })
     return NextResponse.json(kat)
   } catch (e: any) {

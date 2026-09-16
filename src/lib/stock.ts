@@ -29,10 +29,19 @@ export async function getStockMap(
   tovarIds?: string[],
   db: { $queryRawUnsafe: typeof prisma.$queryRawUnsafe } = prisma,
 ): Promise<Map<string, { omborQoldiq: number; dokonQoldiq: number }>> {
-  const filter = tovarIds && tovarIds.length > 0
-    ? `WHERE "tovarId" IN (${tovarIds.map(id => `'${id}'`).join(',')})`
-    : ''
+  // ID'lar SQL matniga QO'SHILMAYDI — parametr sifatida uzatiladi.
+  // Ilgari `'${id}'` bilan qo'shilardi: ID tashqaridan kelsa (masalan
+  // marketplace shartnomasi orqali) bu SQL injection eshigi bo'lardi.
+  const filtrBor = !!tovarIds && tovarIds.length > 0
+  const filter = filtrBor ? `WHERE "tovarId" = ANY($1::text[])` : ''
+  const parametrlar = filtrBor ? [tovarIds] : []
 
+  // Jadval nomi SXEMA BILAN yoziladi (`public.ombor_harakati`).
+  // Xom SQL — Prisma'ning oddiy so'rovlaridan farqli — `search_path` ga
+  // tayanadi. Neon pooler'i (PgBouncer) sessiya sozlamalarini ulanishlar
+  // orasida tarqatadi: boshqa mijoz (masalan `schema=` bilan ishlagan
+  // migratsiya) `search_path` ni o'zgartirsa, bu so'rov vaqti-vaqti bilan
+  // `relation "ombor_harakati" does not exist` bilan yiqilardi.
   const rows = await db.$queryRawUnsafe<StockRow[]>(`
     SELECT
       "tovarId",
@@ -48,10 +57,10 @@ export async function getStockMap(
         WHEN turi IN ('KIRIM', 'QAYTARISH', 'OTKAZMA_KIRIM') THEN miqdor
         ELSE -miqdor
       END), 0)::float AS "dokonQoldiq"
-    FROM ombor_harakati
+    FROM public.ombor_harakati
     ${filter}
     GROUP BY "tovarId"
-  `)
+  `, ...parametrlar)
 
   const map = new Map<string, { omborQoldiq: number; dokonQoldiq: number }>()
   for (const r of rows) {

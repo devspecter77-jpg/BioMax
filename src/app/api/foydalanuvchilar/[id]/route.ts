@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { sessionFilialId } from '@/lib/filial-scope'
+import { ruxsatKeshiniTozala } from '@/lib/ruxsat-server'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -37,6 +38,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data: updateData,
       select: { id: true, ism: true, login: true, rol: true, faol: true, telefon: true, filialId: true },
     })
+    // Rol, filial yoki faollik o'zgargan bo'lishi mumkin — sessiya yangisini olsin
+    ruxsatKeshiniTozala(id)
     return NextResponse.json(user)
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
@@ -64,11 +67,13 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
     if (nishon.faol) {
       await prisma.foydalanuvchi.update({ where: { id }, data: { faol: false } })
+      ruxsatKeshiniTozala(id)
       return NextResponse.json({ ok: true, holat: 'nofaol' })
     }
 
     try {
       await prisma.foydalanuvchi.delete({ where: { id } })
+      ruxsatKeshiniTozala(id)
       return NextResponse.json({ ok: true, holat: 'ochirildi' })
     } catch {
       // Bu hisob nomidan haqiqiy savdo/ombor/xarid tarixi bor — yozuvni

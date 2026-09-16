@@ -78,8 +78,9 @@ export async function GET(req: NextRequest) {
     // ta'minotchiga to'lov esa XARID → TA'MINOTCHI orqali.
     const nasiyaDoira = isEga && !soralganFilial ? {} : { nasiya: { mijoz: doira } }
     const xaridDoira = isEga && !soralganFilial ? {} : { xarid: { taminotchi: doira } }
+    const qarzDoira = isEga && !soralganFilial ? {} : { taminotchi: doira }
 
-    const [sotuvlar, nasiyaTolovlar, qaytarishlar, xaridTolovlar, filiallar] = await Promise.all([
+    const [sotuvlar, nasiyaTolovlar, qaytarishlar, xaridTolovlar, filiallar, qolQarzTolovlari, dokonQarzTolovlari, xarajatlar] = await Promise.all([
       prisma.sotuv.findMany({
         where: {
           holati: 'YAKUNLANGAN',
@@ -117,6 +118,49 @@ export async function GET(req: NextRequest) {
         orderBy: { sana: 'desc' },
       }),
       prisma.filial.findMany({ select: { id: true, nomi: true }, orderBy: { yaratilgan: 'asc' } }),
+      // Ta'minotchiga QO'LDA yozilgan to'lovlar. Ular `XaridTolov` da emas,
+      // alohida qarz daftarida yashaydi — hisobga olinmasa chiqim kam
+      // ko'rinardi va "qayerga ketdi" degan savol javobsiz qolardi.
+      prisma.taminotchiQarz.findMany({
+        where: { sana: { gte: dan, lt: gacha }, turi: 'TOLOV', ...qarzDoira },
+        select: {
+          id: true, summa: true, tolovUsuli: true, sana: true, izoh: true,
+          taminotchi: { select: { nomi: true, filialId: true } },
+          yaratgan: { select: { ism: true } },
+        },
+        orderBy: { sana: 'desc' },
+      }),
+      // Do'konning O'Z qarzi bo'yicha to'lovlar — ular ham do'kondan
+      // chiqqan pul. Hisobga olinmasa chiqim kam ko'rinardi.
+      prisma.dokonQarz.findMany({
+        where: {
+          sana: { gte: dan, lt: gacha },
+          turi: 'TOLOV',
+          ...(isEga && !soralganFilial ? {} : doira),
+        },
+        select: {
+          id: true, kimga: true, summa: true, tolovUsuli: true, sana: true, filialId: true,
+          yaratgan: { select: { ism: true } },
+        },
+        orderBy: { sana: 'desc' },
+      }),
+      // Do'kon xarajatlari — ijara, ovqat, soliq va h.k. Ular ham
+      // do'kondan chiqqan pul. MAOSH xarajatlari xodim to'lovi orqali
+      // yaratiladi, shuning uchun ular ham shu yerda hisobga olinadi.
+      prisma.xarajat.findMany({
+        where: {
+          sana: { gte: dan, lt: gacha },
+          tolovUsuli: { not: null },
+          ...(isEga && !soralganFilial ? {} : doira),
+        },
+        select: {
+          id: true, kategoriya: true, summa: true, tolovUsuli: true, sana: true,
+          izoh: true, kimUchun: true, filialId: true,
+          xodim: { select: { ism: true } },
+          foydalanuvchi: { select: { ism: true } },
+        },
+        orderBy: { sana: 'desc' },
+      }),
     ])
 
     // ── Yig'indilar ──
@@ -160,6 +204,30 @@ export async function GET(req: NextRequest) {
       const summa = Number(x.summa)
       qosh(chiqim, usul, summa)
       qosh(filialYigindi(x.xarid?.taminotchi?.filialId ?? null).chiqim, usul, summa)
+    }
+
+    for (const q of qolQarzTolovlari) {
+      const usul = q.tolovUsuli as KanalUsuli | null
+      if (!usul || !KANAL_USULLARI.includes(usul)) continue
+      const summa = Number(q.summa)
+      qosh(chiqim, usul, summa)
+      qosh(filialYigindi(q.taminotchi?.filialId ?? null).chiqim, usul, summa)
+    }
+
+    for (const d of dokonQarzTolovlari) {
+      const usul = d.tolovUsuli as KanalUsuli | null
+      if (!usul || !KANAL_USULLARI.includes(usul)) continue
+      const summa = Number(d.summa)
+      qosh(chiqim, usul, summa)
+      qosh(filialYigindi(d.filialId).chiqim, usul, summa)
+    }
+
+    for (const x of xarajatlar) {
+      const usul = x.tolovUsuli as KanalUsuli | null
+      if (!usul || !KANAL_USULLARI.includes(usul)) continue
+      const summa = Number(x.summa)
+      qosh(chiqim, usul, summa)
+      qosh(filialYigindi(x.filialId).chiqim, usul, summa)
     }
 
     const qaytarish = Number(qaytarishlar._sum.jamiSumma || 0)
@@ -211,6 +279,46 @@ export async function GET(req: NextRequest) {
         kanallar: [{ usul: x.tolovUsuli as KanalUsuli, summa: Number(x.summa) }],
         jami: Number(x.summa),
       })),
+      ...qolQarzTolovlari
+        .filter(q => q.tolovUsuli && KANAL_USULLARI.includes(q.tolovUsuli as KanalUsuli))
+        .map(q => ({
+          id: 'q:' + q.id,
+          turi: 'xarid' as const,
+          sana: q.sana,
+          nomi: q.taminotchi?.nomi ?? "Ta'minotchi",
+          kim: null,
+          xodim: q.yaratgan?.ism ?? null,
+          filialId: q.taminotchi?.filialId ?? null,
+          kanallar: [{ usul: q.tolovUsuli as KanalUsuli, summa: Number(q.summa) }],
+          jami: Number(q.summa),
+        })),
+      ...dokonQarzTolovlari
+        .filter(d => d.tolovUsuli && KANAL_USULLARI.includes(d.tolovUsuli as KanalUsuli))
+        .map(d => ({
+          id: 'd:' + d.id,
+          turi: 'xarid' as const,
+          sana: d.sana,
+          nomi: d.kimga,
+          kim: null,
+          xodim: d.yaratgan?.ism ?? null,
+          filialId: d.filialId,
+          kanallar: [{ usul: d.tolovUsuli as KanalUsuli, summa: Number(d.summa) }],
+          jami: Number(d.summa),
+        })),
+      ...xarajatlar
+        .filter(x => x.tolovUsuli && KANAL_USULLARI.includes(x.tolovUsuli as KanalUsuli))
+        .map(x => ({
+          id: 'xr:' + x.id,
+          turi: 'xarajat' as const,
+          sana: x.sana,
+          // Nima uchun ketgani darhol ko'rinsin
+          nomi: [x.kategoriya, x.xodim?.ism ?? x.kimUchun].filter(Boolean).join(' — '),
+          kim: null,
+          xodim: x.foydalanuvchi?.ism ?? null,
+          filialId: x.filialId,
+          kanallar: [{ usul: x.tolovUsuli as KanalUsuli, summa: Number(x.summa) }],
+          jami: Number(x.summa),
+        })),
     ]
       .sort((a, b) => new Date(b.sana).getTime() - new Date(a.sana).getTime())
       .slice(0, 300)

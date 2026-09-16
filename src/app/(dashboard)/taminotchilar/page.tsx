@@ -10,7 +10,10 @@ import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useConfirm } from '@/components/ConfirmProvider'
+import { useRuxsat } from '@/hooks/useRuxsat'
 import TaminotchiTafsilot from '@/components/TaminotchiTafsilot'
+import LokatsiyaTanlash from '@/components/LokatsiyaTanlash'
+import { XaritadaKorish } from '@/components/LokatsiyaModal'
 
 interface Taminotchi {
   id: string
@@ -18,16 +21,26 @@ interface Taminotchi {
   kontaktShaxs: string | null
   telefon: string | null
   manzil: string | null
+  /** Xaritadagi aniq nuqta — `manzil` matnidan mustaqil. */
+  lokatsiyaLat: number | null
+  lokatsiyaLng: number | null
   izoh: string | null
   jamiQarz: number
   _count: { xaridlar: number; tovarlar: number }
 }
 
-const bosh = { nomi: '', kontaktShaxs: '', telefon: '', manzil: '', izoh: '' }
+const bosh = {
+  nomi: '', kontaktShaxs: '', telefon: '', manzil: '', izoh: '',
+  lokatsiyaLat: null as number | null, lokatsiyaLng: null as number | null,
+}
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition text-sm'
 
 export default function TaminotchilarPage() {
   const confirm = useConfirm()
+  const ruxsat = useRuxsat()
+  const qoshishRuxsat = ruxsat.bor('taminotchilar.qoshish')
+  const tahrirRuxsat = ruxsat.bor('taminotchilar.tahrirlash')
+  const ochirishRuxsat = ruxsat.bor('taminotchilar.ochirish')
   const [royxat, setRoyxat] = useState<Taminotchi[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
@@ -74,6 +87,8 @@ export default function TaminotchilarPage() {
         kontaktShaxs: t.kontaktShaxs || '',
         telefon: (t.telefon || '').replace(/\D/g, '').replace(/^998/, ''),
         manzil: t.manzil || '',
+        lokatsiyaLat: t.lokatsiyaLat,
+        lokatsiyaLng: t.lokatsiyaLng,
         izoh: t.izoh || '',
       })
     } else {
@@ -140,12 +155,12 @@ export default function TaminotchilarPage() {
             Do&apos;konga tovar yetkazib beruvchilar
           </p>
         </div>
-        <button
+        {qoshishRuxsat && <button
           onClick={() => modalOchish()}
           className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl font-medium transition text-sm"
         >
           <Plus size={16} /> Ta&apos;minotchi qo&apos;shish
-        </button>
+        </button>}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -180,14 +195,14 @@ export default function TaminotchilarPage() {
                 >
                   Qidiruvni tozalash
                 </button>
-              ) : (
+              ) : qoshishRuxsat ? (
                 <button
                   onClick={() => modalOchish()}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:opacity-90 transition"
                 >
                   <Plus size={15} /> Birinchi ta&apos;minotchini qo&apos;shish
                 </button>
-              )}
+              ) : null}
             </span>
           </p>
           {!qidiruv && (
@@ -243,6 +258,13 @@ export default function TaminotchilarPage() {
                     <span className="truncate">{t.manzil}</span>
                   </p>
                 )}
+                {/* Koordinata bo'lsa — oynada xarita va Google havolalari */}
+                <XaritadaKorish
+                  nomi={t.nomi}
+                  tavsif={[t.kontaktShaxs, t.manzil].filter(Boolean).join(' · ') || null}
+                  lat={t.lokatsiyaLat} lng={t.lokatsiyaLng}
+                  turi="taminotchi" matnBilan
+                />
                 {t.izoh && (
                   <p className="text-gray-500 dark:text-gray-400 text-xs italic truncate">{t.izoh}</p>
                 )}
@@ -270,14 +292,14 @@ export default function TaminotchilarPage() {
               </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 -mx-4 -mb-4 pt-2 border-t border-gray-100 dark:border-neutral-800">
-                <button
+              {(tahrirRuxsat || ochirishRuxsat) && <div className={`grid ${tahrirRuxsat && ochirishRuxsat ? 'grid-cols-2' : 'grid-cols-1'} gap-2 -mx-4 -mb-4 pt-2 border-t border-gray-100 dark:border-neutral-800`}>
+                {tahrirRuxsat && <button
                   onClick={() => modalOchish(t)}
                   className="flex items-center justify-center gap-1.5 py-2.5 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm border-r border-gray-100 dark:border-neutral-800 rounded-bl-2xl"
                 >
                   <Pencil size={14} /> Tahrirlash
-                </button>
-                <button
+                </button>}
+                {ochirishRuxsat && <button
                   onClick={() => ochir(t)}
                   disabled={ochirilmoqda === t.id}
                   className="flex items-center justify-center gap-1.5 py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition text-sm disabled:opacity-50 rounded-br-2xl"
@@ -286,8 +308,8 @@ export default function TaminotchilarPage() {
                     ? <Loader2 size={14} className="animate-spin" />
                     : <Trash2 size={14} />}
                   O&apos;chirish
-                </button>
-              </div>
+                </button>}
+              </div>}
             </div>
           ))}
         </div>
@@ -351,6 +373,22 @@ export default function TaminotchilarPage() {
                   value={form.manzil}
                   onChange={e => setForm(f => ({ ...f, manzil: e.target.value }))}
                   className={inputCls}
+                />
+              </div>
+
+              {/* Xaritadagi joylashuv — manzil matnidan MUSTAQIL.
+                  Ta'minotchi oldiga borib turmaganingiz uchun GPS'dan
+                  tashqari xaritadan bosish va havoladan qo'yish ham bor. */}
+              <div>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                  Xaritadagi joylashuv <span className="text-gray-400 font-normal text-xs">(ixtiyoriy)</span>
+                </label>
+                <LokatsiyaTanlash
+                  lat={form.lokatsiyaLat}
+                  lng={form.lokatsiyaLng}
+                  nomi={form.nomi || "Ta'minotchi"}
+                  turi="taminotchi"
+                  onChange={(a, b) => setForm(f => ({ ...f, lokatsiyaLat: a, lokatsiyaLng: b }))}
                 />
               </div>
 

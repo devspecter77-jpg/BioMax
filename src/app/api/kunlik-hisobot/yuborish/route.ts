@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { hisobotSozlamalari, hisobotOluvchilar, kunlikHisobotYubor } from '@/lib/kunlik-hisobot-server'
 
 // "Hozir yuborish" — admin kutmasdan o'ziga hisobot oladi.
@@ -12,8 +13,8 @@ export async function POST() {
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
 
     const u = session.user as unknown as { id: string; rol?: string }
-    if (u.rol !== 'ADMIN') {
-      return NextResponse.json({ xato: 'Faqat admin yubora oladi' }, { status: 403 })
+    if (!(await amalRuxsatiBormi(session, 'kunlik-hisobot.sozlama'))) {
+      return NextResponse.json({ xato: 'Bu amalga ruxsatingiz yo‘q: «Kunlik hisobotni yuborish»', kod: 'ruxsat_yoq' }, { status: 403 })
     }
 
     const oluvchilar = await hisobotOluvchilar()

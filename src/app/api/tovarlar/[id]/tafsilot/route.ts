@@ -106,7 +106,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!narxYashirin) {
       const [qator] = await prisma.$queryRaw<{ summa: number | null }[]>`
         SELECT SUM(miqdor * narx)::float AS summa
-        FROM ombor_harakati
+        FROM public.ombor_harakati
         WHERE "tovarId" = ${id} AND turi = 'KIRIM'
       `
       kirimSumma = qator?.summa ?? 0

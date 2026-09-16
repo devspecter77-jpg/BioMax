@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatSum, formatNarx, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
 import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
@@ -12,6 +12,7 @@ import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useConfirm } from '@/components/ConfirmProvider'
+import { useRuxsat } from '@/hooks/useRuxsat'
 
 interface QoldiqItem {
   id: string; nomi: string; kategoriya: { id: string; nomi: string }; kategoriyaId: string; shtrixKod: string | null
@@ -22,7 +23,11 @@ interface QoldiqItem {
   yaroqlilikMuddati: string | null; kunQoldi: number | null; muddatiYaqin: boolean
 }
 interface Taminotchi { id: string; nomi: string; manzil?: string | null }
-interface Kategoriya { id: string; nomi: string }
+interface Kategoriya {
+  id: string; nomi: string
+  /** Ustki guruh — Ombor. Eski kategoriyalarda bo'lmasligi mumkin. */
+  ombor?: { id: string; nomi: string; faol: boolean } | null
+}
 interface OmborHarakat {
   id: string; turi: string; miqdor: number; narx: number
   sana: string; izoh: string | null
@@ -35,6 +40,10 @@ const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gr
 
 export default function OmborPage() {
   const confirm = useConfirm()
+  const ruxsat = useRuxsat()
+  const otkazmaRuxsat = ruxsat.bor('ombor.otkazma')
+  const tahrirRuxsat = ruxsat.bor('tovarlar.tahrirlash')
+  const ochirishRuxsat = ruxsat.bor('tovarlar.ochirish')
   const [qoldiqlar, setQoldiqlar] = useState<QoldiqItem[]>([])
   const [taminotchilar, setTaminotchilar] = useState<Taminotchi[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
@@ -54,6 +63,9 @@ export default function OmborPage() {
   const [otkazmaMiqdor, setOtkazmaMiqdor] = useState('')
   // Kategoriyalar
   const [kategoriyalar, setKategoriyalar] = useState<Kategoriya[]>([])
+  // Ombor bo'yicha filtr — kirim/chiqim, prixod va o'chirish amallarini
+  // aynan bitta ombor ichida bajarish uchun.
+  const [aktifOmbor, setAktifOmbor] = useState<string | null>(null)
   // Tahrirlash
   const [tahrirModal, setTahrirModal] = useState(false)
   const [tahrirTovar, setTahrirTovar] = useState<QoldiqItem | null>(null)
@@ -177,11 +189,42 @@ export default function OmborPage() {
   }
 
   const [renderLimit, setRenderLimit] = useState(50)
-  useEffect(() => { setRenderLimit(50) }, [qidiruv, kamQolganFilter, muddatiYaqinFilter])
+  useEffect(() => { setRenderLimit(50) }, [qidiruv, kamQolganFilter, muddatiYaqinFilter, aktifOmbor])
 
-  const kamQolganSoni = qoldiqlar.filter(q => q.kamQolgan).length
-  const muddatiYaqinSoni = qoldiqlar.filter(q => q.muddatiYaqin).length
-  const korsatiladiganQoldiqlar = qoldiqlar.slice(0, renderLimit)
+  // Kategoriya -> Ombor jadvali va omborlar ro'yxati kategoriyalardan
+  // yig'iladi: qo'shimcha so'rov kerak emas.
+  // "Omborlar" bo'limidagi kartadan kelinsa (?ombor=<id>) o'sha ombor
+  // darhol tanlangan bo'ladi. Kategoriyalar yuklangach tekshiriladi:
+  // noto'g'ri yoki eskirgan id bo'lsa e'tiborsiz qoldiriladi.
+  useEffect(() => {
+    if (kategoriyalar.length === 0) return
+    const id = new URLSearchParams(window.location.search).get('ombor')
+    if (!id) return
+    if (kategoriyalar.some(k => k.ombor?.id === id)) setAktifOmbor(id)
+  }, [kategoriyalar])
+
+  const kategoriyaOmbori = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const k of kategoriyalar) if (k.ombor) m.set(k.id, k.ombor.id)
+    return m
+  }, [kategoriyalar])
+
+  const omborlar = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const k of kategoriyalar) if (k.ombor?.faol) m.set(k.ombor.id, k.ombor.nomi)
+    return [...m].map(([id, nomi]) => ({ id, nomi }))
+  }, [kategoriyalar])
+
+  const filtrlangan = useMemo(
+    () => aktifOmbor
+      ? qoldiqlar.filter(q => kategoriyaOmbori.get(q.kategoriyaId) === aktifOmbor)
+      : qoldiqlar,
+    [qoldiqlar, aktifOmbor, kategoriyaOmbori],
+  )
+
+  const kamQolganSoni = filtrlangan.filter(q => q.kamQolgan).length
+  const muddatiYaqinSoni = filtrlangan.filter(q => q.muddatiYaqin).length
+  const korsatiladiganQoldiqlar = filtrlangan.slice(0, renderLimit)
 
   // Build combobox options from loaded data
   const taminotchiOptions = taminotchilar.map(t => ({
@@ -223,6 +266,41 @@ export default function OmborPage() {
         </div>
       </div>
 
+      {/* ── OMBOR CHIPLARI ──
+          Ombor tanlansa ro'yxat shu ombor kategoriyalaridagi tovarlar bilan
+          cheklanadi — kirim, chiqim, o'tkazma va o'chirish aynan shu ombor
+          ichida bajariladi. Ombor yaratish "Omborlar" bo'limida. */}
+      {omborlar.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <span className="shrink-0 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide pr-1">
+            Ombor
+          </span>
+          <button
+            onClick={() => setAktifOmbor(null)}
+            className={`shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition whitespace-nowrap ${
+              aktifOmbor === null
+                ? 'bg-gray-800 dark:bg-neutral-200 text-white dark:text-neutral-900'
+                : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+            }`}
+          >
+            Hammasi
+          </button>
+          {omborlar.map(o => (
+            <button
+              key={o.id}
+              onClick={() => setAktifOmbor(o.id)}
+              className={`shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition whitespace-nowrap ${
+                aktifOmbor === o.id
+                  ? 'bg-gray-800 dark:bg-neutral-200 text-white dark:text-neutral-900'
+                  : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              {o.nomi}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Table view */}
       {view === 'table' && (
         <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
@@ -241,7 +319,7 @@ export default function OmborPage() {
               <tbody>
                 {yuklanmoqda ? (
                   <tr><td colSpan={6} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
-                ) : qoldiqlar.length === 0 ? (
+                ) : filtrlangan.length === 0 ? (
                   <tr><td colSpan={6} className="text-center text-gray-500 dark:text-gray-400 py-12">Ma&apos;lumot topilmadi</td></tr>
                 ) : korsatiladiganQoldiqlar.map((q, idx) => (
                   <tr
@@ -282,17 +360,17 @@ export default function OmborPage() {
                         o'sha bosishni yuqoriga o'tkazmasligi kerak. */}
                     <td className="px-4 py-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
-                        {q.omborQoldiq > 0 && (
+                        {q.omborQoldiq > 0 && otkazmaRuxsat && (
                           <button onClick={() => { setOtkazmaTovar(q); setOtkazmaMiqdor(''); setOtkazmaModal(true) }} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition" title="Do'konga o'tkazma">
                             <ArrowRightLeft size={14} />
                           </button>
                         )}
-                        <button onClick={() => tahrirOchish(q)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition" title="Tahrirlash">
+                        {tahrirRuxsat && <button onClick={() => tahrirOchish(q)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition" title="Tahrirlash">
                           <Pencil size={14} />
-                        </button>
-                        <button onClick={() => ochirish(q)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition" title="O'chirish">
+                        </button>}
+                        {ochirishRuxsat && <button onClick={() => ochirish(q)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition" title="O'chirish">
                           <Trash2 size={14} />
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>
@@ -300,9 +378,9 @@ export default function OmborPage() {
               </tbody>
             </table>
           </div>
-          {qoldiqlar.length > renderLimit && (
+          {filtrlangan.length > renderLimit && (
             <button onClick={() => setRenderLimit(r => r + 50)} className="w-full py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800 transition border-t border-gray-200 dark:border-neutral-800">
-              Yana {Math.min(50, qoldiqlar.length - renderLimit)} ta ko&apos;rsatish ({qoldiqlar.length - renderLimit} ta qoldi)
+              Yana {Math.min(50, filtrlangan.length - renderLimit)} ta ko&apos;rsatish ({filtrlangan.length - renderLimit} ta qoldi)
             </button>
           )}
         </div>
@@ -313,7 +391,7 @@ export default function OmborPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {yuklanmoqda ? (
             <p className="text-gray-500 dark:text-gray-400 col-span-3 text-center py-12">Yuklanmoqda...</p>
-          ) : qoldiqlar.length === 0 ? (
+          ) : filtrlangan.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400 col-span-3 text-center py-12">Ma&apos;lumot topilmadi</p>
           ) : korsatiladiganQoldiqlar.map(q => (
             <div key={q.id} className={`bg-white dark:bg-neutral-900 border rounded-2xl overflow-hidden hover:shadow-lg transition-all ${q.kamQolgan ? 'border-red-200 dark:border-red-900' : 'border-gray-200 dark:border-neutral-800 hover:border-primary/30 dark:hover:border-primary/40'}`}>
@@ -369,7 +447,7 @@ export default function OmborPage() {
                   </div>
                 </div>
 
-                {q.omborQoldiq > 0 && (
+                {q.omborQoldiq > 0 && otkazmaRuxsat && (
                   <button onClick={e => { e.stopPropagation(); setOtkazmaTovar(q); setOtkazmaMiqdor(''); setOtkazmaModal(true) }} className="w-full mt-3 text-xs bg-primary-light dark:bg-primary/10 text-primary px-3 py-2 rounded-lg font-medium hover:bg-primary/20 transition flex items-center justify-center gap-1">
                     <ArrowRightLeft size={12} />
                     Do&apos;konga o&apos;tkazish
@@ -378,14 +456,14 @@ export default function OmborPage() {
               </div>
               </div>
 
-              <div className="border-t border-gray-100 dark:border-neutral-800 grid grid-cols-2">
-                <button onClick={() => tahrirOchish(q)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium border-r border-gray-100 dark:border-neutral-800">
+              {(tahrirRuxsat || ochirishRuxsat) && <div className={`border-t border-gray-100 dark:border-neutral-800 grid ${tahrirRuxsat && ochirishRuxsat ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {tahrirRuxsat && <button onClick={() => tahrirOchish(q)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium border-r border-gray-100 dark:border-neutral-800">
                   <Pencil size={14} /> Tahrirlash
-                </button>
-                <button onClick={() => ochirish(q)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium">
+                </button>}
+                {ochirishRuxsat && <button onClick={() => ochirish(q)} className="flex items-center justify-center gap-1.5 py-3 text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition text-sm font-medium">
                   <Trash2 size={14} /> O&apos;chirish
-                </button>
-              </div>
+                </button>}
+              </div>}
             </div>
           ))}
         </div>

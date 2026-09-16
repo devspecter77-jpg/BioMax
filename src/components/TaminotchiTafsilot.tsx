@@ -8,8 +8,10 @@ import {
 } from 'lucide-react'
 import { formatSum, formatPhone, formatSana, formatSanaVaVaqt, uzSearch } from '@/lib/utils'
 import { birlikQisqa } from '@/lib/kunlik-hisobot'
+import { QARZ_MALUMOTI, qarzMalumoti } from '@/lib/taminotchi-qarz'
 import { sorovMatni, type SorovQatori } from '@/lib/taminotchi-sorov'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useRuxsat } from '@/hooks/useRuxsat'
 
 // Ta'minotchi kartasi: aloqa ma'lumoti, mahsulot so'rovi tuzish va uni
 // Telegram orqali yuborish, hamda yuborilgan so'rovlar tarixi.
@@ -69,6 +71,22 @@ const STATUS_RANG: Record<string, string> = {
 const inputCls =
   'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500'
 
+interface QarzYozuvi {
+  id: string
+  turi: string
+  summa: number
+  tolovUsuli: string | null
+  izoh: string | null
+  sana: string
+  yaratgan: { ism: string } | null
+}
+
+interface QarzMalumot {
+  yozuvlar: QarzYozuvi[]
+  xulosa: { xariddan: number; qolda: number; tolangan: number; jami: number }
+  boshqaraOladi: boolean
+}
+
 export default function TaminotchiTafsilot({
   taminotchiId, onYopish, onTahrir,
 }: {
@@ -79,7 +97,19 @@ export default function TaminotchiTafsilot({
   const [data, setData] = useState<Malumot | null>(null)
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [xato, setXato] = useState<string | null>(null)
-  const [varaq, setVaraq] = useState<'sorov' | 'tarix'>('sorov')
+  const [varaq, setVaraq] = useState<'sorov' | 'qarz' | 'tarix'>('sorov')
+  // Buyurtma so'rovi yuborish — alohida ruxsat; yo'q bo'lsa qarz varag'i ochiladi
+  const sorovRuxsat = useRuxsat().bor('taminotchilar.sorov')
+  useEffect(() => { if (!sorovRuxsat && varaq === 'sorov') setVaraq('qarz') }, [sorovRuxsat, varaq])
+
+  // ── Qarz daftari ──
+  const [qarz, setQarz] = useState<QarzMalumot | null>(null)
+  const [qarzYuklanmoqda, setQarzYuklanmoqda] = useState(false)
+  const [qarzTuri, setQarzTuri] = useState<'QARZ' | 'TOLOV'>('QARZ')
+  const [qarzSumma, setQarzSumma] = useState('')
+  const [qarzIzoh, setQarzIzoh] = useState('')
+  const [qarzUsuli, setQarzUsuli] = useState('NAQD')
+  const [qarzAmalda, setQarzAmalda] = useState(false)
 
   // Tanlangan mahsulotlar: tovarId -> miqdor (matn, chunki input bo'sh bo'lishi mumkin)
   const [tanlangan, setTanlangan] = useState<Record<string, string>>({})
@@ -106,6 +136,67 @@ export default function TaminotchiTafsilot({
   }, [taminotchiId])
 
   useEffect(() => { void yukla() }, [yukla])
+
+  // Qarz daftari faqat o'sha varaq ochilganda yuklanadi — so'rov yuborish
+  // uchun kelgan odamga keraksiz so'rov ketmasin.
+  const qarzniYukla = useCallback(async () => {
+    setQarzYuklanmoqda(true)
+    try {
+      const r = await fetch(`/api/taminotchilar/${taminotchiId}/qarz`)
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setQarz(j)
+    } finally {
+      setQarzYuklanmoqda(false)
+    }
+  }, [taminotchiId])
+
+  useEffect(() => {
+    if (varaq === 'qarz' && !qarz) void qarzniYukla()
+  }, [varaq, qarz, qarzniYukla])
+
+  async function qarzQosh() {
+    const summa = Number(qarzSumma)
+    if (!Number.isFinite(summa) || summa <= 0) { toast.error('Summani kiriting'); return }
+    setQarzAmalda(true)
+    try {
+      const r = await fetch(`/api/taminotchilar/${taminotchiId}/qarz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          turi: qarzTuri,
+          summa,
+          izoh: qarzIzoh.trim() || null,
+          tolovUsuli: qarzTuri === 'TOLOV' ? qarzUsuli : null,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.xato || 'Qo\u2018shilmadi'); return }
+      toast.success(qarzTuri === 'QARZ' ? 'Qarz yozildi' : 'To\u2018lov yozildi')
+      setQarzSumma('')
+      setQarzIzoh('')
+      await qarzniYukla()
+      void yukla()
+    } catch {
+      toast.error('Tarmoq xatosi')
+    } finally {
+      setQarzAmalda(false)
+    }
+  }
+
+  async function qarzOchir(yozuvId: string) {
+    setQarzAmalda(true)
+    try {
+      const r = await fetch(`/api/taminotchilar/${taminotchiId}/qarz?yozuvId=${yozuvId}`, { method: 'DELETE' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.xato || 'O\u2018chirilmadi'); return }
+      toast.success('Yozuv bekor qilindi')
+      await qarzniYukla()
+      void yukla()
+    } finally {
+      setQarzAmalda(false)
+    }
+  }
+
 
   useEffect(() => {
     const f = (e: KeyboardEvent) => { if (e.key === 'Escape') onYopish() }
@@ -279,7 +370,7 @@ export default function TaminotchiTafsilot({
               )}
 
               <div className="flex bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 gap-1 mt-3">
-                {([['sorov', "So'rov yuborish"], ['tarix', `Tarix (${data.sorovlar.length})`]] as const).map(([k, label]) => (
+                {([['sorov', "So'rov"], ['qarz', 'Qarz'], ['tarix', `Tarix (${data.sorovlar.length})`]] as const).filter(([k]) => k !== 'sorov' || sorovRuxsat).map(([k, label]) => (
                   <button
                     key={k}
                     onClick={() => setVaraq(k)}
@@ -468,7 +559,7 @@ export default function TaminotchiTafsilot({
                     </section>
                   )}
                 </>
-              ) : (
+              ) : varaq === 'tarix' ? (
                 /* ── Tarix ── */
                 data.sorovlar.length === 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-12">
@@ -495,7 +586,7 @@ export default function TaminotchiTafsilot({
                           </button>
                           <button
                             onClick={() => void qaytaYubor(s.id)}
-                            disabled={qaytaYuborilmoqda === s.id || telefonYoq}
+                            disabled={qaytaYuborilmoqda === s.id || telefonYoq || !sorovRuxsat}
                             title="Qayta yuborish"
                             className="p-2 text-gray-400 hover:text-primary hover:bg-primary-light dark:hover:bg-primary/10 rounded-lg transition shrink-0 disabled:opacity-40"
                           >
@@ -513,6 +604,168 @@ export default function TaminotchiTafsilot({
                     ))}
                   </div>
                 )
+              ) : null}
+
+              {/* ── QARZ DAFTARI ──
+                  Xarid orqali kelgan qarz avtomatik hisoblanadi, lekin
+                  do'konda qarzning bir qismi tizimdan tashqarida paydo
+                  bo'ladi. Shu varaq o'shani yozib qo'yish uchun. */}
+              {varaq === 'qarz' && (
+                qarzYuklanmoqda && !qarz ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 size={22} className="animate-spin text-primary" />
+                  </div>
+                ) : qarz ? (
+                  <>
+                    {/* Xulosa */}
+                    <section>
+                      <div className={`rounded-2xl p-4 ${
+                        qarz.xulosa.jami > 0
+                          ? 'bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50'
+                          : 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/50'
+                      }`}>
+                        <p className={`text-xs font-medium ${
+                          qarz.xulosa.jami > 0 ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400'
+                        }`}>
+                          {qarz.xulosa.jami > 0 ? 'Umumiy qarzimiz' : qarz.xulosa.jami < 0 ? 'Ortiqcha to‘langan' : 'Qarz yo‘q'}
+                        </p>
+                        <p className={`text-2xl font-bold font-mono tabular-nums mt-1 ${
+                          qarz.xulosa.jami > 0 ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {formatSum(Math.abs(qarz.xulosa.jami))}
+                        </p>
+                        <p className="text-gray-600 dark:text-gray-400 text-[11px] mt-1.5">
+                          Xaridlardan {formatSum(qarz.xulosa.xariddan)}
+                          {qarz.xulosa.qolda > 0 && ` · qo‘lda yozilgan ${formatSum(qarz.xulosa.qolda)}`}
+                          {qarz.xulosa.tolangan > 0 && ` · to‘langan ${formatSum(qarz.xulosa.tolangan)}`}
+                        </p>
+                      </div>
+                    </section>
+
+                    {/* Yangi yozuv */}
+                    {qarz.boshqaraOladi && (
+                      <section>
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                          Yangi yozuv
+                        </p>
+                        <div className="flex bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 gap-1 mb-2">
+                          {(['QARZ', 'TOLOV'] as const).map(k => (
+                            <button
+                              key={k}
+                              onClick={() => setQarzTuri(k)}
+                              className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                                qarzTuri === k
+                                  ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100'
+                                  : 'text-gray-500 dark:text-gray-400'
+                              }`}
+                            >
+                              {QARZ_MALUMOTI[k].label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 text-[11px] mb-2">
+                          {QARZ_MALUMOTI[qarzTuri].izoh}
+                        </p>
+
+                        <div className="space-y-2">
+                          <input
+                            value={qarzSumma}
+                            onChange={e => setQarzSumma(e.target.value)}
+                            inputMode="numeric"
+                            placeholder="Summa"
+                            className="w-full px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          />
+
+                          {/* To'lov kanali — To'lovlar bo'limi shu bo'yicha guruhlaydi */}
+                          {qarzTuri === 'TOLOV' && (
+                            <select
+                              value={qarzUsuli}
+                              onChange={e => setQarzUsuli(e.target.value)}
+                              aria-label="To'lov usuli"
+                              className="w-full px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            >
+                              <option value="NAQD">Naqd</option>
+                              <option value="KARTA">Karta</option>
+                              <option value="CLICK">Click</option>
+                              <option value="BANK">Bank o&apos;tkazmasi</option>
+                            </select>
+                          )}
+
+                          <input
+                            value={qarzIzoh}
+                            onChange={e => setQarzIzoh(e.target.value)}
+                            maxLength={500}
+                            placeholder="Izoh (ixtiyoriy) — masalan: tizimdan oldingi qoldiq"
+                            className="w-full px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          />
+
+                          <button
+                            onClick={() => void qarzQosh()}
+                            disabled={qarzAmalda || !qarzSumma}
+                            className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-40 flex items-center justify-center gap-2"
+                          >
+                            {qarzAmalda ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                            {QARZ_MALUMOTI[qarzTuri].label} yozish
+                          </button>
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Daftar */}
+                    <section>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <History size={12} /> Qarz daftari
+                      </p>
+                      {qarz.yozuvlar.length === 0 ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8 bg-gray-50 dark:bg-neutral-800/60 rounded-xl">
+                          Hali qo&apos;lda yozuv yo&apos;q
+                        </p>
+                      ) : (
+                        <div className="border border-gray-200 dark:border-neutral-800 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800">
+                          {qarz.yozuvlar.map(y => {
+                            const m = qarzMalumoti(y.turi)
+                            return (
+                              <div key={y.id} className="px-3 py-2.5 flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${m.badge}`}>
+                                      {m.label}
+                                    </span>
+                                    {y.tolovUsuli && (
+                                      <span className="text-gray-500 dark:text-gray-400 text-[11px]">{y.tolovUsuli}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-gray-500 dark:text-gray-400 text-[11px] mt-0.5 truncate">
+                                    {formatSanaVaVaqt(y.sana)}
+                                    {y.yaratgan && ` · ${y.yaratgan.ism}`}
+                                    {y.izoh && ` · ${y.izoh}`}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className={`font-mono tabular-nums text-sm font-semibold ${
+                                    m.ishora > 0 ? 'text-red-600' : 'text-green-600'
+                                  }`}>
+                                    {m.ishora > 0 ? '+' : '\u2212'}{formatSum(y.summa)}
+                                  </span>
+                                  {qarz.boshqaraOladi && (
+                                    <button
+                                      onClick={() => void qarzOchir(y.id)}
+                                      disabled={qarzAmalda}
+                                      title="Yozuvni bekor qilish"
+                                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition disabled:opacity-50"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </section>
+                  </>
+                ) : null
               )}
 
               {/* So'nggi xaridlar — kontekst uchun */}

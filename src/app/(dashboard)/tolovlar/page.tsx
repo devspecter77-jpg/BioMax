@@ -17,7 +17,7 @@ interface FilialQator extends KanalYigindi { id: string; nomi: string; chiqim: n
 
 interface Tranzaksiya {
   id: string
-  turi: 'sotuv' | 'nasiya' | 'xarid'
+  turi: 'sotuv' | 'nasiya' | 'xarid' | 'xarajat'
   sana: string
   nomi: string
   kim: string | null
@@ -46,12 +46,13 @@ const DAVRLAR: { kalit: ReportTur; label: string }[] = [
 ]
 
 const TUR_LABEL: Record<Tranzaksiya['turi'], string> = {
-  sotuv: 'Sotuv', nasiya: 'Nasiya to‘lovi', xarid: "Ta'minotchiga",
+  sotuv: 'Sotuv', nasiya: 'Nasiya to‘lovi', xarid: "Ta'minotchiga", xarajat: 'Xarajat',
 }
 const TUR_RANG: Record<Tranzaksiya['turi'], string> = {
   sotuv: 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400',
   nasiya: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400',
   xarid: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400',
+  xarajat: 'bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400',
 }
 
 export default function TolovlarPage() {
@@ -294,9 +295,9 @@ export default function TolovlarPage() {
                     </div>
                     <div className="text-right shrink-0">
                       <p className={`font-semibold text-sm font-mono tabular-nums ${
-                        t.turi === 'xarid' ? 'text-red-600' : 'text-green-600'
+                        t.turi === 'xarid' || t.turi === 'xarajat' ? 'text-red-600' : 'text-green-600'
                       }`}>
-                        {t.turi === 'xarid' ? '-' : '+'}{formatSum(t.jami)}
+                        {t.turi === 'xarid' || t.turi === 'xarajat' ? '-' : '+'}{formatSum(t.jami)}
                       </p>
                       <p className="text-gray-500 dark:text-gray-400 text-[11px] truncate">
                         {t.kanallar.map(k => tolovQisqa(k.usul)).join(' + ')}
