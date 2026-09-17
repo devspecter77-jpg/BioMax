@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
+import { masofaM } from '@/lib/dostavchik'
 
 // Xodim/Ega ilova ochiq turganda joylashuvini sokin ravishda yozib boradi —
 // Xarita bo'limida "hozir qayerda" jonli ko'rinishi uchun.
@@ -17,18 +18,12 @@ import { useSession } from 'next-auth/react'
 const MIN_ORALIQ_MS = 15_000
 /** Shu masofadan kam siljish yozilmaydi (GPS "sakrashi" bazani to'ldirmasin). */
 const MIN_MASOFA_M = 20
-
-/** Ikki nuqta orasidagi masofa (metr) — haversine. */
-function masofaM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const R = 6_371_000
-  const rad = (x: number) => (x * Math.PI) / 180
-  const dLat = rad(b.lat - a.lat)
-  const dLng = rad(b.lng - a.lng)
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(h))
-}
+/**
+ * Joyidan qimirlamasa ham shuncha vaqtda bir "tirikman" yuboriladi. Brauzer
+ * joylashuv o'zgarmasa hodisa bermaydi — mijoz oldida turgan dostavchik
+ * aks holda bir necha daqiqada "eskirgan" bo'lib ko'rinardi.
+ */
+const TIRIK_ORALIQ_MS = 60_000
 
 export default function LokatsiyaKuzatuv() {
   const { status } = useSession()
@@ -80,7 +75,17 @@ export default function LokatsiyaKuzatuv() {
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 10_000 },
     )
 
-    return () => navigator.geolocation.clearWatch(kuzatuvId)
+    // Joyidan siljimaganda ham vaqti-vaqti bilan oxirgi nuqtani qayta yozamiz
+    const tirik = setInterval(() => {
+      const o = oxirgi.current
+      if (!o || document.visibilityState !== 'visible') return
+      if (Date.now() - o.vaqt >= TIRIK_ORALIQ_MS - 1_000) void yubor(o.lat, o.lng)
+    }, TIRIK_ORALIQ_MS)
+
+    return () => {
+      navigator.geolocation.clearWatch(kuzatuvId)
+      clearInterval(tirik)
+    }
   }, [status])
 
   return null

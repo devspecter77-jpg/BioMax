@@ -90,7 +90,7 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/tovarlar', ['POST'], ['tovarlar.qoshish'], 'Tovar qo‘shish'),
   Q('/api/tovarlar/:id', ['PUT', 'PATCH'], ['tovarlar.tahrirlash'], 'Tovarni tahrirlash'),
   Q('/api/tovarlar/:id', ['DELETE'], ['tovarlar.ochirish'], 'Tovarni o‘chirish'),
-  Q('/api/tovarlar/*', OQISH, ['tovarlar', 'sotuv', 'ombor', 'omborlar', 'onlayn-vitrina'], 'Tovarlarni ko‘rish'),
+  Q('/api/tovarlar/*', OQISH, ['tovarlar', 'sotuv', 'ombor', 'omborlar', 'onlayn-vitrina', 'namuna-tovar.berish'], 'Tovarlarni ko‘rish'),
   Q('/api/kategoriyalar/*', YOZISH, ['omborlar.boshqarish', 'tovarlar.qoshish', 'tovarlar.tahrirlash'], 'Kategoriyani o‘zgartirish'),
   Q('/api/kategoriyalar/*', OQISH, ['tovarlar', 'sotuv', 'ombor', 'omborlar'], 'Kategoriyalarni ko‘rish'),
   Q('/api/omborlar/*', YOZISH, ['omborlar.boshqarish'], 'Omborni o‘zgartirish'),
@@ -151,8 +151,16 @@ export const API_QOIDALARI: ApiQoida[] = [
   // ── Onlayn do'kon ──
   Q('/api/onlayn-buyurtmalar/sozlama', YOZISH, 'ADMIN', 'Sayt sozlamalari'),
   Q('/api/onlayn-buyurtmalar/:raqam/nuqta', ['POST'], ['onlayn-buyurtmalar.boshqarish'], 'Yetkazish nuqtasini belgilash'),
-  Q('/api/onlayn-buyurtmalar/:raqam/holat', ['POST'], ['onlayn-buyurtmalar.boshqarish', 'onlayn-buyurtmalar.bekor'], 'Buyurtma holatini o‘zgartirish'), // BEKOR marshrutda aniqlashtiriladi
+  // BEKOR va dostavchik yo'li marshrutda aniqlashtiriladi
+  Q('/api/onlayn-buyurtmalar/:raqam/holat', ['POST'], ['onlayn-buyurtmalar.boshqarish', 'onlayn-buyurtmalar.bekor', 'onlayn-buyurtmalar.yetkazish'], 'Buyurtma holatini o‘zgartirish'),
+  Q('/api/onlayn-buyurtmalar/:raqam/yetkazish', ['POST'], ['onlayn-buyurtmalar.yetkazish'], 'Yetkazishni belgilash'),
+  Q('/api/onlayn-buyurtmalar/:raqam/dostavchik', ['POST'], ['onlayn-buyurtmalar.kuryer'], 'Dostavchik biriktirish'),
+  Q('/api/onlayn-buyurtmalar/dostavchiklar', OQISH, ['onlayn-buyurtmalar.kuryer'], 'Dostavchiklar ro‘yxati'),
   Q('/api/onlayn-buyurtmalar/*', OQISH, ['onlayn-buyurtmalar'], 'Onlayn buyurtmalar'),
+  Q('/api/namuna-tovar/dostavchiklar/:id/namuna', ['POST'], ['namuna-tovar.berish'], 'Namuna berish'),
+  Q('/api/namuna-tovar/namunalar/*', ['POST'], ['namuna-tovar.berish'], 'Namunani qaytib olish yoki o‘chirish'),
+  Q('/api/namuna-tovar/dostavchiklar/*', YOZISH, ['namuna-tovar.dostavchik'], 'Dostavchikni o‘zgartirish'),
+  Q('/api/namuna-tovar/*', OQISH, ['namuna-tovar'], 'Namuna tovar'),
   Q('/api/onlayn-mijozlar/:id/manzil/:manzilId', ['POST'], ['mijozlar.tahrirlash'], 'Mijoz manziliga nuqta qo‘yish'),
   Q('/api/onlayn-mijozlar/*', OQISH, ['mijozlar.onlayn'], 'Onlayn do‘kon mijozlari'),
   Q('/api/onlayn-vitrina/:id/aksiya', '*', 'ADMIN', 'Aksiya belgilash'),

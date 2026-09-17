@@ -48,6 +48,14 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
     kalit: 'onlayn-buyurtmalar', label: 'Onlayn buyurtmalar', children: [
       { kalit: 'onlayn-buyurtmalar.boshqarish', label: 'Holatni o‘zgartirish', izoh: 'Tasdiqlash, yig‘ish, topshirish — ombor va sotuvga yoziladi' },
       { kalit: 'onlayn-buyurtmalar.bekor', label: 'Buyurtmani bekor qilish', xavfli: true },
+      { kalit: 'onlayn-buyurtmalar.kuryer', label: 'Buyurtmaga dostavchik biriktirish', izoh: 'Qaysi dostavchik olib borishini tanlash yoki almashtirish' },
+      { kalit: 'onlayn-buyurtmalar.yetkazish', label: 'O‘ziga biriktirilgan buyurtmani yetkazish', izoh: 'Dostavchik uchun: yo‘lga chiqdim, yetib keldim, topshirdim. Faqat o‘ziga biriktirilganlarga ishlaydi' },
+    ],
+  },
+  {
+    kalit: 'namuna-tovar', label: 'Namuna tovar', izoh: 'Dostavchiklar, ularga berilgan namuna tovarlar, joylashuvi va yetkazishlari', children: [
+      { kalit: 'namuna-tovar.berish', label: 'Namuna berish va qaytib olish', izoh: 'Dostavchikka namuna yozish, «topshirdi» deb belgilash' },
+      { kalit: 'namuna-tovar.dostavchik', label: 'Dostavchik qo‘shish va tahrirlash', izoh: 'Tizimga kiradigan yangi hisob ochiladi', xavfli: true },
     ],
   },
   {
@@ -177,6 +185,9 @@ const ROL_STANDART: Record<string, string[]> = {
   ],
   OMBORCHI: ['bosh', 'tovarlar', 'ombor', 'taminotchilar'],
   SOTUVCHI: ['bosh', 'sotuv'],
+  // Dostavchik — faqat buyurtmalar; ichida ham faqat o'ziga biriktirilganlar
+  // (`onlayn-buyurtmalar` API'si rolga qarab filtrlaydi). Qolganini Ega ochadi.
+  DOSTAVCHIK: ['bosh', 'onlayn-buyurtmalar'],
 }
 
 /**
@@ -185,7 +196,11 @@ const ROL_STANDART: Record<string, string[]> = {
  * `kalit:ROL` — faqat shu rol uchun yopiq.
  */
 const STANDART_YOPIQ = new Set([
-  'bosh.statistika:OMBORCHI', 'bosh.statistika:SOTUVCHI',
+  'bosh.statistika:OMBORCHI', 'bosh.statistika:SOTUVCHI', 'bosh.statistika:DOSTAVCHIK',
+  // Dostavchik buyurtmani tasdiqlamaydi, bekor qilmaydi va boshqalarga taqsimlamaydi —
+  // faqat o'ziga biriktirilganini yetkazadi
+  'onlayn-buyurtmalar.boshqarish:DOSTAVCHIK', 'onlayn-buyurtmalar.bekor:DOSTAVCHIK', 'onlayn-buyurtmalar.kuryer:DOSTAVCHIK',
+  'namuna-tovar.dostavchik',
   'tovarlar.ochirish', 'tovarlar.import', 'mijozlar.ochirish', 'mijozlar.import', 'mijozlar.export',
   'nasiyalar.ochirish', 'nasiyalar.import', 'nasiyalar.xarajat',
   'taminotchilar.ochirish', 'taminotchilar.qarz', 'ballar.qolda', 'ballar.sozlama', 'xodimlar.qoshish', 'xodimlar.oylik', 'xodimlar.mulk', 'xodimlar.sotuvlar',

@@ -142,7 +142,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     if (bor('rol')) {
       const rol = String(data.rol)
-      if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI'].includes(rol)) {
+      if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK'].includes(rol)) {
         return NextResponse.json({ xato: 'Rol noto‘g‘ri' }, { status: 400 })
       }
       yangi.rol = rol

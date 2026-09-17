@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     if (!ism) return NextResponse.json({ xato: 'Ism majburiy' }, { status: 400 })
     if (login.length < 3) return NextResponse.json({ xato: 'Login kamida 3 belgi' }, { status: 400 })
     if (parol.length < 6) return NextResponse.json({ xato: 'Parol kamida 6 belgi' }, { status: 400 })
-    if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI'].includes(rol)) {
+    if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK'].includes(rol)) {
       return NextResponse.json({ xato: 'Rol noto‘g‘ri' }, { status: 400 })
     }
     // Ruxsat berilgan xodim ham administrator hisobini yarata olmaydi —
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
 
     const xodim = await prisma.foydalanuvchi.create({
       data: {
-        ism, login, parolHash, rol: rol as 'ADMIN' | 'KASSIR' | 'OMBORCHI' | 'SOTUVCHI',
+        ism, login, parolHash, rol: rol as 'ADMIN' | 'KASSIR' | 'OMBORCHI' | 'SOTUVCHI' | 'DOSTAVCHIK',
         telefon: String(data.telefon ?? '').replace(/\D/g, '') || null,
         filialId,
         ulashilganEgaId,

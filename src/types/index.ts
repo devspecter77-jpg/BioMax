@@ -1,4 +1,4 @@
-export type Rol = 'ADMIN' | 'KASSIR' | 'OMBORCHI' | 'SOTUVCHI'
+export type Rol = 'ADMIN' | 'KASSIR' | 'OMBORCHI' | 'SOTUVCHI' | 'DOSTAVCHIK'
 export type Birlik = 'DONA' | 'KG' | 'LITR' | 'METR' | 'PACHKA' | 'QUTI'
 export type TovarHolati = 'FAOL' | 'ARXIVLANGAN'
 export type HarakatTuri = 'KIRIM' | 'CHIQIM' | 'QAYTARISH' | 'YOQOTISH' | 'OTKAZMA' | 'OTKAZMA_CHIQIM' | 'OTKAZMA_KIRIM'

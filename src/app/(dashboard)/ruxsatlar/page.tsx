@@ -41,6 +41,7 @@ const ROL: Record<string, { nomi: string; rang: string }> = {
   KASSIR: { nomi: 'Kassir', rang: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' },
   OMBORCHI: { nomi: 'Omborchi', rang: 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400' },
   SOTUVCHI: { nomi: 'Sotuvchi', rang: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' },
+  DOSTAVCHIK: { nomi: 'Dostavchik', rang: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400' },
 }
 const rolNomi = (r: string) => ROL[r]?.nomi ?? r
 
@@ -332,7 +333,7 @@ export default function RuxsatlarPage() {
               />
             </label>
             <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5">
-              {['HAMMASI', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'ADMIN'].filter(r => r === 'HAMMASI' || rolSonlari[r]).map(r => (
+              {['HAMMASI', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK', 'ADMIN'].filter(r => r === 'HAMMASI' || rolSonlari[r]).map(r => (
                 <button
                   key={r} type="button" onClick={() => setRolFiltr(r)}
                   className={`shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${rolFiltr === r ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-gray-300 dark:hover:bg-neutral-700'}`}

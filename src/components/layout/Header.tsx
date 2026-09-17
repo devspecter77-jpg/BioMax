@@ -22,7 +22,7 @@ const sahifaNomlar: Record<string, string> = {
 
 // Sessiya yuklanguncha rol yozilmaydi — ilgari hamma (administrator ham) bir lahza
 // "Kassir" bo'lib ko'rinardi, SOTUVCHI esa doim "Kassir" deb chiqardi
-const ROL_NOMI: Record<string, string> = { ADMIN: 'Administrator', KASSIR: 'Kassir', OMBORCHI: 'Omborchi', SOTUVCHI: 'Sotuvchi' }
+const ROL_NOMI: Record<string, string> = { ADMIN: 'Administrator', KASSIR: 'Kassir', OMBORCHI: 'Omborchi', SOTUVCHI: 'Sotuvchi', DOSTAVCHIK: 'Dostavchik' }
 
 export default function Header() {
   const { data: session } = useSession()
