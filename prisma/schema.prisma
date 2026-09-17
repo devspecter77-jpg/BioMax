@@ -109,6 +109,12 @@ model Foydalanuvchi {
   mulklari              XodimMulki[]       @relation("XodimMulklari")
   yaratganMulklari      XodimMulki[]       @relation("XodimMulkYaratgan")
   yakunlaganMulklari    XodimMulki[]       @relation("XodimMulkYakunlagan")
+  dostavchikProfili     DostavchikProfil?  @relation("DostavchikProfili")
+  yetkazishlari         OnlaynYetkazish[]  @relation("DostavchikYetkazishlari")
+  tayinlaganYetkazishlar OnlaynYetkazish[] @relation("YetkazishTayinlagan")
+  olganNamunalari       NamunaBerish[]     @relation("DostavchikNamunalari")
+  berganNamunalari      NamunaBerish[]     @relation("NamunaBergan")
+  qabulQilganNamunalar  NamunaTarkibi[]    @relation("NamunaQabulQilgan")
 
   @@index([filialId])
   @@index([ulashilganEgaId])
@@ -120,6 +126,9 @@ enum Rol {
   KASSIR
   OMBORCHI
   SOTUVCHI
+  // Onlayn buyurtmalarni yetkazadi va mijozlarga namuna tovar ko'rsatadi.
+  // Standart holatda faqat "Onlayn buyurtmalar" ochiq (ruxsat-katalogi.ts).
+  DOSTAVCHIK
 }
 
 // ========================
@@ -253,6 +262,7 @@ model Tovar {
   sorovTarkibi     TaminotchiSorovTarkibi[]
   onlaynRezervlar   OnlaynRezerv[]
   kartochka        TovarKartochka?
+  namunalar        NamunaTarkibi[]
 
   @@unique([shtrixKod, filialId])
   @@index([holati])
@@ -1438,4 +1448,130 @@ model Ombor {
   @@index([filialId])
   @@index([egaId])
   @@map("omborlar")
+}
+
+// ========================
+// DOSTAVCHIKLAR VA NAMUNA TOVARLAR
+// ========================
+
+enum TransportTuri {
+  PIYODA
+  VELOSIPED
+  SKUTER
+  MOTOTSIKL
+  AVTOMOBIL
+  YUK_AVTOMOBILI
+  BOSHQA
+}
+
+// Dostavchikning tizimga kirish hisobi — oddiy `Foydalanuvchi` (rol DOSTAVCHIK).
+// Bu yerda faqat unga xos narsalar: nima haydaydi va qo'shimcha raqamlari.
+// Profil ixtiyoriy: Xodimlar bo'limida DOSTAVCHIK roli bilan yaratilgan
+// xodimda u bo'lmasligi mumkin — "Namuna tovar" bo'limi baribir ko'rsatadi.
+model DostavchikProfil {
+  id                  String        @id @default(cuid())
+  foydalanuvchiId     String        @unique
+  transportTuri       TransportTuri @default(AVTOMOBIL)
+  // Rusumi va rangi: "Chevrolet Damas, oq"
+  transportNomi       String?
+  // Davlat raqami: "01 A 123 BC"
+  davlatRaqami        String?
+  qoshimchaTelefonlar String[]      @default([])
+  izoh                String?
+  yaratilgan          DateTime      @default(now())
+  yangilangan         DateTime      @updatedAt
+
+  foydalanuvchi Foydalanuvchi @relation("DostavchikProfili", fields: [foydalanuvchiId], references: [id], onDelete: Cascade)
+
+  @@map("dostavchik_profillari")
+}
+
+enum YetkazishHolati {
+  TAYINLANGAN
+  YOLDA
+  YETIB_KELDI
+  TOPSHIRILDI
+  BEKOR
+}
+
+// Onlayn buyurtma kimga biriktirilgan va yetkazish qaysi bosqichda.
+//
+// Buyurtmaning o'zi marketplace bazasida — bu yerda faqat ERP'ga tegishli
+// qism: qaysi dostavchik olib boradi va qachon yo'lga chiqdi/yetib keldi/
+// topshirdi. Mijoz nomi va manzili NUSXA qilib saqlanadi: dostavchik paneli
+// har ochilganda marketplace'dan butun ro'yxatni so'ramasin.
+model OnlaynYetkazish {
+  id             String          @id @default(cuid())
+  buyurtmaRaqami String          @unique
+  dostavchikId   String
+  holati         YetkazishHolati @default(TAYINLANGAN)
+  aloqaIsm       String?
+  aloqaTel       String?
+  manzilMatni    String?
+  lat            Float?
+  lng            Float?
+  jamiSumma      Decimal?        @db.Decimal(12, 2)
+  tayinlaganId   String
+  tayinlangan    DateTime        @default(now())
+  yolgaChiqdi    DateTime?
+  yetibKeldi     DateTime?
+  topshirildi    DateTime?
+  yangilangan    DateTime        @updatedAt
+
+  dostavchik Foydalanuvchi @relation("DostavchikYetkazishlari", fields: [dostavchikId], references: [id])
+  tayinlagan Foydalanuvchi @relation("YetkazishTayinlagan", fields: [tayinlaganId], references: [id])
+
+  @@index([dostavchikId, holati])
+  @@index([yangilangan])
+  @@map("onlayn_yetkazishlar")
+}
+
+enum NamunaHolati {
+  BERILGAN
+  TOPSHIRILGAN
+}
+
+// Dostavchikka mijozlarga ko'rsatish uchun bir martada berilgan namunalar
+// (masalan yangi kelgan partiyadan har biridan bittadan).
+//
+// Ombor qoldig'iga tegmaydi: namuna do'kondan vaqtincha chiqib, qaytib
+// keladi. Qayerdaligi shu jadvalda — "hozir dostavchiklarda nima bor".
+model NamunaBerish {
+  id           String   @id @default(cuid())
+  dostavchikId String
+  izoh         String?
+  berganId     String
+  yaratilgan   DateTime @default(now())
+
+  dostavchik Foydalanuvchi   @relation("DostavchikNamunalari", fields: [dostavchikId], references: [id])
+  bergan     Foydalanuvchi   @relation("NamunaBergan", fields: [berganId], references: [id])
+  tarkiblar  NamunaTarkibi[]
+
+  @@index([dostavchikId, yaratilgan])
+  @@map("namuna_berishlar")
+}
+
+// Bitta namuna. Tovar katalogdan tanlansa `tovarId` bor; katalogda yo'q
+// narsa qo'lda yozilsa faqat `nomi`. Nomi har doim nusxa: tovar keyin
+// o'zgartirilsa yoki o'chirilsa ham tarix buzilmaydi.
+model NamunaTarkibi {
+  id               String       @id @default(cuid())
+  berishId         String
+  tovarId          String?
+  nomi             String
+  birlik           String?
+  miqdor           Decimal      @default(1) @db.Decimal(12, 3)
+  holati           NamunaHolati @default(BERILGAN)
+  topshirilganVaqt DateTime?
+  qabulQilganId    String?
+  yangilangan      DateTime     @updatedAt
+
+  berish      NamunaBerish   @relation(fields: [berishId], references: [id], onDelete: Cascade)
+  tovar       Tovar?         @relation(fields: [tovarId], references: [id], onDelete: SetNull)
+  qabulQilgan Foydalanuvchi? @relation("NamunaQabulQilgan", fields: [qabulQilganId], references: [id], onDelete: SetNull)
+
+  @@index([berishId])
+  @@index([holati])
+  @@index([yangilangan])
+  @@map("namuna_tarkiblari")
 }
