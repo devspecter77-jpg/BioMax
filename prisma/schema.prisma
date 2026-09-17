@@ -1477,6 +1477,12 @@ model DostavchikProfil {
   // Davlat raqami: "01 A 123 BC"
   davlatRaqami        String?
   qoshimchaTelefonlar String[]      @default([])
+  /// Yashash yoki ish manzili — matn ko'rinishida (mahalla, ko'cha, uy)
+  manzil              String?
+  /// O'sha manzilning xaritadagi nuqtasi: GPS, xaritadan bosish yoki
+  /// Google/Yandex havolasidan olinadi
+  manzilLat           Float?
+  manzilLng           Float?
   izoh                String?
   yaratilgan          DateTime      @default(now())
   yangilangan         DateTime      @updatedAt

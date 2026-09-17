@@ -4,6 +4,7 @@
 // qoidadan foydalanadi (formani tekshirish, yorliqlar, masofa).
 
 import { telefonlarniTozala } from '@/lib/mijoz-telefon'
+import { koordinataTogrimi } from '@/lib/xarita-havola'
 
 // ─── Turlar ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,11 @@ export interface DostavchikQisqa {
   transportTuri: TransportTuri | null
   transportNomi: string | null
   davlatRaqami: string | null
+  /** Yashash yoki ish manzili (matn) va uning xaritadagi nuqtasi */
+  manzil: string | null
+  manzilLat: number | null
+  manzilLng: number | null
+  /** Telefonidan kelayotgan jonli joylashuv (ilova ochiq bo'lganda) */
   lokatsiya: Lokatsiya | null
   /** Hozir shug'ullanayotgani: manzilda > yo'lda > navbatdagi birinchisi */
   joriy: YetkazishQator | null
@@ -146,6 +152,9 @@ export interface DostavchikMalumoti {
   transportTuri: TransportTuri
   transportNomi: string | null
   davlatRaqami: string | null
+  manzil: string | null
+  manzilLat: number | null
+  manzilLng: number | null
   izoh: string | null
 }
 
@@ -170,6 +179,14 @@ export function dostavchikniTekshir(x: Record<string, unknown>): { xato: string 
   if (!turi) return { xato: 'Transport turini tanlang' }
 
   const davlatRaqami = bosh(x.davlatRaqami, 20)?.toUpperCase() ?? null
+
+  // Nuqta ixtiyoriy, lekin bo'lsa — to'g'ri koordinata bo'lsin (yarim
+  // to'ldirilgani saqlanmaydi: xaritada noto'g'ri joyga nuqta qo'yilmasin)
+  const lat = x.manzilLat === null || x.manzilLat === undefined || x.manzilLat === '' ? null : Number(x.manzilLat)
+  const lng = x.manzilLng === null || x.manzilLng === undefined || x.manzilLng === '' ? null : Number(x.manzilLng)
+  const nuqtaBor = lat !== null && lng !== null
+  if (nuqtaBor && !koordinataTogrimi(lat, lng)) return { xato: 'Manzil nuqtasi noto‘g‘ri — xaritadan qayta belgilang' }
+
   return {
     ism,
     telefon: tel.telefon,
@@ -178,6 +195,9 @@ export function dostavchikniTekshir(x: Record<string, unknown>): { xato: string 
     // Piyoda yurgan dostavchikka mashina nomi yozilmaydi
     transportNomi: turi === 'PIYODA' ? null : bosh(x.transportNomi, 80),
     davlatRaqami: turi === 'PIYODA' || turi === 'VELOSIPED' ? null : davlatRaqami,
+    manzil: bosh(x.manzil, 200),
+    manzilLat: nuqtaBor ? lat : null,
+    manzilLng: nuqtaBor ? lng : null,
     izoh: bosh(x.izoh, 300),
   }
 }

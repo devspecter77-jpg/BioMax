@@ -67,7 +67,10 @@ const FOYDALANUVCHI_SELECT = {
   id: true, ism: true, login: true, faol: true, telefon: true, yaratilgan: true,
   lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
   dostavchikProfili: {
-    select: { transportTuri: true, transportNomi: true, davlatRaqami: true, qoshimchaTelefonlar: true, izoh: true },
+    select: {
+      transportTuri: true, transportNomi: true, davlatRaqami: true, qoshimchaTelefonlar: true,
+      manzil: true, manzilLat: true, manzilLng: true, izoh: true,
+    },
   },
 } as const
 
@@ -76,7 +79,8 @@ type FoydalanuvchiXom = {
   lokatsiyaLat: number | null; lokatsiyaLng: number | null; lokatsiyaYangilangan: Date | null
   dostavchikProfili: {
     transportTuri: DostavchikQisqa['transportTuri']; transportNomi: string | null; davlatRaqami: string | null
-    qoshimchaTelefonlar: string[]; izoh: string | null
+    qoshimchaTelefonlar: string[]; manzil: string | null; manzilLat: number | null; manzilLng: number | null
+    izoh: string | null
   } | null
 }
 
@@ -160,6 +164,9 @@ function asosiy(f: FoydalanuvchiXom, lok: Lokatsiya | null) {
     transportTuri: p?.transportTuri ?? null,
     transportNomi: p?.transportNomi ?? null,
     davlatRaqami: p?.davlatRaqami ?? null,
+    manzil: p?.manzil ?? null,
+    manzilLat: p?.manzilLat ?? null,
+    manzilLng: p?.manzilLng ?? null,
     lokatsiya: lok,
   }
 }

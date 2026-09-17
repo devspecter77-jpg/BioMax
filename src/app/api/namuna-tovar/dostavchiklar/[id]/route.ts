@@ -57,6 +57,9 @@ export async function PUT(req: NextRequest, { params }: Parametr) {
       transportNomi: m.transportNomi,
       davlatRaqami: m.davlatRaqami,
       qoshimchaTelefonlar: m.qoshimchaTelefonlar,
+      manzil: m.manzil,
+      manzilLat: m.manzilLat,
+      manzilLng: m.manzilLng,
       izoh: m.izoh,
     }
     await prisma.foydalanuvchi.update({

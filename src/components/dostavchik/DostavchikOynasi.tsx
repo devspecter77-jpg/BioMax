@@ -106,6 +106,12 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
         yangilik: yangilikAniqla(t.lokatsiya.yangilangan), vaqtMatni: vaqtMatni(t.lokatsiya.yangilangan),
       })
     }
+    if (t.manzilLat != null && t.manzilLng != null) {
+      n.push({
+        id: `manzil-${t.id}`, lat: t.manzilLat, lng: t.manzilLng, turi: 'filial',
+        nomi: `${t.ism} — manzili`, yorliq: 'Manzil', tavsif: t.manzil,
+      })
+    }
     if (t.joriy?.lat != null && t.joriy.lng != null) {
       n.push({
         id: `manzil-${t.joriy.raqam}`, lat: t.joriy.lat, lng: t.joriy.lng, turi: 'mijoz',
@@ -231,6 +237,23 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
                 )}
                 {t.lokatsiya && <JoylashuvQatori lok={t.lokatsiya} />}
               </div>
+
+              {(t.manzil || t.manzilLat != null) && (
+                <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 p-3.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Manzili</p>
+                  <p className="flex items-start gap-2 text-sm text-gray-900 dark:text-gray-100">
+                    <MapPin size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                    <span>{t.manzil ?? 'Matn yozilmagan — faqat xaritadagi nuqta'}</span>
+                  </p>
+                  {t.manzilLat != null && t.manzilLng != null && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <XaritaHavola href={googleXarita(t.manzilLat, t.manzilLng)}>Google</XaritaHavola>
+                      <XaritaHavola href={yandexXarita(t.manzilLat, t.manzilLng)}>Yandex</XaritaHavola>
+                      <XaritaHavola href={googleYonalish(t.manzilLat, t.manzilLng)}><Navigation size={13} /> Yo‘nalish</XaritaHavola>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Joriy yetkazish */}
               {t.joriy ? <JoriyKarta y={t.joriy} /> : (
