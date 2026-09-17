@@ -8,6 +8,7 @@ import { erpIzi, onlaynSotuvYarat, rezervniBoshat, rezervniUzaytir, rezervQoy } 
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { katalogBoyicha } from '@/lib/ruxsat-katalogi'
 import { onlaynHolatUchunKerak, ruxsatYoqXabari } from '@/lib/ruxsat-amallar'
+import { mengaBiriktirilganmi, yetkazishniMoslash } from '@/lib/dostavchik-server'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -45,12 +46,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ raq
   const sabab = typeof tana.sabab === 'string' ? tana.sabab.trim().slice(0, 300) : ''
   if (holat === 'BEKOR' && sabab.length < 3) return xato('Bekor qilish sababini yozing')
 
+  const foydalanuvchiId = (r.session.user as { id: string }).id
+
   const holatKalit = onlaynHolatUchunKerak(holat)
   if (!(await amalRuxsatiBormi(r.session, holatKalit))) {
-    return NextResponse.json(ruxsatYoqXabari(holatKalit, katalogBoyicha.get(holatKalit)?.label ?? holatKalit), { status: 403 })
+    // Dostavchik yo'li: holatni boshqarish ruxsati bo'lmasa ham, o'ziga
+    // biriktirilgan buyurtmani "yo'lga chiqdim" va "topshirdim" qila oladi
+    const dostavchikYoli = (holat === 'YOLDA' || holat === 'BAJARILGAN')
+      && (await amalRuxsatiBormi(r.session, 'onlayn-buyurtmalar.yetkazish'))
+      && !!(await mengaBiriktirilganmi(raqam, foydalanuvchiId))
+    if (!dostavchikYoli) {
+      return NextResponse.json(ruxsatYoqXabari(holatKalit, katalogBoyicha.get(holatKalit)?.label ?? holatKalit), { status: 403 })
+    }
   }
-
-  const foydalanuvchiId = (r.session.user as { id: string }).id
   const kim = (r.session.user as { name?: string | null })?.name || 'xodim'
 
   // Joriy holat va tarkib — ERP amallari saytdagi haqiqiy buyurtmaga asoslansin
@@ -87,6 +95,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ raq
 
   if (holat === 'BEKOR') await rezervniBoshat(raqam)
   if (holat === 'YIGILMOQDA' || holat === 'YOLDA') await rezervniUzaytir(raqam)
+  // Dostavchik biriktirilgan bo'lsa uning yetkazish bosqichi ham siljiydi (kim bosganidan qat'i nazar)
+  await yetkazishniMoslash(raqam, holat)
 
   const yangi = n.qiymat
   // Mahalliy rivojlanishda jonli Telegram sessiyasiga ulanilmaydi: bir sessiya

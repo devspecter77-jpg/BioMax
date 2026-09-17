@@ -4,7 +4,19 @@
 // har javobda `keyingiHolatlar` bo'lib keladi. Panel faqat ko'rsatadi —
 // qoidani ikki joyda yozib, bir kun ikkalasi farq qilib qolmasin.
 
+import type { YetkazishHolati } from '@/lib/dostavchik'
+
 export type OnlaynHolat = 'YANGI' | 'TASDIQLANGAN' | 'YIGILMOQDA' | 'YOLDA' | 'BAJARILGAN' | 'BEKOR' | 'QAYTARILGAN'
+
+/** Buyurtmani olib borayotgan dostavchik (ERP tomonidagi yozuv). */
+export interface BuyurtmaDostavchigi {
+  id: string
+  ism: string
+  telefon: string | null
+  holati: YetkazishHolati
+  yolgaChiqdi: string | null
+  yetibKeldi: string | null
+}
 
 export interface OnlaynBuyurtma {
   id: string
@@ -37,6 +49,8 @@ export interface OnlaynBuyurtma {
     sotuv: { id: string; chekRaqami: string; sana: string; holati: string } | null
     rezerv: 'YOQ' | 'FAOL' | 'SOTILDI' | 'BOSHATILDI' | 'MUDDATI_OTGAN'
   }
+  /** Kim olib boryapti — faqat ERP panel marshrutlari qo'shadi */
+  dostavchik?: BuyurtmaDostavchigi | null
 }
 
 export interface OnlaynRoyxat {
@@ -45,6 +59,8 @@ export interface OnlaynRoyxat {
   sahifa: number
   sahifaHajmi: number
   sonlar: Partial<Record<OnlaynHolat, number>>
+  /** Dostavchik o'z buyurtmalarinigina ko'ryapti */
+  dostavchikRejimi?: boolean
 }
 
 export const FAOL_HOLATLAR: OnlaynHolat[] = ['YANGI', 'TASDIQLANGAN', 'YIGILMOQDA', 'YOLDA']

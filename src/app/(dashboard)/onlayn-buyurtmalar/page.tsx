@@ -1,17 +1,20 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import {
   AlertTriangle, Banknote, Bike, Info, Receipt, Lock, CreditCard, Globe, Loader2, MessageSquare,
-  Phone, RefreshCw, Search, Settings, Store, User, X, Clock, Package,
+  Phone, RefreshCw, Search, Settings, Store, User, X, Clock, Package, Truck, MapPinCheck, Navigation, CheckCircle2,
 } from 'lucide-react'
 import { formatSanaVaVaqt } from '@/lib/utils'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useRuxsat } from '@/hooks/useRuxsat'
+import { useJonli, type JonliJavob } from '@/hooks/useJonli'
+import { transportNomi, type TransportTuri } from '@/lib/dostavchik'
+import { YetkazishBelgisi } from '@/components/dostavchik/DostavchikOynasi'
 import { ManzilTugma } from '@/components/ManzilXarita'
-import { manzilKorinishi, manzilQidiruvMatni } from '@/lib/xarita-havola'
+import { googleYonalish, manzilKorinishi, manzilQidiruvMatni, yandexNavigator } from '@/lib/xarita-havola'
 import {
   FAOL_HOLATLAR, HOLAT_RANGI, amalNomi, holatNomi, tolovNomi,
   type OnlaynBuyurtma, type OnlaynHolat, type OnlaynRoyxat,
@@ -19,8 +22,12 @@ import {
 
 // Onlayn do'kon buyurtmalari — qabul qilish va yetkazishgacha kuzatish.
 //
-// Ro'yxat 30 soniyada o'zi yangilanadi: yangi buyurtma kelsa xodim sahifani
-// qayta ochmasdan ko'radi va ovozsiz bildirishnoma chiqadi.
+// Jonli: qisqa belgi 3 soniyada so'raladi. Saytda yangi buyurtma tushsa yoki
+// biror buyurtma holati (yoki dostavchigi) o'zgarsa, ro'yxat va ochiq oyna
+// sahifani yangilamasdan yangilanadi; yangi buyurtmada ovozli signal chiqadi.
+//
+// Dostavchik (rol DOSTAVCHIK) shu sahifada faqat o'ziga biriktirilganlarini
+// ko'radi va "Yo'lga chiqdim / Yetib keldim / Topshirdim" tugmalarini bosadi.
 
 type Tab = 'FAOL' | OnlaynHolat
 const TABLAR: { kalit: Tab; nomi: string }[] = [
@@ -32,7 +39,38 @@ const TABLAR: { kalit: Tab; nomi: string }[] = [
   { kalit: 'BAJARILGAN', nomi: 'Bajarilgan' },
   { kalit: 'BEKOR', nomi: 'Bekor' },
 ]
-const YANGILASH_MS = 30_000
+const JONLI_MS = 3_000
+
+interface OnlaynBelgi extends JonliJavob {
+  yangiSoni: number | null
+  oxirgi: { raqam: string; yaratilgan: string } | null
+  faolYetkazish: number
+}
+
+/** Qisqa ikki tonli signal — fayl yuklamasdan (brauzer ruxsat bermasa jim o'tadi). */
+function signalBer() {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    ;[880, 1175].forEach((chastota, i) => {
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+      const boshi = ctx.currentTime + i * 0.18
+      o.type = 'sine'
+      o.frequency.value = chastota
+      g.gain.setValueAtTime(0.0001, boshi)
+      g.gain.exponentialRampToValueAtTime(0.18, boshi + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.0001, boshi + 0.3)
+      o.connect(g).connect(ctx.destination)
+      o.start(boshi)
+      o.stop(boshi + 0.32)
+    })
+    setTimeout(() => void ctx.close(), 900)
+  } catch {
+    // Ovoz ixtiyoriy
+  }
+}
 
 const som = (n: number) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`
 const telMatni = (t: string) => {
@@ -59,7 +97,7 @@ export default function OnlaynBuyurtmalarPage() {
   const [xato, setXato] = useState<string | null>(null)
   const [tanlangan, setTanlangan] = useState<string | null>(null)
   const [sozlamaOchiq, setSozlamaOchiq] = useState(false)
-  const oldingiYangi = useRef<number | null>(null)
+  const [yangilanish, setYangilanish] = useState(0)
 
   // `?raqam=MP-...` — boshqa sahifadan (masalan Mijozlar › Onlayn) to'g'ridan-to'g'ri buyurtmani ochish
   useEffect(() => {
@@ -80,11 +118,6 @@ export default function OnlaynBuyurtmalarPage() {
       }
       setXato(null)
       setRoyxat(d as OnlaynRoyxat)
-      const yangi = (d as OnlaynRoyxat).sonlar.YANGI ?? 0
-      if (oldingiYangi.current !== null && yangi > oldingiYangi.current) {
-        toast.info(`Yangi onlayn buyurtma: ${yangi - oldingiYangi.current} ta`)
-      }
-      oldingiYangi.current = yangi
     } catch {
       setXato('Internet aloqasini tekshiring')
     } finally {
@@ -97,24 +130,44 @@ export default function OnlaynBuyurtmalarPage() {
     return () => clearTimeout(t)
   }, [yukla, qidiruv])
 
-  useEffect(() => {
-    const t = setInterval(() => { if (document.visibilityState === 'visible') void yukla(true) }, YANGILASH_MS)
-    return () => clearInterval(t)
-  }, [yukla])
+  // Jonli: belgi o'zgarsa ro'yxat va ochiq oyna jim yangilanadi
+  useJonli<OnlaynBelgi>('/api/onlayn-buyurtmalar/belgi', (yangi, oldingi) => {
+    void yukla(true)
+    setYangilanish(x => x + 1)
+    if (yangi.oxirgi && yangi.oxirgi.raqam !== oldingi.oxirgi?.raqam) {
+      signalBer()
+      const raqam = yangi.oxirgi.raqam
+      toast.info(`Yangi onlayn buyurtma: ${raqam}`, {
+        action: { label: 'Ochish', onClick: () => setTanlangan(raqam) },
+        duration: 10_000,
+      })
+    } else if (yangi.yangiSoni === null && yangi.faolYetkazish > oldingi.faolYetkazish) {
+      // Dostavchik: unga yangi buyurtma biriktirildi
+      signalBer()
+      toast.info('Sizga yangi buyurtma biriktirildi')
+    }
+  }, JONLI_MS)
 
   const sonlar = royxat?.sonlar ?? {}
   const faolSoni = FAOL_HOLATLAR.reduce((s, h) => s + (sonlar[h] ?? 0), 0)
+  const dostavchikRejimi = royxat?.dostavchikRejimi ?? (session?.user as { rol?: string } | undefined)?.rol === 'DOSTAVCHIK'
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <Globe size={22} className="text-primary" />
-            Onlayn buyurtmalar
+            {dostavchikRejimi ? <Truck size={22} className="text-primary" /> : <Globe size={22} className="text-primary" />}
+            {dostavchikRejimi ? 'Mening buyurtmalarim' : 'Onlayn buyurtmalar'}
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">
-            Saytdan kelgan buyurtmalar — tasdiqlang, yig‘ing va yetkazing. Mijoz har bosqichda Telegram orqali xabar oladi.
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5 flex items-center gap-1.5">
+            <span className="relative inline-flex h-2 w-2 shrink-0" aria-hidden>
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 animate-ping motion-reduce:animate-none" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            {dostavchikRejimi
+              ? 'Sizga biriktirilgan buyurtmalar. Yo‘lga chiqqanda, manzilga yetganda va topshirganda tugmani bosing.'
+              : 'Saytdan kelgan buyurtmalar jonli tushadi — tasdiqlang, yig‘ing va yetkazing. Mijoz har bosqichda xabar oladi.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -136,13 +189,15 @@ export default function OnlaynBuyurtmalarPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/10 px-3 py-2.5 text-sm text-blue-800 dark:text-blue-300 flex gap-2">
-        <Info size={17} className="shrink-0 mt-0.5" />
-        <span>
-          <b>Tasdiqlash</b> mahsulotni omborda band qiladi — saytda boshqa xaridor uni ololmaydi.{' '}
-          <b>Topshirildi</b> bosilganda ERP’da avtomatik sotuv yoziladi: chek, ombor chiqimi, mijoz kartasi va ballar.
-        </span>
-      </div>
+      {!dostavchikRejimi && (
+        <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/10 px-3 py-2.5 text-sm text-blue-800 dark:text-blue-300 flex gap-2">
+          <Info size={17} className="shrink-0 mt-0.5" />
+          <span>
+            <b>Tasdiqlash</b> mahsulotni omborda band qiladi — saytda boshqa xaridor uni ololmaydi.{' '}
+            <b>Topshirildi</b> bosilganda ERP’da avtomatik sotuv yoziladi: chek, ombor chiqimi, mijoz kartasi va ballar.
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row lg:items-center gap-3">
         <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
@@ -190,7 +245,7 @@ export default function OnlaynBuyurtmalarPage() {
       ) : !royxat || royxat.buyurtmalar.length === 0 ? (
         <div className="text-center py-16 text-gray-500 dark:text-gray-400">
           <Package size={32} className="mx-auto text-gray-300 dark:text-neutral-700" />
-          <p className="mt-2 text-sm">{qidiruv ? 'Hech narsa topilmadi' : 'Bu bo‘limda buyurtma yo‘q'}</p>
+          <p className="mt-2 text-sm">{qidiruv ? 'Hech narsa topilmadi' : dostavchikRejimi ? 'Sizga hozircha buyurtma biriktirilmagan' : 'Bu bo‘limda buyurtma yo‘q'}</p>
         </div>
       ) : (
         <div className="grid gap-2.5">
@@ -223,6 +278,16 @@ export default function OnlaynBuyurtmalarPage() {
                 </span>
                 {b.vaqtOraligi && <span className="flex items-center gap-1.5 min-w-0"><Clock size={14} className="text-gray-400 shrink-0" /><span className="truncate">{b.vaqtOraligi}</span></span>}
               </div>
+              {b.dostavchik && !dostavchikRejimi && (
+                <div className="mt-2.5 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 min-w-0">
+                  <Truck size={14} className="text-gray-400 shrink-0" />
+                  <span className="truncate">{b.dostavchik.ism}</span>
+                  <YetkazishBelgisi holat={b.dostavchik.holati} />
+                </div>
+              )}
+              {dostavchikRejimi && b.dostavchik && (
+                <div className="mt-2.5"><YetkazishBelgisi holat={b.dostavchik.holati} /></div>
+              )}
             </button>
           ))}
           {royxat.jami > royxat.buyurtmalar.length && (
@@ -234,6 +299,7 @@ export default function OnlaynBuyurtmalarPage() {
       {tanlangan && (
         <BuyurtmaModal
           raqam={tanlangan}
+          yangilanish={yangilanish}
           onYopish={() => setTanlangan(null)}
           onOzgardi={() => void yukla(true)}
         />
@@ -245,14 +311,17 @@ export default function OnlaynBuyurtmalarPage() {
 
 // ─── Buyurtma tafsiloti ──────────────────────────────────────────────────────
 
-function BuyurtmaModal({ raqam, onYopish, onOzgardi }: { raqam: string; onYopish: () => void; onOzgardi: () => void }) {
+function BuyurtmaModal({ raqam, yangilanish, onYopish, onOzgardi }: { raqam: string; yangilanish: number; onYopish: () => void; onOzgardi: () => void }) {
   useBodyScrollLock(true)
+  const { data: session } = useSession()
+  const meId = (session?.user as { id?: string } | undefined)?.id
   const [b, setB] = useState<OnlaynBuyurtma | null>(null)
   const [xato, setXato] = useState<string | null>(null)
   const [band, setBand] = useState<OnlaynHolat | null>(null)
   const [bekorOchiq, setBekorOchiq] = useState(false)
   const [sabab, setSabab] = useState('')
 
+  // Ochilganda va jonli belgi o'zgarganda (boshqa xodim yoki dostavchik holatni o'zgartirdi)
   useEffect(() => {
     let bekor = false
     fetch(`/api/onlayn-buyurtmalar/${encodeURIComponent(raqam)}`, { cache: 'no-store' })
@@ -260,11 +329,11 @@ function BuyurtmaModal({ raqam, onYopish, onOzgardi }: { raqam: string; onYopish
         const d = await j.json().catch(() => ({}))
         if (bekor) return
         if (!j.ok) setXato(d.xato ?? 'Buyurtma ochilmadi')
-        else setB(d)
+        else { setXato(null); setB(d) }
       })
       .catch(() => { if (!bekor) setXato('Internet aloqasini tekshiring') })
     return () => { bekor = true }
-  }, [raqam])
+  }, [raqam, yangilanish])
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !band) onYopish() }
@@ -289,7 +358,8 @@ function BuyurtmaModal({ raqam, onYopish, onOzgardi }: { raqam: string; onYopish
         toast.error(d.xato ?? 'Holat o‘zgarmadi')
         return
       }
-      setB(d)
+      // Holat javobida dostavchik yo'q — keyingi jonli yangilanish uni ham yangilaydi
+      setB(x => ({ ...d, dostavchik: x?.dostavchik ?? null }))
       setBekorOchiq(false)
       toast.success(`${d.raqam}: ${holatNomi(d.holati, d.yetkazish)}${d.xabarYuboriladi ? ' — mijozga xabar yuborilmoqda' : ''}`)
       onOzgardi()
@@ -304,6 +374,26 @@ function BuyurtmaModal({ raqam, onYopish, onOzgardi }: { raqam: string; onYopish
   const ruxsat = useRuxsat()
   const oldinga = ruxsat.bor('onlayn-buyurtmalar.boshqarish') ? b?.keyingiHolatlar?.filter(h => h !== 'BEKOR') ?? [] : []
   const bekorMumkin = ruxsat.bor('onlayn-buyurtmalar.bekor') && (b?.keyingiHolatlar?.includes('BEKOR') ?? false)
+  // Buyurtma shu foydalanuvchiga biriktirilgan — dostavchik tugmalari
+  const menikimi = !!meId && b?.dostavchik?.id === meId && ruxsat.bor('onlayn-buyurtmalar.yetkazish')
+
+  async function yetibKeldim() {
+    setBand('YOLDA')
+    try {
+      const j = await fetch(`/api/onlayn-buyurtmalar/${encodeURIComponent(raqam)}/yetkazish`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amal: 'YETIB_KELDI' }),
+      })
+      const d = await j.json().catch(() => ({}))
+      if (!j.ok) { toast.error(d.xato ?? 'Belgilanmadi'); return }
+      setB(x => x && { ...x, dostavchik: d.dostavchik })
+      toast.success('Manzilga yetib kelganingiz belgilandi')
+      onOzgardi()
+    } catch {
+      toast.error('Internet aloqasini tekshiring')
+    } finally {
+      setBand(null)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={e => { if (e.target === e.currentTarget && !band) onYopish() }}>
@@ -362,6 +452,10 @@ function BuyurtmaModal({ raqam, onYopish, onOzgardi }: { raqam: string; onYopish
                 {b.vaqtOraligi && <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300"><Clock size={14} />{b.vaqtOraligi}</p>}
               </Blok>
             </div>
+
+            {b.yetkazish === 'KURYER' && (
+              <DostavchikBlok b={b} boshqara={ruxsat.bor('onlayn-buyurtmalar.kuryer')} onOzgardi={d => { setB(x => x && { ...x, dostavchik: d }); onOzgardi() }} />
+            )}
 
             {b.izoh && (
               <div className="flex gap-2 rounded-xl bg-blue-50 dark:bg-blue-950/20 px-3.5 py-2.5 text-sm text-blue-800 dark:text-blue-300">
@@ -431,8 +525,51 @@ function BuyurtmaModal({ raqam, onYopish, onOzgardi }: { raqam: string; onYopish
               </ol>
             </Blok>
 
+            {/* Dostavchik amallari — faqat o'ziga biriktirilgan buyurtmada */}
+            {menikimi && b.dostavchik && ['TAYINLANGAN', 'YOLDA', 'YETIB_KELDI'].includes(b.dostavchik.holati) && (
+              <div className="sticky bottom-0 -mx-5 -mb-5 px-5 py-4 bg-white/95 dark:bg-neutral-900/95 backdrop-blur border-t border-gray-100 dark:border-neutral-800 space-y-2">
+                {b.lat != null && b.lng != null && (
+                  <div className="flex gap-2">
+                    <a href={googleYonalish(b.lat, b.lng)} target="_blank" rel="noopener noreferrer"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <Navigation size={15} /> Google yo‘nalish
+                    </a>
+                    <a href={yandexNavigator(b.lat, b.lng)} target="_blank" rel="noopener noreferrer"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <Navigation size={15} /> Yandex Navigator
+                    </a>
+                  </div>
+                )}
+                {b.dostavchik.holati === 'TAYINLANGAN' ? (
+                  b.keyingiHolatlar?.includes('YOLDA') ? (
+                    <button onClick={() => void ozgartir('YOLDA')} disabled={!!band}
+                      className="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-base font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                      {band === 'YOLDA' ? <Loader2 size={17} className="animate-spin" /> : <Truck size={18} />} Yo‘lga chiqdim
+                    </button>
+                  ) : (
+                    <p className="text-sm text-center text-gray-500">Buyurtma yig‘ib bo‘lingach «Yo‘lga chiqdim» tugmasi chiqadi.</p>
+                  )
+                ) : (
+                  <div className="flex gap-2">
+                    {b.dostavchik.holati === 'YOLDA' && (
+                      <button onClick={() => void yetibKeldim()} disabled={!!band}
+                        className="flex-1 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                        <MapPinCheck size={17} /> Yetib keldim
+                      </button>
+                    )}
+                    {b.keyingiHolatlar?.includes('BAJARILGAN') && (
+                      <button onClick={() => void ozgartir('BAJARILGAN')} disabled={!!band}
+                        className="flex-1 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                        {band === 'BAJARILGAN' ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />} Topshirdim
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Amallar */}
-            {(oldinga.length > 0 || bekorMumkin) && (
+            {!menikimi && (oldinga.length > 0 || bekorMumkin) && (
               <div className="sticky bottom-0 -mx-5 -mb-5 px-5 py-4 bg-white/95 dark:bg-neutral-900/95 backdrop-blur border-t border-gray-100 dark:border-neutral-800 space-y-3">
                 {bekorOchiq ? (
                   <div className="space-y-2">
@@ -469,6 +606,131 @@ function BuyurtmaModal({ raqam, onYopish, onOzgardi }: { raqam: string; onYopish
         )}
       </div>
     </div>
+  )
+}
+
+// ─── Dostavchik ──────────────────────────────────────────────────────────────
+
+interface DostavchikTanlov {
+  id: string
+  ism: string
+  telefon: string | null
+  transportTuri: TransportTuri | null
+  transportNomi: string | null
+  band: number
+}
+
+/** Buyurtmani kim olib boryapti; ruxsati borga — biriktirish, almashtirish, olib tashlash. */
+function DostavchikBlok({ b, boshqara, onOzgardi }: {
+  b: OnlaynBuyurtma
+  boshqara: boolean
+  onOzgardi: (d: OnlaynBuyurtma['dostavchik']) => void
+}) {
+  const [royxat, setRoyxat] = useState<DostavchikTanlov[] | null>(null)
+  const [tanlash, setTanlash] = useState(false)
+  const [saqlanmoqda, setSaqlanmoqda] = useState(false)
+  const d = b.dostavchik
+  const ozgartiraOladi = boshqara && FAOL_HOLATLAR.includes(b.holati)
+
+  useEffect(() => {
+    if (!tanlash || royxat) return
+    fetch('/api/onlayn-buyurtmalar/dostavchiklar', { cache: 'no-store' })
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.xato ?? 'Dostavchiklar yuklanmadi')
+        setRoyxat(j)
+      })
+      .catch((e: Error) => { toast.error(e.message); setTanlash(false) })
+  }, [tanlash, royxat])
+
+  async function biriktir(id: string | null) {
+    setSaqlanmoqda(true)
+    try {
+      const j = await fetch(`/api/onlayn-buyurtmalar/${encodeURIComponent(b.raqam)}/dostavchik`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dostavchikId: id }),
+      })
+      const x = await j.json().catch(() => ({}))
+      if (!j.ok) { toast.error(x.xato ?? 'Saqlanmadi'); return }
+      toast.success(id ? `${x.dostavchik?.ism ?? 'Dostavchik'} biriktirildi` : 'Dostavchik olib tashlandi')
+      setTanlash(false)
+      setRoyxat(null)
+      onOzgardi(x.dostavchik ?? null)
+    } catch {
+      toast.error('Internet aloqasini tekshiring')
+    } finally {
+      setSaqlanmoqda(false)
+    }
+  }
+
+  if (!d && !ozgartiraOladi) return null
+
+  return (
+    <Blok sarlavha="Dostavchik">
+      {d ? (
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 flex-wrap font-medium text-gray-900 dark:text-gray-100">
+              <Truck size={15} className="text-gray-400" /> {d.ism} <YetkazishBelgisi holat={d.holati} />
+            </p>
+            {d.telefon && (
+              <a href={`tel:+998${d.telefon.replace(/\D/g, '').slice(-9)}`} className="mt-1 inline-flex items-center gap-1.5 font-mono text-sm text-primary font-semibold">
+                <Phone size={13} />{telMatni(d.telefon)}
+              </a>
+            )}
+            {(d.yolgaChiqdi || d.yetibKeldi) && (
+              <p className="text-xs text-gray-500 mt-0.5">
+                {d.yolgaChiqdi && <>Yo‘lga chiqdi {formatSanaVaVaqt(d.yolgaChiqdi)}</>}
+                {d.yetibKeldi && <> · yetib keldi {formatSanaVaVaqt(d.yetibKeldi)}</>}
+              </p>
+            )}
+          </div>
+          {ozgartiraOladi && !tanlash && (
+            <button onClick={() => setTanlash(true)} className="text-sm font-semibold text-primary hover:underline">Almashtirish</button>
+          )}
+        </div>
+      ) : !tanlash && (
+        <button onClick={() => setTanlash(true)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-gray-300 dark:border-neutral-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:border-primary hover:text-primary">
+          <Truck size={16} /> Dostavchik biriktirish
+        </button>
+      )}
+
+      {tanlash && (
+        <div className="mt-2 space-y-1.5">
+          {!royxat ? (
+            <div className="flex justify-center py-3"><Loader2 size={18} className="animate-spin text-primary" /></div>
+          ) : royxat.length === 0 ? (
+            <p className="text-sm text-gray-500">Faol dostavchik yo‘q. «Namuna tovar» bo‘limida qo‘shing.</p>
+          ) : (
+            <ul className="max-h-60 overflow-y-auto divide-y divide-gray-100 dark:divide-neutral-800 rounded-xl border border-gray-200 dark:border-neutral-800">
+              {royxat.map(x => (
+                <li key={x.id}>
+                  <button onClick={() => void biriktir(x.id)} disabled={saqlanmoqda || x.id === d?.id}
+                    className="w-full text-left flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-50">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{x.ism}{x.id === d?.id && ' (hozirgi)'}</span>
+                      <span className="block text-xs text-gray-500 truncate">{x.transportNomi ?? transportNomi(x.transportTuri)}</span>
+                    </span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${x.band ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'}`}>
+                      {x.band ? `${x.band} ta band` : 'bo‘sh'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => setTanlash(false)} disabled={saqlanmoqda} className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-medium">Qaytish</button>
+            {d && (
+              <button onClick={() => void biriktir(null)} disabled={saqlanmoqda}
+                className="flex-1 py-2 rounded-xl border border-red-200 dark:border-red-900/50 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20">
+                Olib tashlash
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </Blok>
   )
 }
 
