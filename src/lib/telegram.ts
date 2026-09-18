@@ -6,6 +6,19 @@ import { tolovQisqa } from './tolov-usullari'
 
 // ─── Yordamchi funksiyalar ───────────────────────────────────────────────────
 
+/** Xato matni — gramjs `RPCError` ham `Error` dan meros oladi. */
+function xatoMatni(e: unknown): string {
+  return (e instanceof Error && e.message) || String(e)
+}
+
+/**
+ * gramjs `long` maydonlari big-integer turini kutadi, kesh esa JS `bigint`
+ * saqlaydi. Kutubxona yuborishdan oldin qiymatni o'zi `bigInt(...)` ga
+ * aylantiradi (`readBufferFromBigInt`), bu faqat turlar orasidagi ko'prik.
+ */
+type TgLong = Api.InputUser['userId']
+const tgLong = (n: bigint | number | TgLong) => n as unknown as TgLong
+
 function formatSum(sum: number) {
   return new Intl.NumberFormat('uz-UZ').format(Math.round(sum)) + ' UZS'
 }
@@ -244,7 +257,7 @@ async function resolvePhone(client: TelegramClient, telefon: string): Promise<Ap
   const cached = _entityCache.get(cleanPhone)
   if (cached) {
     try {
-      const inputUser = new Api.InputUser({ userId: cached.userId as any, accessHash: cached.accessHash as any })
+      const inputUser = new Api.InputUser({ userId: tgLong(cached.userId), accessHash: tgLong(cached.accessHash) })
       const result = await client.invoke(new Api.users.GetUsers({ id: [inputUser] }))
       if (result.length > 0) return result[0]
       // GetUsers bo'sh qaytsa, cache buzilgan — qayta resolve
@@ -269,7 +282,7 @@ async function resolvePhone(client: TelegramClient, telefon: string): Promise<Ap
         new Api.contacts.ImportContacts({
           contacts: [
             new Api.InputPhoneContact({
-              clientId: randomClientId as any,
+              clientId: tgLong(randomClientId),
               phone: cleanPhone,
               firstName: 'Mijoz',
               lastName: '',
@@ -277,8 +290,9 @@ async function resolvePhone(client: TelegramClient, telefon: string): Promise<Ap
           ],
         })
       )
-    } catch (e: any) {
-      if (e.message?.includes('PHONE_NOT_OCCUPIED') || e.message?.includes('PHONE_NUMBER_INVALID')) {
+    } catch (e) {
+      const msg = xatoMatni(e)
+      if (msg.includes('PHONE_NOT_OCCUPIED') || msg.includes('PHONE_NUMBER_INVALID')) {
         return null
       }
       throw e
@@ -292,17 +306,20 @@ async function resolvePhone(client: TelegramClient, telefon: string): Promise<Ap
 
   if (!result || !result.users || result.users.length === 0) return null
 
-  const user = result.users[0] as any
+  const user = result.users[0]
 
-  if (user.id && user.accessHash) {
+  // `UserEmpty` da accessHash bo'lmaydi — faqat to'liq `User` keshlanadi
+  if (user instanceof Api.User && user.id && user.accessHash) {
     // 3) Kontaktni o'chirish — Telegram kontakt ro'yxatida mijoz qolmasin
-    const inputUser = new Api.InputUser({ userId: user.id as any, accessHash: user.accessHash as any })
+    const inputUser = new Api.InputUser({ userId: user.id, accessHash: user.accessHash })
     await client.invoke(new Api.contacts.DeleteContacts({ id: [inputUser] })).catch(() => {})
 
     // 4) Entity ABADIY cache'ga — keyingi xabar yuborilganda API call kerak emas
     _entityCache.set(cleanPhone, {
-      userId: BigInt(user.id),
-      accessHash: BigInt(user.accessHash),
+      // toString() orqali — valueOf() JS number beradi va 2^53 dan katta
+      // accessHash yaxlitlanib, keshdagi yozuv yaroqsiz bo'lib qolardi
+      userId: BigInt(user.id.toString()),
+      accessHash: BigInt(user.accessHash.toString()),
       cachedAt: Date.now(),
     })
     saveEntityCache().catch(() => {})
@@ -342,8 +359,8 @@ async function sendMessageToPhone(
 
     await client.sendMessage(user, { message: xabar })
     return { ok: true }
-  } catch (e: any) {
-    const msg = e.message || String(e)
+  } catch (e) {
+    const msg = xatoMatni(e)
 
     // FloodWait — Telegram vaqtinchalik cheklovi, qayta urinish kerak
     if (msg.includes('FLOOD_WAIT') || msg.includes('FloodWait')) {
@@ -611,8 +628,8 @@ export async function telegramConnect(apiId: number, apiHash: string, phone: str
     })
 
     return { ok: true, phoneCodeHash }
-  } catch (e: any) {
-    const msg = e.message || String(e)
+  } catch (e) {
+    const msg = xatoMatni(e)
     if (msg.includes('API_ID_INVALID')) {
       return { ok: false, xato: "API ID yoki API Hash noto'g'ri. my.telegram.org dan qayta tekshiring." }
     }
@@ -654,8 +671,8 @@ export async function telegramVerify(
           phoneCode: code,
         })
       )
-    } catch (e: any) {
-      if (e.message?.includes('SESSION_PASSWORD_NEEDED')) {
+    } catch (e) {
+      if (xatoMatni(e).includes('SESSION_PASSWORD_NEEDED')) {
         if (!password) {
           return { ok: false, xato: '2FA parol kiritish kerak' }
         }
@@ -669,6 +686,7 @@ export async function telegramVerify(
 
     const sessionStr = client.session.save() as unknown as string
     const me = await client.getMe()
+    const tgIsm = me instanceof Api.User ? `${me.firstName || ''} ${me.lastName || ''}`.trim() : ''
 
     await Promise.all([
       prisma.sozlama.upsert({
@@ -693,8 +711,8 @@ export async function telegramVerify(
       }),
       prisma.sozlama.upsert({
         where: { kalit: 'telegram_user_name' },
-        update: { qiymat: `${(me as any).firstName || ''} ${(me as any).lastName || ''}`.trim() },
-        create: { kalit: 'telegram_user_name', qiymat: `${(me as any).firstName || ''} ${(me as any).lastName || ''}`.trim() },
+        update: { qiymat: tgIsm },
+        create: { kalit: 'telegram_user_name', qiymat: tgIsm },
       }),
       prisma.sozlama.deleteMany({ where: { kalit: 'telegram_temp_session' } }),
     ])
@@ -704,8 +722,8 @@ export async function telegramVerify(
     _clientReady = false
 
     return { ok: true }
-  } catch (e: any) {
-    return { ok: false, xato: e.message || String(e) }
+  } catch (e) {
+    return { ok: false, xato: xatoMatni(e) }
   } finally {
     if (client) await client.disconnect().catch(() => {})
   }
