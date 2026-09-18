@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
 
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
     const data = await req.json()
     const { tovarId, yangiQoldiq } = data
 

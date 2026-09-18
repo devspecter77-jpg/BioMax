@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const data = await req.json()
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
 
     const egalik = await prisma.nasiya.findFirst({ where: { id, mijoz: egaFilialWhere(session) }, select: { id: true } })
     if (!egalik) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
@@ -69,9 +69,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     return NextResponse.json({ tolov: natija.tolov, nasiya: natija.nasiya }, { status: 201 })
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
-    if (e.message === 'ALREADY_PAID') return NextResponse.json({ xato: "Bu nasiya allaqachon to'langan" }, { status: 400 })
+  } catch (e) {
+    const xabar = e instanceof Error ? e.message : ''
+    if (xabar === 'NOT_FOUND') return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
+    if (xabar === 'ALREADY_PAID') return NextResponse.json({ xato: "Bu nasiya allaqachon to'langan" }, { status: 400 })
     console.error('[Nasiya tolov]', e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }

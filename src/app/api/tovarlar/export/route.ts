@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
     const ownFilialId = sessionFilialId(session)
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
     const { searchParams } = new URL(req.url)
     const isRealEga = sessionIsRealEga(session)
     const filialId = ownFilialId || (isRealEga ? searchParams.get('filialId') : null) || null

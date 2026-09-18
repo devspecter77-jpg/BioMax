@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { qolbolaXabarYuborish } from '@/lib/telegram'
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
     const xabarTuri = searchParams.get('xabarTuri') || ''
     const mijozIsm = searchParams.get('mijozIsm') || ''
 
-    const where: any = {}
+    const where: Prisma.BildirishnomLogWhereInput = {}
     if (status) where.status = status
     if (xabarTuri) where.xabarTuri = xabarTuri
     if (mijozIsm) where.mijoz = { ism: { contains: mijozIsm, mode: 'insensitive' } }
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!session || session.user?.rol !== 'ADMIN') {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!session || session.user?.rol !== 'ADMIN') {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 
@@ -101,7 +102,7 @@ export async function DELETE(req: NextRequest) {
     const chegara = new Date()
     chegara.setDate(chegara.getDate() - kunlar)
 
-    const where: any = { sana: { lt: chegara } }
+    const where: Prisma.BildirishnomLogWhereInput = { sana: { lt: chegara } }
     if (statusFilter) where.status = statusFilter
 
     const result = await prisma.bildirishnomLog.deleteMany({ where })

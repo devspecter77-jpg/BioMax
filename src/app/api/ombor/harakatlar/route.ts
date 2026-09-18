@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { HarakatTuri, Joylashuv, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
@@ -14,10 +15,10 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
 
     const joy = searchParams.get('joy') || ''
-    const where: any = { tovar: egaFilialWhere(session) }
-    if (tur) where.turi = tur
+    const where: Prisma.OmborHarakatiWhereInput = { tovar: egaFilialWhere(session) }
+    if (tur) where.turi = tur as HarakatTuri
     if (tovarId) where.tovarId = tovarId
-    if (joy) where.joy = joy
+    if (joy) where.joy = joy as Joylashuv
 
     const harakatlar = await prisma.omborHarakati.findMany({
       where,

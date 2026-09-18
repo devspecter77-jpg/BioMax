@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Birlik, TovarHolati } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
 
     if (rows.length === 0) {
       return NextResponse.json({ xato: "Faylda mahsulot ma'lumoti topilmadi" }, { status: 400 })
@@ -63,9 +64,9 @@ export async function POST(req: NextRequest) {
         const kelishNarxi = parseFloat(String(row['Kelish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
         const sotishNarxi = parseFloat(String(row['Sotish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
         const birlikRaw = String(row['Birlik'] || 'DONA').trim().toUpperCase()
-        const birlik = (BIRLIKLAR.has(birlikRaw) ? birlikRaw : 'DONA') as any
+        const birlik = (BIRLIKLAR.has(birlikRaw) ? birlikRaw : 'DONA') as Birlik
         const holatiRaw = String(row['Holati'] || 'FAOL').trim().toUpperCase()
-        const holati = (HOLATLAR.has(holatiRaw) ? holatiRaw : 'FAOL') as any
+        const holati = (HOLATLAR.has(holatiRaw) ? holatiRaw : 'FAOL') as TovarHolati
         const qoldiq = parseFloat(String(row['Miqdori'] || '0').replace(/[^\d.]/g, '')) || 0
         const muddatRaw = row['Yaroqlilik muddati']
         let yaroqlilikMuddati: Date | null = null
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
                 miqdor: Math.abs(farq),
                 narx: kelishNarxi,
                 izoh: 'Excel import orqali miqdor moslashtirildi',
-                foydalanuvchiId: (session.user as any).id,
+                foydalanuvchiId: session.user.id,
               },
             })
           }
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
                 miqdor: qoldiq,
                 narx: kelishNarxi,
                 izoh: 'Excel import',
-                foydalanuvchiId: (session.user as any).id,
+                foydalanuvchiId: session.user.id,
               },
             })
           }

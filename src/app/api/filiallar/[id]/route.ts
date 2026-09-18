@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Session } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionIsRealEga } from '@/lib/filial-scope'
 
-function faqatEga(session: any) {
+function faqatEga(session: Session | null) {
   const rol = session?.user?.rol
   return !!session && rol === 'ADMIN' && sessionIsRealEga(session)
 }

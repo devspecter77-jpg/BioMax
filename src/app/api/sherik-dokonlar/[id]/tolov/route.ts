@@ -12,7 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Tovar qaytarish rejimi
     if (tovarQaytarish && Array.isArray(tovarQaytarish) && tovarQaytarish.length > 0) {
-      const userId = (session as any).user?.id || (session as any).id
+      const userId = session.user.id
       let jamiSumma = 0
 
       for (const item of tovarQaytarish as { tovarId: string; miqdor: number; narx: number }[]) {

@@ -13,7 +13,7 @@ import { prisma } from './prisma'
  * o'zgarish darhol kuchga kiradi.
  */
 export async function tovarYozishRuxsatlari(session: Session | null): Promise<{ tahrirlashMumkin: boolean; ochirishMumkin: boolean }> {
-  const u = session?.user as any
+  const u = session?.user
   if (!u?.ulashilganEgaId) return { tahrirlashMumkin: true, ochirishMumkin: true }
 
   const foydalanuvchi = await prisma.foydalanuvchi.findUnique({

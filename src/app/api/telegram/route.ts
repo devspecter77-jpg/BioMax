@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Session } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import {
@@ -13,7 +14,7 @@ import { sessionFilialId } from '@/lib/filial-scope'
 // Telegram — butun kompaniya uchun umumiy ulanish. Faqat bosh egasi (Ega,
 // filialId yo'q) boshqarishi kerak — filial egasi bu umumiy hisobni
 // o'zgartira olmasligi/uza olmasligi kerak.
-function faqatEga(session: any) {
+function faqatEga(session: Session | null) {
   const rol = session?.user?.rol
   return !!session && rol === 'ADMIN' && !sessionFilialId(session)
 }

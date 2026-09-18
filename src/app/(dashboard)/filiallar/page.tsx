@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatPhone } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -81,23 +81,23 @@ export default function FiliallarPage() {
 
   useBodyScrollLock(modal || tahrirModal || egaTahrirModal)
 
-  async function yuklash() {
+  const meId = session?.user?.id
+  const yuklash = useCallback(async () => {
     setYuklanmoqda(true)
     const [data, hammaFoydalanuvchi] = await Promise.all([
       fetch('/api/filiallar').then(r => r.json()),
       fetch('/api/foydalanuvchilar').then(r => r.json()).catch(() => []),
     ])
     setFiliallar(Array.isArray(data) ? data : [])
-    const meId = (session?.user as any)?.id
     setEgaHisoblar(
       Array.isArray(hammaFoydalanuvchi)
-        ? hammaFoydalanuvchi.filter((u: any) => u.rol === 'ADMIN' && !u.filialId && u.id !== meId)
+        ? (hammaFoydalanuvchi as (EgaHisob & { rol: string })[]).filter(u => u.rol === 'ADMIN' && !u.filialId && u.id !== meId)
         : []
     )
     setYuklanmoqda(false)
-  }
+  }, [meId])
 
-  useEffect(() => { yuklash() }, [session])
+  useEffect(() => { yuklash() }, [yuklash])
 
   function modalniOchish() {
     setForm(emptyForm)
@@ -407,7 +407,7 @@ export default function FiliallarPage() {
                     </div>
                     {i > 0 && (
                       <span className="text-[11px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg font-medium shrink-0" title="Ma'lumotlarga bog'langan qo'shimcha admin">
-                        Bog'langan
+                        Bog&apos;langan
                       </span>
                     )}
                   </div>

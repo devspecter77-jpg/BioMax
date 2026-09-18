@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
 
     const normalizeManzil = (m: string) => m.trim().toLowerCase().replace(/\s+/g, ' ')
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
           mijoz = await prisma.mijoz.create({ data: { ism, manzil, telefon: finalPhone, ...egaFilialWhere(session) } })
         }
 
-        const muddatQiymati = row['Muddat'] ? new Date(row['Muddat']) : null
+        const muddatQiymati = row['Muddat'] ? new Date(row['Muddat'] as string | number) : null
         const muddat = muddatQiymati && !isNaN(muddatQiymati.getTime()) ? muddatQiymati : null
 
         await prisma.$transaction(async (tx) => {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma, TovarHolati } from '@prisma/client'
 import { aksiyalarniYangila } from '@/lib/vitrina-server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -27,20 +28,20 @@ export async function GET(req: NextRequest) {
     const limit = limitParam ? parseInt(limitParam) : 0
 
     const ownFilialId = sessionFilialId(session)
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
     // Ega (filialsiz) — standart holatda faqat OZINING mahsulotlarini ko'radi.
     // ?filialId= bilan ixtiyoriy ravishda boshqa bitta filialni tanlab ko'rishi mumkin
     // (faqat haqiqiy Ega uchun — ulashilgan admin bunday tanlov qila olmaydi).
     // Filialga bog'langan foydalanuvchi esa har doim faqat o'z filialiga qulflangan.
     const isRealEga = sessionIsRealEga(session)
     const filialId = ownFilialId || (isRealEga ? searchParams.get('filialId') : null) || null
-    const where: any = { filialId }
+    const where: Prisma.TovarWhereInput = { filialId }
     if (!filialId) {
       // Filialsiz katalog — Ega o'zi yoki u ulashgan admin bo'lsa, faqat
       // o'sha Eganing mahsulotlari (jonli, nusxasiz — egaId orqali).
       where.egaId = sessionEgaId(session)
     }
-    if (holati !== 'BARCHASI') where.holati = holati
+    if (holati !== 'BARCHASI') where.holati = holati as TovarHolati
     // Sotuv (POS) qulflangan tovarlarni umuman ko'rmasligi kerak.
     // Filtrlash SERVERDA: mijoz tomonda yashirish yetarli emas, chunki
     // javobni to'g'ridan-to'g'ri o'qish mumkin.
@@ -199,14 +200,14 @@ export async function POST(req: NextRequest) {
           izoh: tovar.keltirilganManzil
             ? `Boshlang'ich qoldiq · ${tovar.keltirilganManzil}`
             : "Boshlang'ich qoldiq",
-          foydalanuvchiId: (session.user as any).id,
+          foydalanuvchiId: session.user.id,
         },
       })
     }
 
     return NextResponse.json(tovar, { status: 201 })
-  } catch (e: any) {
-    if (e.code === 'P2002') {
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'P2002') {
       return NextResponse.json({ xato: 'Bu shtrix-kod allaqachon mavjud' }, { status: 400 })
     }
     console.error(e)

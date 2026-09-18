@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone, playBeep, uzSearch } from '@/lib/utils'
-import { buildChekHtml, chekChopEtish as printChek } from '@/lib/chek-print'
+import { buildChekHtml, chekChopEtish as printChek, type ChekData, type ChekTarkib } from '@/lib/chek-print'
 import { kodniAjrat } from '@/lib/qr-kod'
 import { toast } from 'sonner'
+import type { Html5Qrcode } from 'html5-qrcode'
 import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, LayoutGrid, Link2, Share2, Package, Plus, Gift, Percent, MapPin, Send } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { jsPDF } from 'jspdf'
@@ -37,11 +38,16 @@ interface Kategoriya { id: string; nomi: string; ombor?: { id: string; nomi: str
 type NarxTuri = 'sotish' | 'optom' | 'bolish'
 const NARX_TURI_LABEL: Record<NarxTuri, string> = { sotish: 'Chakana', optom: 'Optom', bolish: "Bo'lish" }
 
-// Mahsulot USD'da narxlangan bo'lsa, savatga qo'shishda joriy kurs bo'yicha
-// so'mga o'giriladi — chek/hisobotlar hammasi so'mda bo'lishi shart.
-function sotishNarxiSomda(tovar: Tovar, kursi: number): number {
-  return tovar.valyuta === 'USD' ? Math.round(tovar.sotishNarxi * kursi) : tovar.sotishNarxi
+/** Server qaytargan sotuv — chek, oxirgi sotuv va qaytarish oynalari uchun */
+interface SotuvTarkibi extends ChekTarkib {
+  id: string
+  tovarId: string
 }
+interface SotuvYozuvi extends ChekData {
+  id: string
+  tarkiblar: SotuvTarkibi[]
+}
+
 // Tanlangan narx turi bo'yicha narxni tanlaydi — o'sha tur uchun mahsulotda
 // narx kiritilmagan bo'lsa, oddiy sotish narxiga qaytadi.
 function narxTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number): number {
@@ -78,7 +84,6 @@ function MiqdorInput({ miqdor, max, onChange }: { miqdor: number; max: number; o
 
   useEffect(() => {
     setMatn(String(miqdor))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miqdor])
 
   return (
@@ -208,7 +213,7 @@ export default function SotuvPage() {
   const [nasiyaMuddat, setNasiyaMuddat] = useState('')
   const [yuklanmoqda, setYuklanmoqda] = useState(false)
   const [chekModal, setChekModal] = useState(false)
-  const [oxirgiSotuv, setOxirgiSotuv] = useState<any>(null)
+  const [oxirgiSotuv, setOxirgiSotuv] = useState<SotuvYozuvi | null>(null)
   // Chek Telegramga ATAYLAB avtomatik ketmaydi — kassir o'zi qaror qiladi.
   // 'yuborildi' bo'lgach tugma holatini o'zgartiramiz, ikki marta
   // bosib mijozga bir xil xabar ikki marta ketmasin.
@@ -243,21 +248,20 @@ export default function SotuvPage() {
 
   // Qaytarish
   const [qaytarishModal, setQaytarishModal] = useState(false)
-  const [qaytarishSotuv, setQaytarishSotuv] = useState<any>(null)
+  const [qaytarishSotuv, setQaytarishSotuv] = useState<SotuvYozuvi | null>(null)
   const [qaytarishTanlangan, setQaytarishTanlangan] = useState<Record<string, { miqdor: number; birlikNarxi: number; checked: boolean }>>({})
   const [qaytarishSabab, setQaytarishSabab] = useState('')
   const [qaytarishYuklanmoqda, setQaytarishYuklanmoqda] = useState(false)
-  const [sotuvlarRoyxati, setSotuvlarRoyxati] = useState<any[]>([])
+  const [sotuvlarRoyxati, setSotuvlarRoyxati] = useState<SotuvYozuvi[]>([])
   const [sotuvlarYuklanmoqda, setSotuvlarYuklanmoqda] = useState(false)
   const [sotuvQidiruv, setSotuvQidiruv] = useState('')
 
   // Til (lotin / kirill)
   const [til, setTil] = useState<'lotin' | 'kirill'>('lotin')
-  const [logoBase64, setLogoBase64] = useState<string>('')
 
   // Barcode skaner
   const [skanerOchiq, setSkanerOchiq] = useState(false)
-  const skanerRef = useRef<any>(null)
+  const skanerRef = useRef<Html5Qrcode | null>(null)
   const oxirgiSkanRef = useRef<string>('')
   // Har doim oxirgi tovarlar ro'yxatini olish uchun ref
   const tovarlarRef = useRef<Tovar[]>([])
@@ -266,7 +270,7 @@ export default function SotuvPage() {
   const skanerniYopish = useCallback(() => {
     const s = skanerRef.current
     if (s) {
-      s.isScanning && s.stop().then(() => s.clear()).catch(() => {})
+      if (s.isScanning) s.stop().then(() => s.clear()).catch(() => {})
       skanerRef.current = null
     }
     oxirgiSkanRef.current = ''
@@ -366,12 +370,11 @@ export default function SotuvPage() {
           },
           () => {}
         )
-      } catch (err) {
+      } catch {
         toast.error('Kamera ochilmadi')
         setSkanerOchiq(false)
       }
     }, 100)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Saqlangan savatlar
@@ -397,9 +400,10 @@ export default function SotuvPage() {
       }
       const tv = await r.json()
       setTovarlar(Array.isArray(tv.tovarlar) ? tv.tovarlar : [])
-    } catch (e: any) {
-      setTovarlarXato(e?.message || 'Tovarlarni yuklashda xato')
-      toast.error(e?.message || 'Tovarlarni yuklab bo\'lmadi')
+    } catch (e) {
+      const xabar = e instanceof Error ? e.message : ''
+      setTovarlarXato(xabar || 'Tovarlarni yuklashda xato')
+      toast.error(xabar || 'Tovarlarni yuklab bo\'lmadi')
     } finally {
       setTovarlarYuklanmoqda(false)
     }
@@ -461,13 +465,6 @@ export default function SotuvPage() {
     tovarlarniYuklash()
     yuklashQoshimcha()
     fetch('/api/kurs').then(r => r.json()).then(d => { if (d.kursi) setKursi(d.kursi) }).catch(() => {})
-    const blobToBase64 = (url: string) =>
-      fetch(url).then(r => r.blob()).then(blob => new Promise<string>(resolve => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.readAsDataURL(blob)
-      }))
-    blobToBase64('/chek.png').then(setLogoBase64).catch(() => {})
     // Oxirgi sotuv localStorage dan yuklash
     const saved = localStorage.getItem('oxirgi-sotuv')
     if (saved) { try { setOxirgiSotuv(JSON.parse(saved)) } catch {} }
@@ -920,7 +917,7 @@ export default function SotuvPage() {
       aralash: aralashSummalar as AralashKiritma,
     })
 
-    const body: any = {
+    const body = {
       mijozId: aniqMijozId || mijozId || null,
       jamiSumma,
       chegirma,
@@ -1006,7 +1003,7 @@ export default function SotuvPage() {
     setSotuvlarYuklanmoqda(false)
   }
 
-  function sotuvTanlash(sotuv: any) {
+  function sotuvTanlash(sotuv: SotuvYozuvi) {
     setQaytarishSotuv(sotuv)
     const init: Record<string, { miqdor: number; birlikNarxi: number; checked: boolean }> = {}
     for (const t of sotuv.tarkiblar) {
@@ -1018,8 +1015,8 @@ export default function SotuvPage() {
   async function qaytarishYuborish() {
     if (!qaytarishSotuv) return
     const tarkiblar = qaytarishSotuv.tarkiblar
-      .filter((t: any) => qaytarishTanlangan[t.tovarId]?.checked)
-      .map((t: any) => {
+      .filter(t => qaytarishTanlangan[t.tovarId]?.checked)
+      .map(t => {
         const sel = qaytarishTanlandan(t.tovarId)
         return { tovarId: t.tovarId, miqdor: sel.miqdor, birlikNarxi: sel.birlikNarxi, jami: sel.miqdor * sel.birlikNarxi }
       })
@@ -1167,7 +1164,7 @@ export default function SotuvPage() {
   // Til bo'yicha matn tarjima qilish
   const t = (text: string) => til === 'kirill' ? kirill(text) : text
 
-  function chekHtml(s: any) {
+  function chekHtml(s: SotuvYozuvi) {
     return buildChekHtml({
       data: s,
       dokonInfo,
@@ -1176,11 +1173,11 @@ export default function SotuvPage() {
     })
   }
 
-  function chekChopEtish(s: any) {
+  function chekChopEtish(s: SotuvYozuvi) {
     printChek(chekHtml(s))
   }
 
-  function chekPdfYuklash(s: any) {
+  function chekPdfYuklash(s: SotuvYozuvi) {
     const dokonNomi = t(dokonInfo.dokon_nomi || "Do'kon")
     const manzil = t(dokonInfo.manzil || '')
     const tel = dokonInfo.telefon || ''
@@ -2462,7 +2459,7 @@ export default function SotuvPage() {
                 <div>{t('Sana')}: {formatSanaVaVaqt(s.sana)}</div>
                 {kassirTel && <div>{t('Kassir tel')}: {kassirTel}</div>}
                 <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                {s.tarkiblar?.map((item: any) => {
+                {s.tarkiblar?.map(item => {
                   const bonusmi = Number(item.birlikNarxi) === 0
                   return (
                   <div key={item.id} style={{ marginBottom: 4 }}>
@@ -2862,7 +2859,7 @@ export default function SotuvPage() {
 
                   <div className="space-y-2">
                     <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">Qaytariladigan mahsulotlar:</p>
-                    {qaytarishSotuv.tarkiblar.map((t: any) => {
+                    {qaytarishSotuv.tarkiblar.map(t => {
                       const sel = qaytarishTanlandan(t.tovarId)
                       return (
                         <div key={t.tovarId} className="border border-gray-200 dark:border-neutral-700 rounded-xl p-3">

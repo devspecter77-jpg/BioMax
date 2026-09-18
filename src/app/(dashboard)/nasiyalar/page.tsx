@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { formatSum, formatSana, uzSearch } from '@/lib/utils'
 import DokonQarzPanel from '@/components/DokonQarzPanel'
 import XarajatPanel from '@/components/XarajatPanel'
 import { QARZ_TOLOV_USULLARI, TOLOV_MALUMOTI, tolovQisqa } from '@/lib/tolov-usullari'
 import { toast } from 'sonner'
-import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, Users, AlertTriangle, CheckCircle, TrendingDown, Download, Upload, Loader2, Calendar } from 'lucide-react'
+import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, AlertTriangle, CheckCircle, Download, Upload, Loader2, Calendar } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import ViewToggle from '@/components/ViewToggle'
 import MoneyInput from '@/components/ui/money-input'
@@ -126,7 +126,7 @@ export default function NasiyalarPage() {
     }
   }
 
-  async function yuklash() {
+  const yuklash = useCallback(async () => {
     setYuklanmoqda(true)
     // "BUGUN" — muddat bo'yicha, holati emas — server so'rovida qatnashmaydi,
     // to'liq ro'yxatdan (barchasi) client tomonda hisoblanadi.
@@ -138,7 +138,7 @@ export default function NasiyalarPage() {
     setNasiyalar(filtered || [])
     setBarchasi(all || [])
     setYuklanmoqda(false)
-  }
+  }, [filter])
 
   useEffect(() => {
     // Restore saved view preference from localStorage
@@ -146,7 +146,7 @@ export default function NasiyalarPage() {
     if (saved === 'table' || saved === 'card') setView(saved)
   }, [])
 
-  useEffect(() => { yuklash() }, [filter])
+  useEffect(() => { yuklash() }, [yuklash])
 
   // Muddati aynan bugun bo'lgan, hali yopilmagan nasiyalar — alohida kategoriya
   const bugunSanasi = new Date().toISOString().slice(0, 10)
@@ -421,6 +421,7 @@ export default function NasiyalarPage() {
         </div>
         {ruxsat.bor('nasiyalar.export') && <a
           href="/api/nasiyalar/export"
+          download
           title="Excel export"
           className="flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
         >

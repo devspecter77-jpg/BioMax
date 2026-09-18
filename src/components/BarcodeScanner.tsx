@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useId } from 'react'
 import { ScanLine, X } from 'lucide-react'
 import { toast } from 'sonner'
+import type { Html5Qrcode } from 'html5-qrcode'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 interface Props {
@@ -14,14 +15,14 @@ interface Props {
 export default function BarcodeScanner({ onScan, className, title }: Props) {
   const [ochiq, setOchiq] = useState(false)
   useBodyScrollLock(ochiq)
-  const skanerRef = useRef<any>(null)
+  const skanerRef = useRef<Html5Qrcode | null>(null)
   const oxirgiSkanRef = useRef<string>('')
   const readerId = 'barcode-reader-' + useId().replace(/[^a-zA-Z0-9]/g, '')
 
   const yopish = useCallback(() => {
     const s = skanerRef.current
     if (s) {
-      s.isScanning && s.stop().then(() => s.clear()).catch(() => {})
+      if (s.isScanning) s.stop().then(() => s.clear()).catch(() => {})
       skanerRef.current = null
     }
     oxirgiSkanRef.current = ''
@@ -52,13 +53,12 @@ export default function BarcodeScanner({ onScan, className, title }: Props) {
         toast.error('Kamera ochilmadi')
         setOchiq(false)
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, 100)
   }, [onScan, yopish, readerId])
 
   useEffect(() => () => {
     const s = skanerRef.current
-    s?.isScanning && s.stop().catch(() => {})
+    if (s?.isScanning) s.stop().catch(() => {})
   }, [])
 
   return (

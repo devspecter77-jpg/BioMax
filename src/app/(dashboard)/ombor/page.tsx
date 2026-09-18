@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { formatSum, formatNarx, formatSana } from '@/lib/utils'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { formatNarx, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
-import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Plus, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
+import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import TovarTafsilot from '@/components/TovarTafsilot'
 import { harakatMalumoti } from '@/lib/harakat-turlari'
@@ -22,7 +22,6 @@ interface QoldiqItem {
   rasmlar?: string[]
   yaroqlilikMuddati: string | null; kunQoldi: number | null; muddatiYaqin: boolean
 }
-interface Taminotchi { id: string; nomi: string; manzil?: string | null }
 interface Kategoriya {
   id: string; nomi: string
   /** Ustki guruh — Ombor. Eski kategoriyalarda bo'lmasligi mumkin. */
@@ -45,7 +44,6 @@ export default function OmborPage() {
   const tahrirRuxsat = ruxsat.bor('tovarlar.tahrirlash')
   const ochirishRuxsat = ruxsat.bor('tovarlar.ochirish')
   const [qoldiqlar, setQoldiqlar] = useState<QoldiqItem[]>([])
-  const [taminotchilar, setTaminotchilar] = useState<Taminotchi[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
   const [tafsilotId, setTafsilotId] = useState<string | null>(null)
@@ -87,31 +85,29 @@ export default function OmborPage() {
     localStorage.setItem('view-preference', v)
   }
 
-  async function yuklash() {
+  const yuklash = useCallback(async () => {
     setYuklanmoqda(true)
-    const [qd, tm, kt] = await Promise.all([
-      fetch(`/api/ombor?q=${qidiruv}&kamQolgan=${kamQolganFilter}&muddatiYaqin=${muddatiYaqinFilter}`).then(r => r.json()),
-      fetch('/api/taminotchilar').then(r => r.json()),
+    const [qd, kt] = await Promise.all([
+      fetch(`/api/ombor?q=${encodeURIComponent(qidiruv)}&kamQolgan=${kamQolganFilter}&muddatiYaqin=${muddatiYaqinFilter}`).then(r => r.json()),
       fetch('/api/kategoriyalar').then(r => r.json()),
     ])
     setQoldiqlar(qd || [])
-    setTaminotchilar(tm || [])
     setKategoriyalar(kt || [])
     setYuklanmoqda(false)
-  }
+  }, [qidiruv, kamQolganFilter, muddatiYaqinFilter])
 
-  useEffect(() => { yuklash() }, [qidiruv, kamQolganFilter, muddatiYaqinFilter])
+  useEffect(() => { yuklash() }, [yuklash])
 
-  async function harakatlarYuklash() {
+  const harakatlarYuklash = useCallback(async () => {
     setHarakatYuklanmoqda(true)
     const data = await fetch(`/api/ombor/harakatlar?limit=100${harakatTur ? `&tur=${harakatTur}` : ''}`).then(r => r.json())
     setHarakatlar(data || [])
     setHarakatYuklanmoqda(false)
-  }
+  }, [harakatTur])
 
   useEffect(() => {
     if (tarix) harakatlarYuklash()
-  }, [tarix, harakatTur])
+  }, [tarix, harakatlarYuklash])
 
   async function otkazmaQilish(e: React.FormEvent) {
     e.preventDefault()
@@ -225,12 +221,6 @@ export default function OmborPage() {
   const kamQolganSoni = filtrlangan.filter(q => q.kamQolgan).length
   const muddatiYaqinSoni = filtrlangan.filter(q => q.muddatiYaqin).length
   const korsatiladiganQoldiqlar = filtrlangan.slice(0, renderLimit)
-
-  // Build combobox options from loaded data
-  const taminotchiOptions = taminotchilar.map(t => ({
-    value: t.id,
-    label: t.manzil ? `${t.nomi} — ${t.manzil}` : t.nomi,
-  }))
 
   return (
     <div className="space-y-4">

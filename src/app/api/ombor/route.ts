@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const muddatiYaqin = searchParams.get('muddatiYaqin') === 'true'
     const qidiruv = searchParams.get('q') || ''
     const ownFilialId = sessionFilialId(session)
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
     // Ega (filialsiz) — standart holatda faqat OZINING mahsulotlarini ko'radi.
     const isRealEga = sessionIsRealEga(session)
     const filialId = ownFilialId || (isRealEga ? searchParams.get('filialId') : null) || null
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const data = await req.json()
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
 
     const egalik = await prisma.tovar.findFirst({ where: { id: data.tovarId, ...egaFilialWhere(session) }, select: { id: true } })
     if (!egalik) return NextResponse.json({ xato: 'Tovar topilmadi' }, { status: 404 })

@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     await prisma.foydalanuvchi.update({
-      where: { id: (session.user as any).id },
+      where: { id: session.user.id },
       data: { lokatsiyaLat: lat, lokatsiyaLng: lng, lokatsiyaYangilangan: new Date() },
     })
 

@@ -66,7 +66,11 @@ function HisobotlarInner({ isKassir }: { isKassir: boolean }) {
       ...(filtrlar.dan ? { dan: filtrlar.dan } : {}),
       ...(filtrlar.gacha ? { gacha: filtrlar.gacha } : {}),
     })
-    window.location.href = `/api/hisobotlar/export?${qs.toString()}`
+    // Excel fayl yuklab olinadi — sahifa almashmaydi
+    const havola = document.createElement('a')
+    havola.href = `/api/hisobotlar/export?${qs.toString()}`
+    havola.download = ''
+    havola.click()
   }
 
   return (

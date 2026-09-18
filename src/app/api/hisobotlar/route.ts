@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
-    const rol = (session?.user as any)?.rol
+    const rol = session?.user?.rol
     const kassirId = rol === 'KASSIR' ? session?.user?.id : null
 
     const { searchParams } = new URL(req.url)

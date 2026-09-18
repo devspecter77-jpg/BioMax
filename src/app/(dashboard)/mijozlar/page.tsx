@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Eye, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe } from 'lucide-react'
 import { buildChekHtml, buildMijozTarixHtml, chekChopEtish } from '@/lib/chek-print'
 import { tolovQisqa } from '@/lib/tolov-usullari'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -288,12 +288,12 @@ export default function MijozlarPage() {
     setDetailYuklanmoqda(false)
   }
 
-  async function yuklash() {
+  const yuklash = useCallback(async () => {
     setYuklanmoqda(true)
-    const data = await fetch(`/api/mijozlar?q=${qidiruv}`).then(r => r.json())
+    const data = await fetch(`/api/mijozlar?q=${encodeURIComponent(qidiruv)}`).then(r => r.json())
     setMijozlar(data || [])
     setYuklanmoqda(false)
-  }
+  }, [qidiruv])
 
   useEffect(() => {
     // Restore saved view preference from localStorage
@@ -301,7 +301,7 @@ export default function MijozlarPage() {
     if (saved === 'table' || saved === 'card') setView(saved)
   }, [])
 
-  useEffect(() => { yuklash() }, [qidiruv])
+  useEffect(() => { yuklash() }, [yuklash])
 
   function changeView(v: 'table' | 'card') {
     setView(v)
@@ -412,6 +412,7 @@ export default function MijozlarPage() {
           </div>
           {ruxsat.bor('mijozlar.export') && <a
             href="/api/mijozlar/export"
+            download
             title="Excel export"
             className="flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800"
           >

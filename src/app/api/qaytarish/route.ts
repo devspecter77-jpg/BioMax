@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { balansOzgartir } from '@/lib/sodiqlik-server'
@@ -12,15 +13,16 @@ export async function GET(req: NextRequest) {
     const dan = searchParams.get('dan')
     const gacha = searchParams.get('gacha')
 
-    const where: any = {}
+    const where: Prisma.QaytarishWhereInput = {}
     if (dan || gacha) {
-      where.yaratilgan = {}
-      if (dan) where.yaratilgan.gte = new Date(dan)
+      const yaratilgan: Prisma.DateTimeFilter = {}
+      if (dan) yaratilgan.gte = new Date(dan)
       if (gacha) {
         const g = new Date(gacha)
         g.setHours(23, 59, 59)
-        where.yaratilgan.lte = g
+        yaratilgan.lte = g
       }
+      where.yaratilgan = yaratilgan
     }
 
     const qaytarishlar = await prisma.qaytarish.findMany({
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
 
-    const kassirId = (session.user as any).id
+    const kassirId = session.user.id
     const { aslSotuvId, tarkiblar, sabab } = await req.json()
 
     if (!aslSotuvId || !tarkiblar || tarkiblar.length === 0) {

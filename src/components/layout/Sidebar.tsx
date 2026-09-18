@@ -17,10 +17,10 @@ export default function Sidebar() {
   useBodyScrollLock(open)
   const [dokonNomi, setDokonNomi] = useState('BioMax')
   const { data: session } = useSession()
-  const rol = (session?.user as any)?.rol
-  const ruxsatlar = (session?.user as any)?.ruxsatlar
-  const filialId = (session?.user as any)?.filialId
-  const ulashilganEgaId = (session?.user as any)?.ulashilganEgaId
+  const rol = session?.user?.rol
+  const ruxsatlar = session?.user?.ruxsatlar
+  const filialId = session?.user?.filialId
+  const ulashilganEgaId = session?.user?.ulashilganEgaId
 
   const visibleItems = visibleNavItems(rol, ruxsatlar, filialId, ulashilganEgaId)
 

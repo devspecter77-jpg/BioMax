@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const data = await req.json()
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
 
     const xarid = await prisma.xarid.findUnique({ where: { id } })
     if (!xarid) return NextResponse.json({ xato: 'Xarid topilmadi' }, { status: 404 })

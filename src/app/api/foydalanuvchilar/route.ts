@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!session || session.user?.rol !== 'ADMIN') {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
     const ownFilialId = sessionFilialId(session)
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     // Ega o'z mahsulotlar katalogini yangi Admin bilan ulashishi — faqat
     // filialsiz Admin uchun ma'noli, va faqat SO'ROVCHINING o'z id'siga
     // (boshqa Eganing nomidan ulasha olmaydi).
-    const ulashilganEgaId = rol === 'ADMIN' && !filialId && reqUlashilganEgaId ? (session.user as any).id : null
+    const ulashilganEgaId = rol === 'ADMIN' && !filialId && reqUlashilganEgaId ? session.user.id : null
 
     const mavjud = await prisma.foydalanuvchi.findUnique({ where: { login } })
     if (mavjud) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })

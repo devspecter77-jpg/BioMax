@@ -9,7 +9,7 @@ const RUXSAT_ETILGAN_KALITLAR = new Set(YASHIRILADIGAN_MAYDONLAR.map(m => m.kali
 
 async function ruxsatniTekshirish(id: string) {
   const session = await auth()
-  if (!session || (session.user as any)?.rol !== 'ADMIN') return null
+  if (!session || session.user?.rol !== 'ADMIN') return null
   const ownFilialId = sessionFilialId(session)
   if (ownFilialId) {
     const nishon = await prisma.foydalanuvchi.findUnique({ where: { id }, select: { filialId: true } })

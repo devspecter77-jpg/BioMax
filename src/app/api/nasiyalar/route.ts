@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { NasiyaHolati, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
@@ -12,8 +13,8 @@ export async function GET(req: NextRequest) {
     const holati = searchParams.get('holati') || ''
     const mijozId = searchParams.get('mijozId') || ''
 
-    const where: any = { ochirilgan: false, mijoz: egaFilialWhere(session) }
-    if (holati) where.holati = holati
+    const where: Prisma.NasiyaWhereInput = { ochirilgan: false, mijoz: egaFilialWhere(session) }
+    if (holati) where.holati = holati as NasiyaHolati
     if (mijozId) where.mijozId = mijozId
 
     const nasiyalar = await prisma.nasiya.findMany({
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
       })
     } else {
       // Mavjud mijozni yangilash (telefon yoki manzil o'zgarganda)
-      const updateData: any = {}
+      const updateData: Prisma.MijozUpdateInput = {}
       if (finalPhone && mijoz.telefon !== finalPhone) updateData.telefon = finalPhone
       if (manzil && mijoz.manzil !== manzil) updateData.manzil = manzil
       if (Object.keys(updateData).length > 0) {

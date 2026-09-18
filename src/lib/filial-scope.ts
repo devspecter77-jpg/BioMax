@@ -6,7 +6,7 @@ import type { Session } from 'next-auth'
  * chunki Ega barcha filiallarni (va filialsiz eski ma'lumotlarni) ko'rishi kerak.
  */
 export function sessionFilialId(session: Session | null): string | null {
-  return (session?.user as any)?.filialId ?? null
+  return session?.user?.filialId ?? null
 }
 
 /**
@@ -16,14 +16,14 @@ export function sessionFilialId(session: Session | null): string | null {
  * ya'ni bir xil qatorlarni jonli (nusxasiz) ko'radi.
  */
 export function sessionEgaId(session: Session | null): string | null {
-  const u = session?.user as any
+  const u = session?.user
   if (!u || u.filialId) return null
   return u.ulashilganEgaId || u.id
 }
 
 /** Haqiqiy Ega — boshqa birovning ulashgan admin emas. */
 export function sessionIsRealEga(session: Session | null): boolean {
-  const u = session?.user as any
+  const u = session?.user
   return !!u && !u.filialId && !u.ulashilganEgaId
 }
 

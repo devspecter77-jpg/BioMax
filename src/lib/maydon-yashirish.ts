@@ -12,11 +12,11 @@ export async function foydalanuvchiYashirilganMaydonlari(foydalanuvchiId: string
 }
 
 // Berilgan obyekt(lar)dan yashirilgan maydonlarni null qilib qaytaradi.
-export function maydonlarniYashir<T extends Record<string, any>>(item: T, yashirilgan: Set<string>): T {
+export function maydonlarniYashir<T extends object>(item: T, yashirilgan: Set<string>): T {
   if (yashirilgan.size === 0) return item
-  const nusxa: any = { ...item }
+  const nusxa = { ...item } as Record<string, unknown>
   for (const kalit of yashirilgan) {
     if (kalit in nusxa) nusxa[kalit] = null
   }
-  return nusxa
+  return nusxa as T
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { generateChekRaqami } from '@/lib/utils'
@@ -44,15 +45,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(sotuv ? { sotuvlar: [sotuv], jami: 1 } : { sotuvlar: [], jami: 0 })
     }
 
-    const where: any = { ...egaFilialWhere(session) }
+    const where: Prisma.SotuvWhereInput = { ...egaFilialWhere(session) }
     if (dan || gacha) {
-      where.sana = {}
-      if (dan) where.sana.gte = new Date(dan)
+      const sana: Prisma.DateTimeFilter = {}
+      if (dan) sana.gte = new Date(dan)
       if (gacha) {
         const gachaD = new Date(gacha)
         gachaD.setHours(23, 59, 59)
-        where.sana.lte = gachaD
+        sana.lte = gachaD
       }
+      where.sana = sana
     }
 
     if (kassirId) where.kassirId = kassirId
@@ -109,7 +111,7 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
     const data = await req.json()
-    const kassirId = (session.user as any).id
+    const kassirId = session.user.id
 
     // To'lov usuli — enum'da yo'q qiymat kelsa sotuv butunlay yiqilardi
     // (Prisma xatosi), shuning uchun oldindan tekshiramiz.

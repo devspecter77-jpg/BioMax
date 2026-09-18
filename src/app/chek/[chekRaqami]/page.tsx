@@ -251,7 +251,7 @@ export default function PublicChekPage() {
           {data.nasiya && nasiyaInfo && (
             <div className="mx-5 mb-4 p-4 bg-orange-50 border border-orange-200 rounded-xl">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-orange-800 text-xs font-semibold uppercase tracking-wider">Nasiya ma'lumotlari</p>
+                <p className="text-orange-800 text-xs font-semibold uppercase tracking-wider">Nasiya ma&apos;lumotlari</p>
                 <span className={`text-xs font-bold ${nasiyaInfo.rang}`}>{nasiyaInfo.nom}</span>
               </div>
               <div className="space-y-1.5">
@@ -260,7 +260,7 @@ export default function PublicChekPage() {
                   <span className="text-orange-900 font-medium">{fSum(Number(data.nasiya.jamiQarz))}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-orange-700/70">To'langan</span>
+                  <span className="text-orange-700/70">To&apos;langan</span>
                   <span className="text-green-600 font-medium">{fSum(Number(data.nasiya.tolangan))}</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold">
@@ -290,7 +290,7 @@ export default function PublicChekPage() {
           )}
 
           <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 text-center">
-            <p className="text-gray-400 text-[11px]">BioMax — Do'kon boshqaruv tizimi</p>
+            <p className="text-gray-400 text-[11px]">BioMax — Do&apos;kon boshqaruv tizimi</p>
           </div>
         </div>
       </div>

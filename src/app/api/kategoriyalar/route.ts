@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
       include: { ombor: { select: { id: true, nomi: true } } },
     })
     return NextResponse.json(kat, { status: 201 })
-  } catch (e: any) {
-    if (e.code === 'P2002') {
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'P2002') {
       return NextResponse.json({ xato: 'Bu kategoriya allaqachon mavjud' }, { status: 400 })
     }
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })

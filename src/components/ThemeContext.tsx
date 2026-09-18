@@ -1,29 +1,21 @@
 'use client'
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext } from 'react'
+import { useSaqlanganQiymat } from '@/hooks/useSaqlanganQiymat'
 
 type Theme = 'light' | 'dark'
 interface ThemeCtx { theme: Theme; toggle: () => void }
 const ThemeContext = createContext<ThemeCtx>({ theme: 'light', toggle: () => {} })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light')
-
-  useEffect(() => {
-    const saved = localStorage.getItem('theme') as Theme | null
-    // Standart — yorug' (qizil-oq brend) uslub. Foydalanuvchi tugma orqali
-    // aniq tanlagan bo'lsa, o'sha ustunlik qiladi.
-    const initial = saved || 'light'
-    setTheme(initial)
-    document.documentElement.classList.toggle('dark', initial === 'dark')
-  }, [])
+  // Standart — yorug' (qizil-oq brend) uslub. Foydalanuvchi tugma orqali
+  // aniq tanlagan bo'lsa, o'sha ustunlik qiladi. Sahifa ochilganda `.dark`
+  // klassini layout'dagi `themeInitScript` render'dan oldin qo'yadi.
+  const [theme, setTheme] = useSaqlanganQiymat<Theme>('theme', 'light')
 
   function toggle() {
-    setTheme(prev => {
-      const next = prev === 'light' ? 'dark' : 'light'
-      localStorage.setItem('theme', next)
-      document.documentElement.classList.toggle('dark', next === 'dark')
-      return next
-    })
+    const next = theme === 'light' ? 'dark' : 'light'
+    document.documentElement.classList.toggle('dark', next === 'dark')
+    setTheme(next)
   }
 
   return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>

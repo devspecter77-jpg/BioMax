@@ -33,7 +33,7 @@ export default function Header() {
   const sahifaNomi = sahifaNomlar[pathname] || "ERP Do'kon"
   const rol = (session?.user as { rol?: string } | undefined)?.rol
   const rolNomi = rol ? ROL_NOMI[rol] ?? rol : ''
-  const filialNomi = (session?.user as any)?.filialNomi as string | null | undefined
+  const filialNomi = session?.user?.filialNomi
   const firstLetter = session?.user?.name?.[0]?.toUpperCase() || 'U'
 
   return (

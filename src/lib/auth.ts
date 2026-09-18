@@ -1,8 +1,20 @@
 import NextAuth from 'next-auth'
+import type { JWT } from 'next-auth/jwt'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from './prisma'
 import { hisobHolati } from './ruxsat-server'
+import type { HisobMaydonlari } from '@/types/next-auth'
+
+/**
+ * Token ichidagi hisob maydonlari. `JWT` ni modul kengaytmasi bilan turlab
+ * bo'lmaydi: `next-auth/jwt` uni `export *` orqali qayta eksport qiladi.
+ */
+type HisobTokeni = JWT & Partial<HisobMaydonlari> & {
+  id?: string
+  /** Hisob holati bazadan oxirgi marta o'qilgan vaqt (ms) */
+  tekshirildi?: number
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -69,16 +81,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token: xom, user }) {
+      const token: HisobTokeni = xom
       if (user) {
         token.id = user.id
-        token.rol = (user as any).rol
-        token.filialId = (user as any).filialId
-        token.filialNomi = (user as any).filialNomi
-        token.ulashilganEgaId = (user as any).ulashilganEgaId
-        token.tovarTahrirlashMumkin = (user as any).tovarTahrirlashMumkin
-        token.tovarOchirishMumkin = (user as any).tovarOchirishMumkin
-        token.ruxsatlar = (user as any).ruxsatlar
+        token.rol = user.rol
+        token.filialId = user.filialId
+        token.filialNomi = user.filialNomi
+        token.ulashilganEgaId = user.ulashilganEgaId
+        token.tovarTahrirlashMumkin = user.tovarTahrirlashMumkin
+        token.tovarOchirishMumkin = user.tovarOchirishMumkin
+        token.ruxsatlar = user.ruxsatlar
         token.tekshirildi = Date.now()
         return token
       }
@@ -86,7 +99,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Har 30 soniyada hisob holati bazadan yangilanadi: ruxsat o'zgarsa xodim
       // qayta kirishi shart emas, o'chirilgan (faol emas) xodim esa tizimdan chiqadi.
       if (token.id && Date.now() - Number(token.tekshirildi ?? 0) > 30_000) {
-        const h = await hisobHolati(token.id as string).catch(() => undefined)
+        const h = await hisobHolati(token.id).catch(() => undefined)
         if (h === undefined) return token // baza vaqtincha javob bermadi — eski holat bilan davom
         if (!h || !h.faol) return null
         token.rol = h.rol
@@ -100,16 +113,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return token
     },
-    async session({ session, token }) {
+    async session({ session, token: xom }) {
+      const token: HisobTokeni = xom
       if (token) {
         session.user.id = token.id as string
-        ;(session.user as any).rol = token.rol
-        ;(session.user as any).filialId = token.filialId
-        ;(session.user as any).filialNomi = token.filialNomi
-        ;(session.user as any).ulashilganEgaId = token.ulashilganEgaId
-        ;(session.user as any).tovarTahrirlashMumkin = token.tovarTahrirlashMumkin
-        ;(session.user as any).tovarOchirishMumkin = token.tovarOchirishMumkin
-        ;(session.user as any).ruxsatlar = token.ruxsatlar
+        session.user.rol = token.rol as string
+        session.user.filialId = token.filialId ?? null
+        session.user.filialNomi = token.filialNomi ?? null
+        session.user.ulashilganEgaId = token.ulashilganEgaId ?? null
+        session.user.tovarTahrirlashMumkin = token.tovarTahrirlashMumkin ?? false
+        session.user.tovarOchirishMumkin = token.tovarOchirishMumkin ?? false
+        session.user.ruxsatlar = token.ruxsatlar as string[] | null
       }
       return session
     },

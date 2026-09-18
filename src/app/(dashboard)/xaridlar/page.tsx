@@ -43,28 +43,38 @@ export default function XaridlarPage() {
   const eksportRuxsat = useRuxsat().bor('xaridlar.export')
   const [sotuvlar, setSotuvlar] = useState<Sotuv[]>([])
   const [jami, setJami] = useState(0)
-  const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [qidiruv, setQidiruv] = useState('')
   // Bitta sana bo'yicha qidirish — shu kunning boshidan oxirigacha
   // (serverda "dan" va "gacha" bir xil sanaga o'rnatiladi).
   const [sanaFilter, setSanaFilter] = useState('')
-  const [renderLimit, setRenderLimit] = useState(30)
   const [tafsilot, setTafsilot] = useState<Sotuv | null>(null)
   useBodyScrollLock(!!tafsilot)
 
-  async function yuklash() {
-    setYuklanmoqda(true)
+  // Filtr o'zgarsa ro'yxat qayta yuklanadi va yana boshidan ko'rsatiladi.
+  // Ikkalasi ham shu kalitdan hisoblanadi — effekt ichida setState kerak emas.
+  const filtrKaliti = `${qidiruv}|${sanaFilter}`
+  const [yuklanganKalit, setYuklanganKalit] = useState<string | null>(null)
+  const yuklanmoqda = yuklanganKalit !== filtrKaliti
+  const [limit, setLimit] = useState({ kalit: filtrKaliti, soni: 30 })
+  const renderLimit = limit.kalit === filtrKaliti ? limit.soni : 30
+
+  useEffect(() => {
+    let bekor = false // eski so'rovning kech kelgan javobi yangisini bosib ketmasin
+    const kalit = `${qidiruv}|${sanaFilter}`
     const params = new URLSearchParams({ limit: '200' })
     if (qidiruv) params.set('q', qidiruv)
     if (sanaFilter) { params.set('dan', sanaFilter); params.set('gacha', sanaFilter) }
-    const data = await fetch(`/api/sotuvlar?${params}`).then(r => r.json())
-    setSotuvlar(data.sotuvlar || [])
-    setJami(data.jami || 0)
-    setYuklanmoqda(false)
-  }
-
-  useEffect(() => { yuklash() }, [qidiruv, sanaFilter])
-  useEffect(() => { setRenderLimit(30) }, [qidiruv, sanaFilter])
+    fetch(`/api/sotuvlar?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (bekor) return
+        setSotuvlar(data.sotuvlar || [])
+        setJami(data.jami || 0)
+        setYuklanganKalit(kalit)
+      })
+      .catch(() => { if (!bekor) setYuklanganKalit(kalit) })
+    return () => { bekor = true }
+  }, [qidiruv, sanaFilter])
 
   const jamiSumma = sotuvlar.reduce((s, x) => s + Number(x.yakuniySumma), 0)
 
@@ -228,7 +238,7 @@ export default function XaridlarPage() {
       )}
 
       {yozuvlar.length > renderLimit && (
-        <button onClick={() => setRenderLimit(r => r + 30)} className="w-full py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-white dark:hover:bg-neutral-900 transition border border-gray-200 dark:border-neutral-800 rounded-xl">
+        <button onClick={() => setLimit({ kalit: filtrKaliti, soni: renderLimit + 30 })} className="w-full py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-white dark:hover:bg-neutral-900 transition border border-gray-200 dark:border-neutral-800 rounded-xl">
           Yana ko&apos;rsatish ({yozuvlar.length - renderLimit} ta qoldi)
         </button>
       )}

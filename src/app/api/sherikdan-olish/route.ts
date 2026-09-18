@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 
@@ -16,12 +17,12 @@ export async function GET() {
         tolovlar: true,
       },
       orderBy: { yaratilgan: 'desc' },
-    }) as any[]
+    })
 
     // Kontragent (sherik yoki ta'minotchi) bo'yicha guruhlash
     const guruhMap: Record<string, {
       kontragent: { id: string; ism: string; telefon: string | null; turi: 'SHERIK' | 'TAMINOTCHI' }
-      olishlar: any[]
+      olishlar: typeof sherikdanOlishlar
       jamiQarz: number
       tolangan: number
       qoldiq: number
@@ -46,7 +47,7 @@ export async function GET() {
       }
       guruhMap[key].olishlar.push(item)
       guruhMap[key].jamiQarz += Number(item.jami)
-      const itemTolangan = item.tolovlar.reduce((s: number, t: any) => s + Number(t.summa), 0)
+      const itemTolangan = item.tolovlar.reduce((s, t) => s + Number(t.summa), 0)
       guruhMap[key].tolangan += itemTolangan
     }
 
@@ -136,7 +137,7 @@ export async function PUT(req: NextRequest) {
 
     if (!id) return NextResponse.json({ xato: 'ID kerak' }, { status: 400 })
 
-    const updateData: any = {}
+    const updateData: Prisma.SherikdanOlishUncheckedUpdateInput = {}
     if (sherikId) updateData.sherikId = sherikId
     if (miqdor !== undefined) {
       updateData.miqdor = parseFloat(miqdor)

@@ -70,7 +70,7 @@ export function ruxsatKeshiniTozala(foydalanuvchiId?: string) {
  */
 export function bolimRuxsatiBormi(session: Session | null, kalit: string): boolean {
   if (!session) return false
-  const u = session.user as unknown as { rol?: string; ruxsatlar?: string[] | null }
+  const u = session.user
   if (u?.rol === 'ADMIN') return true
   if (!barchaRuxsatKalitlari.includes(kalit)) return true
   return Array.isArray(u?.ruxsatlar) && u.ruxsatlar.includes(kalit)

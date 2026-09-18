@@ -15,7 +15,7 @@ export async function PUT(req: NextRequest) {
 
     const parolHash = await bcrypt.hash(yangiParol, 10)
     await prisma.foydalanuvchi.update({
-      where: { id: (session.user as any).id },
+      where: { id: session.user.id },
       data: { parolHash },
     })
 

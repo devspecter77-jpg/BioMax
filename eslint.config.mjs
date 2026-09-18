@@ -19,6 +19,11 @@ const eslintConfig = defineConfig([
       }],
     },
   },
+  {
+    // Node.js uchun CommonJS yordamchi skriptlar (`node scripts/x.js`)
+    files: ["scripts/**/*.js"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -26,6 +31,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // .gitignore dagi vaqtinchalik fayllar — repoda yo'q, lint ham qilinmaydi
+    "add_tovarlar_temp.js",
+    "**/__*.ts",
+    "**/__*.mjs",
   ]),
 ]);
 

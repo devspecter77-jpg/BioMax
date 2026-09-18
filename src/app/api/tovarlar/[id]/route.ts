@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
@@ -12,7 +13,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
     const filialId = sessionFilialId(session)
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
 
     const tovar = await prisma.tovar.findFirst({
       where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
@@ -72,9 +73,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Yashirilgan maydonlarni (masalan kelish narxi) shu hisob ko'rmaydi —
     // shuning uchun ularni saqlashda o'zgartirmaymiz, aks holda ko'rinmas
     // qiymat bo'sh/0 deb noto'g'ri ustidan yozilib qolishi mumkin edi.
-    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari((session.user as any).id)
+    const yashirilganMaydonlar = await foydalanuvchiYashirilganMaydonlari(session.user.id)
 
-    const updateData: any = {}
+    const updateData: Prisma.TovarUncheckedUpdateInput = {}
     if (bor('nomi')) updateData.nomi = data.nomi
     if (bor('kategoriyaId')) updateData.kategoriyaId = data.kategoriyaId
     if (bor('shtrixKod')) updateData.shtrixKod = data.shtrixKod || null
@@ -129,7 +130,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           izoh: tovar.keltirilganManzil
             ? `Tahrirlashda qoldiq oshirildi · ${tovar.keltirilganManzil}`
             : 'Tahrirlashda qoldiq oshirildi',
-          foydalanuvchiId: (session.user as any).id,
+          foydalanuvchiId: session.user.id,
         },
       })
     }

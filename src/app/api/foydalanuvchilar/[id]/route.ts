@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
@@ -9,7 +10,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!session || session.user?.rol !== 'ADMIN') {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
     const ownFilialId = sessionFilialId(session)
@@ -26,7 +27,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (rol !== 'ADMIN' && !filialId) {
       return NextResponse.json({ xato: "Filial tanlang" }, { status: 400 })
     }
-    const updateData: any = { ism, rol, faol, telefon: telefon || null, filialId: rol === 'ADMIN' ? (filialId || null) : filialId }
+    const updateData: Prisma.FoydalanuvchiUncheckedUpdateInput = { ism, rol, faol, telefon: telefon || null, filialId: rol === 'ADMIN' ? (filialId || null) : filialId }
     if (login) {
       const bandmi = await prisma.foydalanuvchi.findFirst({ where: { login, NOT: { id } } })
       if (bandmi) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
@@ -50,7 +51,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id } = await params
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!session || session.user?.rol !== 'ADMIN') {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
     const ownFilialId = sessionFilialId(session)

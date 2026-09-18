@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState } from 'react'
+import { useSaqlanganQiymat } from '@/hooks/useSaqlanganQiymat'
 
 interface SidebarCtx {
   open: boolean
@@ -20,19 +21,11 @@ const SidebarContext = createContext<SidebarCtx>({
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
-
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebar-collapsed')
-    if (saved === 'true') setCollapsed(true)
-  }, [])
+  const [saqlangan, saqla] = useSaqlanganQiymat<'true' | 'false'>('sidebar-collapsed', 'false')
+  const collapsed = saqlangan === 'true'
 
   function toggleCollapsed() {
-    setCollapsed(prev => {
-      const next = !prev
-      localStorage.setItem('sidebar-collapsed', String(next))
-      return next
-    })
+    saqla(collapsed ? 'false' : 'true')
   }
 
   return (

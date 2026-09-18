@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -66,10 +66,10 @@ interface AdminHisob { id: string; ism: string; login: string; filialId: string 
 export default function TovarlarPage() {
   const confirm = useConfirm()
   const { data: session } = useSession()
-  const egaMi = !(session?.user as any)?.filialId
+  const egaMi = !session?.user?.filialId
   // Haqiqiy Ega — ulashilgan admin emas. Faqat haqiqiy Ega boshqa filial
   // tanlashi va ulashish sozlamalarini boshqarishi mumkin.
-  const haqiqiyEga = egaMi && !(session?.user as any)?.ulashilganEgaId
+  const haqiqiyEga = egaMi && !session?.user?.ulashilganEgaId
   // Ulashilgan admin uchun — Ega tomonidan berilgan tahrirlash/o'chirish ruxsati.
   // Sessiya (JWT) faqat login vaqtida to'ldiriladi — Ega ruxsatni keyin
   // o'zgartirsa, allaqachon login qilgan admin sessiyasi eskirib qoladi.
@@ -84,12 +84,12 @@ export default function TovarlarPage() {
   // Xodim ruxsatlari (Ruxsatlar bo'limi) — ulashilgan admin cheklovi bilan birga ishlaydi
   const ruxsat = useRuxsat()
   const ustamaFoizYashirilgan = ozYashirilganMaydonlar.has('ustamaFoiz') || !ruxsat.maydon('tovarlar.ustamaFoiz')
-  const ulashishTahrir = haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.tahrirlashMumkin : !!(session?.user as any)?.tovarTahrirlashMumkin)
+  const ulashishTahrir = haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.tahrirlashMumkin : !!session?.user?.tovarTahrirlashMumkin)
   const tahrirRuxsat = ulashishTahrir && ruxsat.bor('tovarlar.tahrirlash')
   const qoshishRuxsat = ulashishTahrir && ruxsat.bor('tovarlar.qoshish')
   const importRuxsat = ulashishTahrir && ruxsat.bor('tovarlar.import')
   const kategoriyaRuxsat = ruxsat.bor('tovarlar.qoshish') || ruxsat.bor('tovarlar.tahrirlash') || ruxsat.bor('omborlar.boshqarish')
-  const ochirishRuxsat = (haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.ochirishMumkin : !!(session?.user as any)?.tovarOchirishMumkin)) && ruxsat.bor('tovarlar.ochirish')
+  const ochirishRuxsat = (haqiqiyEga || (ulashilganRuxsat ? ulashilganRuxsat.ochirishMumkin : !!session?.user?.tovarOchirishMumkin)) && ruxsat.bor('tovarlar.ochirish')
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
   const [korinishModal, setKorinishModal] = useState(false)
   const [adminlar, setAdminlar] = useState<AdminHisob[]>([])
@@ -186,7 +186,7 @@ export default function TovarlarPage() {
     localStorage.setItem('view-preference', v)
   }
 
-  async function yuklash() {
+  const yuklash = useCallback(async () => {
     setYuklanmoqda(true)
     const params = new URLSearchParams({
       q: normalizeUzbek(qidiruv),
@@ -203,9 +203,9 @@ export default function TovarlarPage() {
     setKategoriyalar(kt || [])
     setTaminotchilar(Array.isArray(tm) ? tm : [])
     setYuklanmoqda(false)
-  }
+  }, [qidiruv, aktifKategoriya, tanlanganFilial])
 
-  useEffect(() => { yuklash() }, [qidiruv, aktifKategoriya, tanlanganFilial])
+  useEffect(() => { yuklash() }, [yuklash])
 
   // IntersectionObserver — scroll hodisasidan farqli o'laroq tartib
   // (layout) o'zgarsa ham to'g'ri ishlaydi va desktopda ham, mobilda ham
@@ -225,14 +225,13 @@ export default function TovarlarPage() {
   useEffect(() => {
     if (!haqiqiyEga) return
     fetch('/api/filiallar').then(r => r.json()).then(d => setFiliallar(Array.isArray(d) ? d : [])).catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [haqiqiyEga])
 
   // Ulashilgan admin — tahrirlash/o'chirish ruxsatini bazadan jonli olish
   // (sessiya eskirgan bo'lishi mumkin, tugmalar shunga qarab yashirinadi).
   useEffect(() => {
-    const meId = (session?.user as any)?.id
-    const ulashilganEgaId = (session?.user as any)?.ulashilganEgaId
+    const meId = session?.user?.id
+    const ulashilganEgaId = session?.user?.ulashilganEgaId
     if (!meId || !ulashilganEgaId) return
     fetch(`/api/foydalanuvchilar/${meId}/yashirilgan-tovarlar`)
       .then(r => r.json())
@@ -276,8 +275,8 @@ export default function TovarlarPage() {
     setKorinishTahrirlashMumkin(true)
     setKorinishOchirishMumkin(true)
     const data = await fetch('/api/foydalanuvchilar').then(r => r.json()).catch(() => [])
-    const meId = (session?.user as any)?.id
-    setAdminlar(Array.isArray(data) ? data.filter((u: any) => u.rol === 'ADMIN' && u.ulashilganEgaId === meId) : [])
+    const meId = session?.user?.id
+    setAdminlar(Array.isArray(data) ? (data as (AdminHisob & { rol: string; ulashilganEgaId: string | null })[]).filter(u => u.rol === 'ADMIN' && u.ulashilganEgaId === meId) : [])
   }
 
   async function adminTanlash(id: string) {

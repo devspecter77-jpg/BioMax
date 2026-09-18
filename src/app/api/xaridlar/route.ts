@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 
@@ -12,16 +13,17 @@ export async function GET(req: NextRequest) {
     const dan = searchParams.get('dan') || ''
     const gacha = searchParams.get('gacha') || ''
 
-    const where: any = {}
+    const where: Prisma.XaridWhereInput = {}
     if (taminotchiId) where.taminotchiId = taminotchiId
     if (dan || gacha) {
-      where.sana = {}
-      if (dan) where.sana.gte = new Date(dan)
+      const sana: Prisma.DateTimeFilter = {}
+      if (dan) sana.gte = new Date(dan)
       if (gacha) {
         const g = new Date(gacha)
         g.setHours(23, 59, 59, 999)
-        where.sana.lte = g
+        sana.lte = g
       }
+      where.sana = sana
     }
 
     const xaridlar = await prisma.xarid.findMany({
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: 'Ruxsat yo\'q' }, { status: 401 })
 
-    const foydalanuvchiId = (session.user as any).id
+    const foydalanuvchiId = session.user.id
     const data = await req.json()
 
     const { taminotchiId, tarkiblar, tolangan, izoh, rejim, qarzSumma } = data

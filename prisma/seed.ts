@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { PrismaClient, Rol, Birlik, TolovUsuli, NasiyaHolati, XarajatKategoriya } from '@prisma/client'
+import type { Foydalanuvchi, Kategoriya, Mijoz, Prisma, Taminotchi, Tovar } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import bcrypt from 'bcryptjs'
@@ -25,7 +26,7 @@ async function main() {
     { ism: "Rahbar Xodim", login: "rahbar", parol: "rahbar123", rol: Rol.ADMIN },
   ]
 
-  const createdUsers: any[] = []
+  const createdUsers: Foydalanuvchi[] = []
   for (const u of users) {
     const hash = await bcrypt.hash(u.parol, 10)
     const user = await prisma.foydalanuvchi.upsert({
@@ -73,9 +74,11 @@ async function main() {
     { nomi: 'Boshqa', tavsif: "Boshqa xo'jalik mollari" },
   ]
 
-  const kategoriyalar: any[] = []
+  const kategoriyalar: Kategoriya[] = []
   for (const k of kategoriyalarData) {
-    const kat = await prisma.kategoriya.upsert({ where: { nomi_filialId_egaId: { nomi: k.nomi, filialId: null as any, egaId: null as any } }, update: {}, create: k })
+    // @@unique([nomi, filialId, egaId]) da NULL bor — upsert ishlamaydi, avval qidiramiz
+    const kat = (await prisma.kategoriya.findFirst({ where: { nomi: k.nomi, filialId: null, egaId: null } }))
+      ?? (await prisma.kategoriya.create({ data: k }))
     kategoriyalar.push(kat)
   }
   const katMap: Record<string, string> = {}
@@ -238,13 +241,13 @@ async function main() {
     { nomi: 'Temir tasma 5m', kat: 'Boshqa', kelish: 12000, ustama: 35, birlik: Birlik.DONA, min: 10 },
   ]
 
-  const createdTovarlar: any[] = []
+  const createdTovarlar: Tovar[] = []
   for (const t of tovarlarData) {
     const katId = katMap[t.kat]
     if (!katId) continue
     const sotish = Math.round(t.kelish * (1 + t.ustama / 100) / 100) * 100
     const mavjud = await prisma.tovar.findFirst({ where: { nomi: t.nomi } })
-    let tovar: any
+    let tovar: Tovar
     if (!mavjud) {
       tovar = await prisma.tovar.create({
         data: {
@@ -295,7 +298,7 @@ async function main() {
     { nomi: "Koreys Tovarlar", kontaktShaxs: "Kim Jun Ho", telefon: "+998712009988", manzil: "Toshkent, FEZ" },
   ]
 
-  const createdTaminotchilar: any[] = []
+  const createdTaminotchilar: Taminotchi[] = []
   for (const t of taminotchilarData) {
     const tm = await prisma.taminotchi.create({ data: t })
     createdTaminotchilar.push(tm)
@@ -356,7 +359,7 @@ async function main() {
     { ism: "Xasanova Fotima", telefon: "+998901234616", manzil: "Toshkent, Bektemir" },
   ]
 
-  const createdMijozlar: any[] = []
+  const createdMijozlar: Mijoz[] = []
   for (const m of mijozlarData) {
     const mijoz = await prisma.mijoz.create({ data: m })
     createdMijozlar.push(mijoz)
@@ -364,7 +367,7 @@ async function main() {
   console.log('Mijozlar:', createdMijozlar.length)
 
   // ==================== XARAJATLAR (90 kun) ====================
-  const xarajatlarData: any[] = []
+  const xarajatlarData: Prisma.XarajatUncheckedCreateInput[] = []
   for (let i = 0; i < 90; i++) {
     const sana = daysAgo(i)
     // Oylik: ijara, kommunal (har 30 kunda)
@@ -405,7 +408,7 @@ async function main() {
       const tarkibTovarlar = [...allTovarlar].sort(() => Math.random() - 0.5).slice(0, tarkibSoni)
 
       let jamiSumma = 0
-      const tarkiblar: any[] = []
+      const tarkiblar: Prisma.SotuvTarkibiUncheckedCreateWithoutSotuvInput[] = []
 
       for (const tv of tarkibTovarlar) {
         const miqdor = rnd(1, 5)
@@ -470,7 +473,7 @@ async function main() {
         }
 
         sotuvCount++
-      } catch (err) {
+      } catch {
         // skip duplicates or errors
       }
     }
@@ -512,7 +515,7 @@ async function main() {
     const tovarSoni = rnd(2, 6)
     const xaridTovarlar = [...allTovarlar].sort(() => Math.random() - 0.5).slice(0, tovarSoni)
     let jamiSumma = 0
-    const tarkiblar: any[] = []
+    const tarkiblar: Prisma.XaridTarkibiUncheckedCreateWithoutXaridInput[] = []
     for (const tv of xaridTovarlar) {
       const miqdor = rnd(20, 100)
       const narx = Number(tv.kelishNarxi)

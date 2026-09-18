@@ -18,21 +18,19 @@ function isActive(pathname: string, href: string) {
 export default function MobileNav() {
   const pathname = usePathname()
   const { data: session } = useSession()
-  const rol = (session?.user as any)?.rol
-  const ruxsatlar = (session?.user as any)?.ruxsatlar
-  const filialId = (session?.user as any)?.filialId
-  const ulashilganEgaId = (session?.user as any)?.ulashilganEgaId
-  const [moreOpen, setMoreOpen] = useState(false)
+  const rol = session?.user?.rol
+  const ruxsatlar = session?.user?.ruxsatlar
+  const filialId = session?.user?.filialId
+  const ulashilganEgaId = session?.user?.ulashilganEgaId
+  // Menyu qaysi sahifada ochilgani — boshqa sahifaga o'tilsa o'zi yopiladi
+  const [ochiqYol, setOchiqYol] = useState<string | null>(null)
+  const moreOpen = ochiqYol === pathname
   useBodyScrollLock(moreOpen)
-
-  useEffect(() => {
-    setMoreOpen(false)
-  }, [pathname])
 
   useEffect(() => {
     if (!moreOpen) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreOpen(false)
+      if (e.key === 'Escape') setOchiqYol(null)
     }
     window.addEventListener('keydown', onKey)
     return () => {
@@ -64,7 +62,7 @@ export default function MobileNav() {
           {hasMore && (
             <button
               type="button"
-              onClick={() => setMoreOpen(true)}
+              onClick={() => setOchiqYol(pathname)}
               className="flex flex-col items-center justify-center gap-1 py-2 px-3 min-w-[60px] flex-1 group"
               aria-label="Barcha bo'limlar"
               aria-expanded={moreOpen}
@@ -93,7 +91,7 @@ export default function MobileNav() {
       </nav>
 
       {hasMore && moreOpen && (
-        <MoreSheet items={sorted} pathname={pathname} onClose={() => setMoreOpen(false)} />
+        <MoreSheet items={sorted} pathname={pathname} onClose={() => setOchiqYol(null)} />
       )}
     </>
   )

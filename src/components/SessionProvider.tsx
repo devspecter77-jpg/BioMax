@@ -121,6 +121,8 @@ function SessiyaQorovuli() {
         }
         if (!n.sessiya) {
           // Server sessiyani tan olmadi: hisob nofaol qilingan yoki muddati tugagan
+          // To'liq qayta yuklash ataylab: eski sessiya holati xotiradan tozalansin
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           if (!window.location.pathname.startsWith('/login')) window.location.assign('/login')
           return
         }

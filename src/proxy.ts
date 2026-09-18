@@ -69,7 +69,7 @@ export default auth((req) => {
   }
 
   // Ruxsatlar bo'yicha tekshiruv — ADMIN cheklanmaydi
-  const rol = (req.auth.user as any)?.rol
+  const rol = req.auth.user?.rol
   const birinchiBolak = pathname.slice(1).split('/')[0]
   // Katalogda yo'q, faqat administratorga tegishli sahifalar. Ilgari faqat
   // menyudan yashirilardi — manzilni qo'lda yozgan xodim sahifani ochardi.
@@ -77,7 +77,7 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/', req.url))
   }
   if (rol && rol !== 'ADMIN') {
-    const ruxsatlar: string[] = (req.auth.user as any)?.ruxsatlar || []
+    const ruxsatlar: string[] = req.auth.user?.ruxsatlar || []
     const bolimKalit = birinchiBolak
     const katalogdaBorMi = barchaRuxsatKalitlari.includes(bolimKalit)
     if (katalogdaBorMi && !ruxsatlar.includes(bolimKalit)) {

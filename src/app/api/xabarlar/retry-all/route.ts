@@ -8,7 +8,7 @@ import { queueWorkerTick } from '@/lib/telegram'
 export async function POST(_req: NextRequest) {
   try {
     const session = await auth()
-    if (!session || (session.user as any)?.rol !== 'ADMIN') {
+    if (!session || session.user?.rol !== 'ADMIN') {
       return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
     }
 

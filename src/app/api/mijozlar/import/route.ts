@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
 
     let qoshildi = 0, yangilandi = 0, xatolar = 0
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       const tuman = String(row['Tuman'] || '').trim() || null
 
       try {
-        let mavjud = telefonToza
+        const mavjud = telefonToza
           ? await prisma.mijoz.findFirst({
               where: { telefon: { endsWith: telefonToza.slice(-9) }, ...(filialId ? { filialId } : { egaId }) },
             })
