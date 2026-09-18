@@ -55,3 +55,6 @@ test-results/
 add_tovarlar_temp.js
 __*.ts
 __*.mjs
+
+# Claude Code shaxsiy sozlamalari — har bir dasturchida o'ziniki
+.claude/settings.local.json
