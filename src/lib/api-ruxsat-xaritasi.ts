@@ -157,6 +157,8 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/onlayn-buyurtmalar/:raqam/dostavchik', ['POST'], ['onlayn-buyurtmalar.kuryer'], 'Dostavchik biriktirish'),
   Q('/api/onlayn-buyurtmalar/dostavchiklar', OQISH, ['onlayn-buyurtmalar.kuryer'], 'Dostavchiklar ro‘yxati'),
   Q('/api/onlayn-buyurtmalar/*', OQISH, ['onlayn-buyurtmalar'], 'Onlayn buyurtmalar'),
+  Q('/api/ilova-qr', ['PUT'], ['ilova-qr.manzil'], 'QR manzilini o‘zgartirish'),
+  Q('/api/ilova-qr/*', '*', ['ilova-qr'], 'Ilova QR kodi'),
   Q('/api/namuna-tovar/dostavchiklar/:id/namuna', ['POST'], ['namuna-tovar.berish'], 'Namuna berish'),
   Q('/api/namuna-tovar/namunalar/*', ['POST'], ['namuna-tovar.berish'], 'Namunani qaytib olish yoki o‘chirish'),
   Q('/api/namuna-tovar/dostavchiklar/*', YOZISH, ['namuna-tovar.dostavchik'], 'Dostavchikni o‘zgartirish'),

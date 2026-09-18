@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   LayoutDashboard, ShoppingCart, Package, Warehouse,
   Users, CreditCard, BarChart3,
-  ShoppingBag, Building, Gift, ArrowRightLeft, MapPin, Truck, Wallet, ClipboardList, UsersRound, Boxes, Globe, LayoutGrid, ShieldCheck, PackageOpen,
+  ShoppingBag, Building, Gift, ArrowRightLeft, MapPin, Truck, Wallet, ClipboardList, UsersRound, Boxes, Globe, LayoutGrid, ShieldCheck, PackageOpen, QrCode,
 } from 'lucide-react'
 import { barchaRuxsatKalitlari } from '@/lib/ruxsat-katalogi'
 
@@ -34,6 +34,8 @@ export const navItems: NavItem[] = [
   { href: '/onlayn-vitrina', label: 'Onlayn vitrina', icon: LayoutGrid, roles: HAMMA, section: 'SAVDO' },
   // Dostavchiklar: berilgan namuna tovarlar, jonli joylashuv va yetkazishlar. Standart — faqat ADMIN.
   { href: '/namuna-tovar', label: 'Namuna tovar', icon: PackageOpen, roles: HAMMA, section: 'SAVDO' },
+  // Mijoz skanerlab ilovani o'rnatadigan QR kod. Standart — faqat ADMIN.
+  { href: '/ilova-qr', label: 'Ilova QR kodi', icon: QrCode, roles: HAMMA, section: 'SAVDO' },
 
   { href: '/tovarlar', label: 'Tovarlar', icon: Package, roles: HAMMA, section: 'OMBOR' },
   // Ombor — kategoriyalarning ustki guruhi (katta kategoriya).
@@ -70,7 +72,7 @@ export const navItems: NavItem[] = [
  *  varag'ida chiqadi (agar 4 tadan ortiq bo'lsa). */
 export const mobilePriorityOrder = [
   '/', '/sotuv', '/onlayn-buyurtmalar', '/namuna-tovar', '/nasiyalar', '/tovarlar', '/ombor', '/mijozlar',
-  '/ballar', '/omborlar', '/kunlik-hisobot', '/tolovlar', '/hisobotlar', '/taminotchilar', '/xaridlar', '/otkazmalar', '/onlayn-vitrina', '/xodimlar', '/ruxsatlar', '/xarita', '/filiallar',
+  '/ballar', '/omborlar', '/kunlik-hisobot', '/tolovlar', '/hisobotlar', '/taminotchilar', '/xaridlar', '/otkazmalar', '/onlayn-vitrina', '/ilova-qr', '/xodimlar', '/ruxsatlar', '/xarita', '/filiallar',
 ]
 
 /**
@@ -95,7 +97,7 @@ export function visibleNavItems(rol: string | undefined, ruxsatlar?: string[] | 
       && (filialId || ulashilganEgaId)
     ) return false
     // Onlayn buyurtmalar markaziy do'konniki — filial xodimi ko'rmaydi (API ham rad etadi)
-    if ((item.href === '/onlayn-buyurtmalar' || item.href === '/onlayn-vitrina' || item.href === '/namuna-tovar') && filialId) return false
+    if ((item.href === '/onlayn-buyurtmalar' || item.href === '/onlayn-vitrina' || item.href === '/namuna-tovar' || item.href === '/ilova-qr') && filialId) return false
     if (rol === 'ADMIN') return true
     // Ruxsatlar hali kelmagan (eski sessiya) — faqat bosh sahifa, keyingi yangilanishgacha
     if (!Array.isArray(ruxsatlar)) return item.href === '/'

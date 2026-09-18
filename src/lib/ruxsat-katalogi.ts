@@ -53,6 +53,11 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
     ],
   },
   {
+    kalit: 'ilova-qr', label: 'Ilova QR kodi', izoh: 'Mijoz skanerlab do‘kon ilovasini telefoniga o‘rnatadigan kod', children: [
+      { kalit: 'ilova-qr.manzil', label: 'QR manzilini o‘zgartirish', izoh: 'Chop etilgan eski kodlar ishlamay qolishi mumkin', xavfli: true },
+    ],
+  },
+  {
     kalit: 'namuna-tovar', label: 'Namuna tovar', izoh: 'Dostavchiklar, ularga berilgan namuna tovarlar, joylashuvi va yetkazishlari', children: [
       { kalit: 'namuna-tovar.berish', label: 'Namuna berish va qaytib olish', izoh: 'Dostavchikka namuna yozish, «topshirdi» deb belgilash' },
       { kalit: 'namuna-tovar.dostavchik', label: 'Dostavchik qo‘shish va tahrirlash', izoh: 'Tizimga kiradigan yangi hisob ochiladi', xavfli: true },
@@ -200,7 +205,7 @@ const STANDART_YOPIQ = new Set([
   // Dostavchik buyurtmani tasdiqlamaydi, bekor qilmaydi va boshqalarga taqsimlamaydi —
   // faqat o'ziga biriktirilganini yetkazadi
   'onlayn-buyurtmalar.boshqarish:DOSTAVCHIK', 'onlayn-buyurtmalar.bekor:DOSTAVCHIK', 'onlayn-buyurtmalar.kuryer:DOSTAVCHIK',
-  'namuna-tovar.dostavchik',
+  'namuna-tovar.dostavchik', 'ilova-qr.manzil',
   'tovarlar.ochirish', 'tovarlar.import', 'mijozlar.ochirish', 'mijozlar.import', 'mijozlar.export',
   'nasiyalar.ochirish', 'nasiyalar.import', 'nasiyalar.xarajat',
   'taminotchilar.ochirish', 'taminotchilar.qarz', 'ballar.qolda', 'ballar.sozlama', 'xodimlar.qoshish', 'xodimlar.oylik', 'xodimlar.mulk', 'xodimlar.sotuvlar',
