@@ -29,8 +29,9 @@ interface Javob {
 
 interface Tekshiruv {
   ok: boolean
-  holat?: number
   xabar: string
+  /** Har bir bo'g'in alohida: sayt, ERP kaliti, sayt ↔ ERP aloqasi */
+  qadamlar?: { nomi: string; ok: boolean; xabar: string }[]
 }
 
 export default function IlovaQrPage() {
@@ -205,20 +206,39 @@ export default function IlovaQrPage() {
               <button onClick={() => void tekshir()} disabled={tekshirilmoqda || !d.manzil}
                 className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-60 flex items-center justify-center gap-2">
                 {tekshirilmoqda ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
-                QR ishlayaptimi — tekshirish
+                Onlayn do‘konni tekshirish
               </button>
               {tekshiruv && (
-                <p className={`mt-2.5 flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm ${
-                  tekshiruv.ok
-                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-400'
-                    : 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400'
-                }`}>
-                  {tekshiruv.ok ? <Check size={16} className="mt-0.5 shrink-0" /> : <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
-                  <span>{tekshiruv.xabar}</span>
-                </p>
+                <div className="mt-2.5 space-y-2" role="status">
+                  <p className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm font-medium ${
+                    tekshiruv.ok
+                      ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-400'
+                      : 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400'
+                  }`}>
+                    {tekshiruv.ok ? <Check size={16} className="mt-0.5 shrink-0" /> : <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
+                    <span>{tekshiruv.xabar}</span>
+                  </p>
+                  {tekshiruv.qadamlar && tekshiruv.qadamlar.length > 0 && (
+                    <ul className="divide-y divide-gray-100 dark:divide-neutral-800 rounded-xl border border-gray-200 dark:border-neutral-800">
+                      {tekshiruv.qadamlar.map(q => (
+                        <li key={q.nomi} className="flex items-start gap-2.5 px-3 py-2.5 text-sm">
+                          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                            q.ok ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                          }`}>
+                            {q.ok ? <Check size={12} /> : <AlertTriangle size={11} />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block font-semibold text-gray-900 dark:text-gray-100">{q.nomi}</span>
+                            <span className="block text-gray-600 dark:text-gray-400">{q.xabar}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Tekshiruv saytga kirib ko‘radi: sahifa ochiladimi va ilova sozlamasi joyidami.
+                Uch narsa tekshiriladi: sayt ochiladimi, ERP’da sayt kaliti bormi va sayt ERP’ga ulanyaptimi.
               </p>
             </section>
 
