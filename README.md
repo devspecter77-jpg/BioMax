@@ -3,8 +3,8 @@
 Do'kon boshqaruv tizimi (ERP/POS): kassa, ombor va filiallar, mijozlar va nasiya,
 ta'minotchilar, xodimlar va ruxsatlar, hisobotlar, onlayn buyurtmalar.
 
-Jonli: **https://www.biomaxx.store** · Onlayn do'kon:
-[biomax-marketplace](https://github.com/ozodbek98776-sudo/Biomax-marketplace)
+Jonli: **https://www.biomaxx.store** · **https://qaqnus222.biznesjon.uz**  
+Onlayn do'kon: [biomax-marketplace](https://github.com/ozodbek98776-sudo/Biomax-marketplace) · **https://www.biomaxmarketplace.store**
 
 ## Texnologiyalar
 
@@ -15,6 +15,7 @@ Jonli: **https://www.biomaxx.store** · Onlayn do'kon:
 | Kirish | NextAuth v5 (JWT sessiya, login + parol) |
 | Xabarlar | Telegram (GramJS) — chek, nasiya eslatmasi, kirish kodi |
 | Joylashtirish | Vercel (`sin1`) + Vercel Cron |
+| Integratsiya | Marketplace API (HMAC-SHA256 autentifikatsiya) |
 
 ## Ishga tushirish
 
@@ -84,3 +85,62 @@ e'lon qilinadi, administrator ularni «Ruxsatlar» bo'limida xodimga beradi.
 Cron vazifalar [vercel.json](vercel.json) da: nasiya eslatmasi va kunlik hisobot.
 
 Batafsil texnik tavsif — [docs/protokol.md](docs/protokol.md).
+
+## Marketplace Integratsiyasi
+
+BioMax ERP Marketplace (onlayn do'kon) bilan to'liq integratsiya qilingan.
+
+### API Marshrutlar
+
+**10 ta endpoint mavjud** (`/api/marketplace/*`):
+
+| Marshrut | Method | Maqsad |
+|----------|--------|--------|
+| `/salomatlik` | GET | Health check, bog'lanish testi |
+| `/katalog` | GET | Vitrina uchun mahsulotlar (BOR/KAM/YOQ) |
+| `/qoldiq` | POST | Bir nechta tovar mavjudligini tekshirish |
+| `/rezerv` | POST | Buyurtma uchun zaxira band qilish |
+| `/rezerv-boshat` | POST | Rezervni bo'shatish |
+| `/bajarish` | POST | Buyurtmani bajarish, sotuv yaratish |
+| `/mijoz` | POST | Mijoz topish yoki yaratish |
+| `/dokon` | GET | Do'kon aloqa ma'lumotlari |
+| `/rasm/:id/:n` | GET | Mahsulot rasmi |
+| `/kod-yubor` | POST | Telegram orqali kirish kodi |
+
+### Xavfsizlik
+
+- ✅ **HMAC-SHA256** autentifikatsiya har bir so'rovda
+- ✅ **Timing-safe** taqqoslash
+- ✅ **5 daqiqalik** vaqt oynasi
+- ✅ **Aniq qoldiq yashirilgan** (faqat BOR/KAM/YOQ)
+- ✅ **Kelish narxi va ta'minotchi** hech qachon qaytarilmaydi
+
+### Hujjatlar
+
+- 📚 [MARKETPLACE_INTEGRATSIYA.md](MARKETPLACE_INTEGRATSIYA.md) - To'liq API hujjatlari (500+ qator)
+- 📄 [MARKETPLACE_XULOSA.md](MARKETPLACE_XULOSA.md) - Qisqa xulosa
+- ✅ [TEKSHIRUV_NATIJASI.md](TEKSHIRUV_NATIJASI.md) - Tekshiruv hisoboti
+- 🧪 [test-marketplace.mjs](test-marketplace.mjs) - Test script
+
+### Test qilish
+
+```bash
+# Automatic test (salomatlik, katalog, qoldiq, mijoz, rezerv)
+node test-marketplace.mjs
+
+# Yoki curl orqali
+curl -H "X-MP-Timestamp: <timestamp>" \
+     -H "X-MP-Signature: <hmac-signature>" \
+     https://qaqnus222.biznesjon.uz/api/marketplace/salomatlik
+```
+
+### Sozlash
+
+.env faylida quyidagilar kerak:
+```bash
+MP_HMAC_SECRET="<64-belgili-kalit>"  # Marketplace bilan bir xil
+MARKETPLACE_URL="https://www.biomaxmarketplace.store"
+MARKETPLACE_OMMAVIY_URL="https://www.biomaxmarketplace.store"
+```
+
+Batafsil: [MARKETPLACE_INTEGRATSIYA.md](MARKETPLACE_INTEGRATSIYA.md)
