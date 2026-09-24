@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server'
-import { mpSorov } from '@/lib/marketplace-mijoz'
+import { buyurtmaBelgisi } from '@/lib/marketplace-baza'
 import { onlaynRuxsat } from '@/lib/onlayn-buyurtma-server'
 import { yetkazishBelgisi } from '@/lib/dostavchik-server'
 
 export const dynamic = 'force-dynamic'
-
-interface MpBelgi {
-  belgi: string
-  yangiSoni: number
-  oxirgi: { raqam: string; yaratilgan: string } | null
-}
 
 /**
  * Jonli yangilanish uchun qisqa belgi — panel uni bir necha soniyada bir so'raydi.
@@ -25,15 +19,14 @@ export async function GET() {
   const dostavchik = u.rol === 'DOSTAVCHIK'
 
   const [mp, erp] = await Promise.all([
-    mpSorov<MpBelgi>('GET', '/api/erp/buyurtmalar/belgi'),
+    buyurtmaBelgisi(),
     yetkazishBelgisi(dostavchik ? u.id : undefined),
   ])
-  if (!mp.ok) return NextResponse.json({ kod: mp.kod, xato: mp.xato }, { status: mp.holat >= 500 ? 502 : mp.holat })
 
   return NextResponse.json({
-    belgi: `${mp.qiymat.belgi}|${erp.belgi}`,
-    yangiSoni: dostavchik ? null : mp.qiymat.yangiSoni,
-    oxirgi: dostavchik ? null : mp.qiymat.oxirgi,
+    belgi: `${mp.belgi}|${erp.belgi}`,
+    yangiSoni: dostavchik ? null : mp.yangiSoni,
+    oxirgi: dostavchik ? null : mp.oxirgi,
     /** Dostavchik uchun — o'ziga biriktirilgan faol buyurtmalar soni */
     faolYetkazish: erp.faolSoni,
   }, { headers: { 'Cache-Control': 'no-store' } })

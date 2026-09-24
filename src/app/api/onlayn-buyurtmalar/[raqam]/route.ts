@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mpSorov } from '@/lib/marketplace-mijoz'
+import { buyurtmaTafsiloti } from '@/lib/marketplace-baza'
 import { onlaynRuxsat } from '@/lib/onlayn-buyurtma-server'
-import type { OnlaynBuyurtma } from '@/lib/onlayn-buyurtma'
 import { erpIzi } from '@/lib/onlayn-sotuv-server'
 import { buyurtmaDostavchiklari } from '@/lib/dostavchik-server'
 
@@ -20,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ raq
     return NextResponse.json({ xato: 'Buyurtma topilmadi' }, { status: 404 })
   }
 
-  const n = await mpSorov<OnlaynBuyurtma>('GET', `/api/erp/buyurtmalar/${encodeURIComponent(raqam)}`)
-  if (!n.ok) return NextResponse.json({ kod: n.kod, xato: n.xato }, { status: n.holat >= 500 ? 502 : n.holat })
-  return NextResponse.json({ ...n.qiymat, erp: await erpIzi(raqam), dostavchik })
+  const b = await buyurtmaTafsiloti(raqam)
+  if (!b) return NextResponse.json({ xato: 'Buyurtma topilmadi' }, { status: 404 })
+  return NextResponse.json({ ...b, erp: await erpIzi(raqam), dostavchik })
 }
