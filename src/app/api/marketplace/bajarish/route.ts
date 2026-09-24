@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { imzoniTekshir } from '@/lib/marketplace-imzo'
 import { onlaynSotuvYarat } from '@/lib/onlayn-sotuv-server'
+import { prisma } from '@/lib/prisma'
 import type { OnlaynBuyurtma } from '@/lib/onlayn-buyurtma'
 import type { Session } from 'next-auth'
 
@@ -12,9 +13,36 @@ import type { Session } from 'next-auth'
 
 export const dynamic = 'force-dynamic'
 
-const TIZIM_SESSION: Session = {
-  user: { id: 'marketplace-system', ism: 'Marketplace', rol: 'ADMIN' },
-  expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+/**
+ * Sotuvni kim nomidan yozamiz.
+ *
+ * `onlaynSotuvYarat` sessiyadan ikki narsani oladi: kassir (sotuvga
+ * `foydalanuvchiId` bo'lib yoziladi, ya'ni BAZADA BOR hisob bo'lishi shart)
+ * va ma'lumot doirasi (`egaFilialWhere` — qaysi katalogdagi mahsulotlar).
+ * Shuning uchun o'ylab topilgan id emas, haqiqiy Ega hisobi olinadi:
+ * filialsiz, faol va o'zi boshqa Eganing ulashgan admini bo'lmagan ADMIN.
+ */
+async function egaSessiyasi(): Promise<Session | null> {
+  const ega = await prisma.foydalanuvchi.findFirst({
+    where: { rol: 'ADMIN', faol: true, filialId: null, ulashilganEgaId: null },
+    orderBy: { yaratilgan: 'asc' },
+    select: { id: true, ism: true, rol: true },
+  })
+  if (!ega) return null
+  return {
+    user: {
+      id: ega.id,
+      name: ega.ism,
+      rol: ega.rol,
+      filialId: null,
+      filialNomi: null,
+      ulashilganEgaId: null,
+      tovarTahrirlashMumkin: true,
+      tovarOchirishMumkin: true,
+      ruxsatlar: null,
+    },
+    expires: new Date(Date.now() + 60_000).toISOString(),
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -89,7 +117,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const natija = await onlaynSotuvYarat(buyurtma as OnlaynBuyurtma, TIZIM_SESSION)
+    const sessiya = await egaSessiyasi()
+    if (!sessiya) {
+      console.error('[mp/bajarish] Ega hisobi topilmadi — sotuvni kim nomidan yozishni aniqlab bo‘lmadi')
+      return NextResponse.json({ kod: 'ega_topilmadi', xato: 'Do\'kon hisobi sozlanmagan' }, { status: 503 })
+    }
+
+    const natija = await onlaynSotuvYarat(buyurtma as OnlaynBuyurtma, sessiya)
     
     if (!natija.ok) {
       return NextResponse.json({ kod: 'sotuv_xatosi', xato: natija.xato }, { status: 422 })
