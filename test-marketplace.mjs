@@ -8,8 +8,14 @@
 
 import crypto from 'crypto'
 
-const ERP_URL = 'https://qaqnus222.biznesjon.uz'
-const HMAC_SECRET = '2ad59d54e510b60a3b6a5d03ee2f840e0a647a7f34fcc38bf993ce1d0ea7f65d'
+// Kalit va manzil MUHITDAN olinadi — kodga yozilsa repoga tushib ketadi:
+//   ERP_URL=https://www.biomaxx.store MP_HMAC_SECRET=<kalit> node test-marketplace.mjs
+const ERP_URL = process.env.ERP_URL || 'http://localhost:3001'
+const HMAC_SECRET = process.env.MP_HMAC_SECRET || ''
+if (!HMAC_SECRET) {
+  console.error('MP_HMAC_SECRET yo‘q — muhit o‘zgaruvchisi sifatida bering')
+  process.exit(1)
+}
 
 /**
  * HMAC imzosini yaratish

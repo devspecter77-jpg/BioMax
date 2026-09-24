@@ -1,11 +1,16 @@
 # BioMax ERP ↔ Marketplace Integratsiya - Xulosa
 
+> **Eslatma (2026-09-24):** katalog va buyurtmalar endi bitta bazadagi
+> ko‘rinishlardan to‘g‘ridan-to‘g‘ri o‘qiladi (README → «Marketplace
+> integratsiyasi»). Quyidagi HMAC shartnomasi holat o‘zgartirish va eski
+> deploylar uchun kuchda qoladi.
+
 ## ✅ Bajarilgan ishlar
 
 ### 1. .env fayli yangilandi
 
 ```env
-MP_HMAC_SECRET=2ad59d54e510b60a3b6a5d03ee2f840e0a647a7f34fcc38bf993ce1d0ea7f65d
+MP_HMAC_SECRET=<KALIT — .env da, repoga YOZILMAYDI>
 MARKETPLACE_URL=https://www.biomaxmarketplace.store
 MARKETPLACE_OMMAVIY_URL=https://www.biomaxmarketplace.store
 ```
@@ -115,7 +120,7 @@ Bu script quyidagi testlarni o'tkazadi:
 # Timestamp va imzo yaratish kerak
 curl -H "X-MP-Timestamp: <TIMESTAMP>" \
      -H "X-MP-Signature: <SIGNATURE>" \
-     https://qaqnus222.biznesjon.uz/api/marketplace/salomatlik
+     https://www.biomaxx.store/api/marketplace/salomatlik
 ```
 
 #### Qoldiq:
@@ -125,7 +130,7 @@ curl -X POST \
      -H "X-MP-Timestamp: <TIMESTAMP>" \
      -H "X-MP-Signature: <SIGNATURE>" \
      -d '{"tovarIds": ["tovar-id-1"]}' \
-     https://qaqnus222.biznesjon.uz/api/marketplace/qoldiq
+     https://www.biomaxx.store/api/marketplace/qoldiq
 ```
 
 ### 3. Marketplace tomonidan test
@@ -219,7 +224,7 @@ Kutilgan javob vaqtlari:
 - Barcha marshrutlar HMAC autentifikatsiya talab qiladi
 
 **Environment:**
-- Production: https://qaqnus222.biznesjon.uz
+- Production: https://www.biomaxx.store
 - Marketplace: https://www.biomaxmarketplace.store
 
 ---

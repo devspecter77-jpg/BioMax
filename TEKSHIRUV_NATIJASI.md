@@ -1,5 +1,10 @@
 # ✅ TEKSHIRUV NATIJASI - BioMax ERP ↔ Marketplace Integratsiya
 
+> **Eslatma (2026-09-24):** katalog va buyurtmalar endi bitta bazadagi
+> ko‘rinishlardan to‘g‘ridan-to‘g‘ri o‘qiladi (README → «Marketplace
+> integratsiyasi»). Quyidagi HMAC shartnomasi holat o‘zgartirish va eski
+> deploylar uchun kuchda qoladi.
+
 ## 📅 Sana: 2026-09-21
 ## ✅ Holat: HAMMASI TAYYOR!
 
@@ -10,7 +15,7 @@
 ### ✅ Mavjud va to'g'ri sozlangan:
 
 ```env
-MP_HMAC_SECRET=2ad59d54e510b60a3b6a5d03ee2f840e0a647a7f34fcc38bf993ce1d0ea7f65d
+MP_HMAC_SECRET=<KALIT — .env da, repoga YOZILMAYDI>
 MARKETPLACE_URL=https://www.biomaxmarketplace.store
 MARKETPLACE_OMMAVIY_URL=https://www.biomaxmarketplace.store
 ```
@@ -169,7 +174,7 @@ Test qiladigan marshrutlar:
 # Marketplace tomonidan HMAC imzo bilan
 curl -H "X-MP-Timestamp: <timestamp>" \
      -H "X-MP-Signature: <signature>" \
-     https://qaqnus222.biznesjon.uz/api/marketplace/salomatlik
+     https://www.biomaxx.store/api/marketplace/salomatlik
 ```
 
 ---
@@ -258,7 +263,7 @@ curl -H "X-MP-Timestamp: <timestamp>" \
 - test-marketplace.mjs - Automatic test script
 
 **API Base URL:**
-- Production: https://qaqnus222.biznesjon.uz/api/marketplace/*
+- Production: https://www.biomaxx.store/api/marketplace/*
 
 **Marketplace URL:**
 - https://www.biomaxmarketplace.store

@@ -86,13 +86,31 @@ Cron vazifalar [vercel.json](vercel.json) da: nasiya eslatmasi va kunlik hisobot
 
 Batafsil texnik tavsif — [docs/protokol.md](docs/protokol.md).
 
-## Marketplace Integratsiyasi
+## Marketplace integratsiyasi
 
-BioMax ERP Marketplace (onlayn do'kon) bilan to'liq integratsiya qilingan.
+ERP va onlayn do'kon **bitta PostgreSQL bazasida**: ERP `public`, do'kon
+`marketplace` sxemasida. Shuning uchun ma'lumot almashinuvi ikki qatlamda:
 
-### API Marshrutlar
+| Yo'nalish | Nima | Qanday |
+|---|---|---|
+| Sayt → ERP ma'lumotlari | katalog, narx, mavjudlik, do'kon ma'lumoti, rasm | `public.vitrina_katalog` ko'rinishidan **to'g'ridan-to'g'ri** (real vaqtda) |
+| ERP → buyurtmalar | panel ro'yxati, tafsilot, jonli belgi | `marketplace.erp_buyurtmalar` ko'rinishidan **to'g'ridan-to'g'ri** |
+| ERP → buyurtma holatini o'zgartirish | tasdiqlash, yig'ish, yo'lda, bekor | imzolangan `POST /api/erp/*` (qoidalar do'kon tomonida) |
 
-**10 ta endpoint mavjud** (`/api/marketplace/*`):
+Ko'rinishlar qoidalarni o'zida saqlaydi: `vitrina_katalog` faqat saytga
+chiqarilgan mahsulotni va BOR/KAM/YOQ mavjudlikni beradi (aniq qoldiq,
+kelish narxi va ta'minotchi YO'Q); `erp_buyurtmalar` esa buyurtma qatorlari,
+tarixi va ruxsat etilgan keyingi holatlarni beradi.
+
+Natijada katalog va panel HMAC kalitiga bog'liq emas — kalit faqat holat
+o'zgartirish uchun kerak (`MP_HMAC_SECRET`).
+
+### Eski HTTP shartnomasi (`/api/marketplace/*`)
+
+Marshrutlar joyida qoldi: jonli saytda hali eski versiya ishlayapti va u
+shularga murojaat qiladi. Yangi deploydan keyin ular faqat zaxira yo'l.
+
+**10 ta endpoint** (`/api/marketplace/*`):
 
 | Marshrut | Method | Maqsad |
 |----------|--------|--------|

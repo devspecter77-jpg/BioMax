@@ -1,5 +1,10 @@
 # BioMax ERP ↔ Marketplace Integratsiya
 
+> **Eslatma (2026-09-24):** katalog va buyurtmalar endi bitta bazadagi
+> ko‘rinishlardan to‘g‘ridan-to‘g‘ri o‘qiladi (README → «Marketplace
+> integratsiyasi»). Quyidagi HMAC shartnomasi holat o‘zgartirish va eski
+> deploylar uchun kuchda qoladi.
+
 ## Umumiy ma'lumot
 
 BioMax ERP tizimi Marketplace (onlayn do'kon) bilan HMAC-SHA256 autentifikatsiya orqali integratsiya qilingan. Bu hujjatda integratsiya sozlamalari va API marshrutlari haqida ma'lumot berilgan.
@@ -12,7 +17,7 @@ Quyidagi o'zgaruvchilar `.env` faylida sozlangan:
 
 ```env
 # Marketplace HMAC kaliti (Marketplace'dagi ERP_HMAC_SECRET bilan AYNAN bir xil bo'lishi shart)
-MP_HMAC_SECRET=2ad59d54e510b60a3b6a5d03ee2f840e0a647a7f34fcc38bf993ce1d0ea7f65d
+MP_HMAC_SECRET=<KALIT — .env da, repoga YOZILMAYDI>
 
 # Marketplace URL'lari
 MARKETPLACE_URL=https://www.biomaxmarketplace.store
@@ -439,7 +444,7 @@ Marketplace keyinroq qayta urinadi (exponential backoff).
 
 ```bash
 # HMAC imzosiz (xato)
-curl https://qaqnus222.biznesjon.uz/api/marketplace/salomatlik
+curl https://www.biomaxx.store/api/marketplace/salomatlik
 
 # HMAC imzosi bilan (muvaffaqiyatli)
 # TypeScript yoki Python orqali imzo yaratib test qiling
@@ -450,7 +455,7 @@ curl https://qaqnus222.biznesjon.uz/api/marketplace/salomatlik
 ```bash
 curl -H "X-MP-Timestamp: $(date +%s)000" \
      -H "X-MP-Signature: <HMAC_IMZO>" \
-     https://qaqnus222.biznesjon.uz/api/marketplace/katalog
+     https://www.biomaxx.store/api/marketplace/katalog
 ```
 
 ### 3. Qoldiq
@@ -461,7 +466,7 @@ curl -X POST \
      -H "X-MP-Timestamp: $(date +%s)000" \
      -H "X-MP-Signature: <HMAC_IMZO>" \
      -d '{"tovarIds": ["tovar-id-1", "tovar-id-2"]}' \
-     https://qaqnus222.biznesjon.uz/api/marketplace/qoldiq
+     https://www.biomaxx.store/api/marketplace/qoldiq
 ```
 
 ## Texnik detallar
