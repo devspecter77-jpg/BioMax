@@ -2498,6 +2498,11 @@ export default function SotuvPage() {
                       kamQoldi={kamQoldi}
                       kelishNarxi={t.kelishNarxi}
                       sotishNarxi={t.sotishNarxi}
+                      // `?? null` — API maydonni umuman qaytarmasa ham qator
+                      // o'rnida qolsin ("—"), aks holda kartalar bo'yi
+                      // har xil bo'lib tarh qatorlari notekis chiqardi.
+                      optomNarxi={t.optomNarxi ?? null}
+                      bolishNarxi={t.bolishNarxi ?? null}
                       valyuta={t.valyuta}
                       sotishRangi="text-pos"
                       olcham="keng"

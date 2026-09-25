@@ -2,7 +2,7 @@
 
 import { formatNarx } from '@/lib/utils'
 
-// Mahsulot kartasidagi "Miqdori / Kelish / Sotish" paneli.
+// Mahsulot kartasidagi "Miqdori / Kelish / Sotish / Optom / Bo'lish" paneli.
 //
 // Ilgari bu uch ustunli grid edi va `tovarlar` hamda `sotuv` sahifalarida
 // ikki nusxada yozilgan edi. Muammo: har qiymatga kartaning ~33% i tegardi,
@@ -24,6 +24,20 @@ interface Props {
   kamQoldi?: boolean
   kelishNarxi: number | string | null
   sotishNarxi: number | string | null
+  /**
+   * Optom va bo'lish narxlari. Kassada narx turi (Chakana/Optom/Bo'lish)
+   * tanlanadi — kassir qaysi tugmani bosishdan OLDIN uchala narxni ko'rib
+   * turishi kerak, aks holda tanlovni savatga qo'shgandan keyingina
+   * bilib olardi.
+   *
+   * `undefined` — qator umuman chizilmaydi (sahifa bu narxlarni
+   * ko'rsatmaydi). `null` — narx kiritilmagan yoki foydalanuvchidan
+   * yashirilgan: qator turadi, qiymat "—" bo'ladi. Ikkisi ataylab
+   * farqlanadi: kartalar bo'yi bir xil qolsin, aks holda optom narxi
+   * bor va yo'q mahsulotlar tarh qatorida notekis turardi.
+   */
+  optomNarxi?: number | string | null
+  bolishNarxi?: number | string | null
   valyuta?: string
   /** Sotish narxi rangi: katalogda yashil, kassada brend rangi. */
   sotishRangi?: string
@@ -37,7 +51,7 @@ interface Props {
   miqdorKorsatilsinmi?: boolean
 }
 
-function narxMatni(narx: number | string | null, valyuta?: string) {
+function narxMatni(narx: number | string | null | undefined, valyuta?: string) {
   // `null` — narx yashirilgan yoki kiritilmagan. Nolga aylantirmaymiz:
   // "0 so'm" yolg'on ma'lumot bo'lardi.
   if (narx === null || narx === undefined) return '—'
@@ -72,7 +86,7 @@ function Qator({ yorliq, qiymat, sarlavha, qiymatCls, olcham }: {
 
 export default function TovarNarxPaneli({
   qoldiq, birlik, kamQoldi = false,
-  kelishNarxi, sotishNarxi, valyuta,
+  kelishNarxi, sotishNarxi, optomNarxi, bolishNarxi, valyuta,
   sotishRangi = 'text-green-600 dark:text-green-500',
   olcham = 'ixcham',
   miqdorKorsatilsinmi = true,
@@ -80,6 +94,8 @@ export default function TovarNarxPaneli({
   const birlikMatni = birlik.toLowerCase()
   const kelish = narxMatni(kelishNarxi, valyuta)
   const sotish = narxMatni(sotishNarxi, valyuta)
+  const optom = narxMatni(optomNarxi, valyuta)
+  const bolish = narxMatni(bolishNarxi, valyuta)
 
   return (
     <div className="mt-2.5 sm:mt-3 bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-1 divide-y divide-gray-200/70 dark:divide-neutral-700/70">
@@ -111,6 +127,27 @@ export default function TovarNarxPaneli({
         qiymat={sotish}
         qiymatCls={`font-semibold ${sotishRangi}`}
       />
+      {/* Optom va bo'lish — asosiy sotish narxidan pastda va betaraf rangda.
+          Uchalasi bir xil urg'uda bo'lsa karta "uch narxli" bo'lib chalkashtirardi:
+          standart narx AYNAN sotish narxi, qolgan ikkitasi esa maxsus holat. */}
+      {optomNarxi !== undefined && (
+        <Qator
+          yorliq="Optom"
+          olcham={olcham}
+          sarlavha={optom}
+          qiymat={optom}
+          qiymatCls="text-gray-700 dark:text-gray-300 font-medium"
+        />
+      )}
+      {bolishNarxi !== undefined && (
+        <Qator
+          yorliq="Bo'lish"
+          olcham={olcham}
+          sarlavha={bolish}
+          qiymat={bolish}
+          qiymatCls="text-gray-700 dark:text-gray-300 font-medium"
+        />
+      )}
     </div>
   )
 }

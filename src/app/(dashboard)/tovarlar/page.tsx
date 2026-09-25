@@ -1070,6 +1070,8 @@ export default function TovarlarPage() {
                   kamQoldi={t.qoldiq !== null && t.qoldiq <= t.minimalQoldiq}
                   kelishNarxi={t.kelishNarxi}
                   sotishNarxi={t.sotishNarxi}
+                  optomNarxi={t.optomNarxi}
+                  bolishNarxi={t.bolishNarxi}
                   valyuta={t.valyuta}
                 />
               </div>
