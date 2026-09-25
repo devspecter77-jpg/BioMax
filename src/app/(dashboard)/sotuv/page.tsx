@@ -6,7 +6,7 @@ import { buildChekHtml, chekChopEtish as printChek, type ChekData, type ChekTark
 import { kodniAjrat } from '@/lib/qr-kod'
 import { toast } from 'sonner'
 import type { Html5Qrcode } from 'html5-qrcode'
-import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, LayoutGrid, Link2, Share2, Package, Plus, Gift, Percent, MapPin, Send } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, LayoutGrid, Link2, Share2, Package, Plus, Minus, Gift, Percent, MapPin, Send } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { jsPDF } from 'jspdf'
 import Combobox from '@/components/ui/combobox'
@@ -112,6 +112,251 @@ function MiqdorInput({ miqdor, max, onChange }: { miqdor: number; max: number; o
       onWheel={e => e.currentTarget.blur()}
       className="w-14 h-7 text-center text-sm font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-pos shrink-0"
     />
+  )
+}
+
+// Kasr miqdor faqat o'lchanadigan birliklarda (1.5 kg); dona, pachka va
+// quti — butun son.
+const KASRLI_BIRLIKLAR = new Set(['KG', 'LITR', 'METR'])
+const kasrliBirlikmi = (birlik: string) => KASRLI_BIRLIKLAR.has(birlik.toUpperCase())
+// 0.1 + 0.2 kabi suzuvchi nuqta qoldiqlari savatga tushmasin — bazada
+// miqdor 3 xonali kasr bilan saqlanadi.
+const miqdorYaxlitla = (n: number) => Math.round(n * 1000) / 1000
+const miqdorniOqi = (matn: string) => parseFloat(matn.replace(',', '.'))
+
+/** Skanerlangan miqdor savatga sig'adimi; sig'masa — kassirga ko'rsatiladigan sabab. */
+function skanMiqdorXatosi(miqdor: number, tovar: Tovar, savatda: number): string | null {
+  const birlik = tovar.birlik.toLowerCase()
+  const qolgan = miqdorYaxlitla(tovar.qoldiq - savatda)
+  if (!Number.isFinite(miqdor) || miqdor <= 0) return 'Miqdorni kiriting'
+  if (!kasrliBirlikmi(tovar.birlik) && !Number.isInteger(miqdor)) return 'Butun son kiriting'
+  if (miqdor > qolgan) {
+    return savatda > 0
+      ? `Savatda ${savatda} ${birlik} bor — yana faqat ${qolgan} ${birlik} qo'shish mumkin`
+      : `Omborda faqat ${qolgan} ${birlik} bor`
+  }
+  return null
+}
+
+interface SkanMiqdorProps {
+  tovar: Tovar
+  bonus: boolean
+  /** Bir birlik narxi, so'mda (bonusda 0) */
+  narx: number
+  /** Savatdagi shu mahsulot qatorining miqdori */
+  savatda: number
+  /** Oyna ochilgandagi miqdor */
+  boshlangich: string
+  onTasdiq: (miqdor: number) => void
+  onYop: () => void
+  /**
+   * Oyna ochiq turganda USB skaner yangi kod o'qidi. `true` — xuddi shu
+   * mahsulot (miqdor +1 bo'ladi).
+   */
+  onSkan: (oldingiMatn: string, kod: string) => Promise<boolean>
+}
+
+/**
+ * Skaner o'qigan mahsulot uchun miqdor so'raydi: Enter — savatga qo'shadi,
+ * Esc — bekor qiladi.
+ *
+ * USB skaner klaviatura kabi yozadi: oyna ochiq paytda keyingi mahsulot
+ * skanerlansa, uning 13 xonali kodi shu maydonga "miqdor" bo'lib tushardi.
+ * Skaner belgilarni odamdan ancha tez yozadi (o'rtacha 50 ms dan kam; odam —
+ * 100 ms dan ortiq): shunday kamida 6 belgili ketma-ketlik va Enter yangi skan
+ * deb olinadi, miqdor esa skandan oldingi qiymatiga qaytariladi. Bitta-yarimta
+ * sekin bo'shliq (brauzer band bo'lgan lahza) skanni buzmasligi uchun har bir
+ * bo'shliq emas, o'rtacha tezlik o'lchanadi.
+ */
+function SkanMiqdorOynasi({ tovar, bonus, narx, savatda, boshlangich, onTasdiq, onYop, onSkan }: SkanMiqdorProps) {
+  // Matn shu yerda saqlanadi, sahifada emas: har tugma bosilishi butun
+  // kassani qayta chizmasin — og'ir render skaner belgilarini sekinlashtirib,
+  // ularni odam yozuvidan ajratib bo'lmay qolardi.
+  const [matn, setMatn] = useState(boshlangich)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const tezYozuv = useRef({ oldingi: '', kod: '', boshi: 0, vaqt: 0 })
+  const kasrli = kasrliBirlikmi(tovar.birlik)
+  const birlik = tovar.birlik.toLowerCase()
+  const qolgan = miqdorYaxlitla(tovar.qoldiq - savatda)
+  const miqdor = miqdorniOqi(matn)
+  const xato = skanMiqdorXatosi(miqdor, tovar, savatda)
+  const tezTanlov = kasrli ? [0.5, 1, 2, 5] : [1, 2, 5, 10]
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
+
+  // Tugmalar bosilganda fokus maydonda qoladi — keyingi skan ham, Enter ham
+  // shu yerga tushadi.
+  const fokusniSaqla = (e: React.MouseEvent) => e.preventDefault()
+  const qadam = (farq: number) => {
+    const joriy = Number.isFinite(miqdor) ? miqdor : 0
+    setMatn(String(Math.max(0, miqdorYaxlitla(joriy + farq))))
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+      onClick={onYop}
+      onKeyDown={e => {
+        if (e.key !== 'Escape') return
+        // Sahifadagi Esc tinglovchisi kassa oynasini ham yopib yubormasin
+        e.stopPropagation()
+        onYop()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="skan-miqdor-sarlavha"
+        className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              {bonus ? <Gift size={14} className="text-violet-500" /> : <ScanLine size={14} className="text-pos" />}
+              {bonus ? 'Bonusga nechta qo‘shilsin?' : 'Savatga nechta qo‘shilsin?'}
+            </p>
+            <h3 id="skan-miqdor-sarlavha" className="mt-1 text-gray-900 dark:text-gray-100 font-semibold leading-snug line-clamp-2">
+              {tovar.nomi}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onYop}
+            aria-label="Yopish"
+            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 text-sm tabular-nums">
+            <span className="text-gray-900 dark:text-gray-100 font-medium">
+              {bonus ? 'Bonus — bepul' :`${formatSum(narx)} / ${birlik}`}
+            </span>
+            <span className="text-gray-500 dark:text-gray-400 text-right">
+              Qoldiq: {qolgan} {birlik}
+              {savatda > 0 && <span className="block text-xs">savatda {savatda}</span>}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onMouseDown={fokusniSaqla}
+              onClick={() => qadam(-1)}
+              disabled={!Number.isFinite(miqdor) || miqdor <= 1}
+              aria-label="Kamaytirish"
+              className="h-12 w-12 shrink-0 flex items-center justify-center rounded-xl border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40 transition"
+            >
+              <Minus size={18} />
+            </button>
+            <input
+              ref={inputRef}
+              id="skan-miqdor"
+              type="text"
+              inputMode={kasrli ? 'decimal' : 'numeric'}
+              autoComplete="off"
+              aria-label={`Miqdor, ${birlik}`}
+              aria-invalid={!!xato}
+              value={matn}
+              onChange={e => {
+                const v = kasrli
+                  ? e.target.value.replace(',', '.').replace(/[^0-9.]/g, '')
+                  : e.target.value.replace(/\D/g, '')
+                // Bitta nuqta va 3 xonagacha kasr; aks holda o'zgarish rad etiladi
+                if (kasrli && !/^\d*\.?\d{0,3}$/.test(v)) return
+                setMatn(v)
+              }}
+              onKeyDown={e => {
+                const t = tezYozuv.current
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  const skanmi = t.kod.length >= 6
+                    && e.timeStamp - t.vaqt < 150
+                    && (t.vaqt - t.boshi) / (t.kod.length - 1) < 50
+                  if (skanmi) {
+                    const { oldingi, kod } = t
+                    tezYozuv.current = { oldingi: '', kod: '', boshi: 0, vaqt: 0 }
+                    // Skaner raqamlari maydonga tushib qolgan — oldingi miqdorga qaytamiz
+                    setMatn(oldingi)
+                    onSkan(oldingi, kod).then(birXil => {
+                      if (!birXil) return
+                      setMatn(m => {
+                        const joriy = miqdorniOqi(m)
+                        return String(miqdorYaxlitla((Number.isFinite(joriy) ? joriy : 0) + 1))
+                      })
+                    })
+                    return
+                  }
+                  if (!xato) onTasdiq(miqdor)
+                  return
+                }
+                if (e.key.length !== 1) return
+                // 150 ms dan uzoq to'xtalish — yangi ketma-ketlik boshlanadi
+                if (t.kod && e.timeStamp - t.vaqt < 150) t.kod += e.key
+                else tezYozuv.current = { oldingi: matn, kod: e.key, boshi: e.timeStamp, vaqt: 0 }
+                tezYozuv.current.vaqt = e.timeStamp
+              }}
+              onFocus={e => e.target.select()}
+              className={`h-12 min-w-0 flex-1 text-center text-2xl font-semibold tabular-nums text-gray-900 dark:text-gray-100 bg-white dark:bg-neutral-900 border rounded-xl focus:outline-none focus:ring-2 ${xato && matn ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 dark:border-neutral-700 focus:ring-pos'}`}
+            />
+            <button
+              type="button"
+              onMouseDown={fokusniSaqla}
+              onClick={() => qadam(1)}
+              disabled={Number.isFinite(miqdor) && miqdor + 1 > qolgan}
+              aria-label="Oshirish"
+              className="h-12 w-12 shrink-0 flex items-center justify-center rounded-xl border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40 transition"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {tezTanlov.map(q => (
+              <button
+                key={q}
+                type="button"
+                onMouseDown={fokusniSaqla}
+                onClick={() => setMatn(String(q))}
+                disabled={q > qolgan}
+                aria-pressed={miqdor === q}
+                className={`py-2 rounded-lg text-sm font-medium tabular-nums transition disabled:opacity-40 ${miqdor === q ? 'bg-pos text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+
+          <p className={`min-h-5 text-sm ${xato && matn ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`} aria-live="polite">
+            {xato ? (matn ? xato : '') : bonus ? '' : `Jami: ${formatSum(Math.round(narx * miqdor))}`}
+          </p>
+        </div>
+
+        <div className="p-4 pt-0 flex gap-2 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
+          <button
+            type="button"
+            onClick={onYop}
+            className="flex-1 py-3 rounded-xl border border-gray-300 dark:border-neutral-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition"
+          >
+            Bekor qilish
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (!xato) onTasdiq(miqdor) }}
+            disabled={!!xato}
+            className={`flex-[2] py-3 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50 ${bonus ? 'bg-violet-600 hover:bg-violet-700' : 'bg-pos hover:opacity-90'}`}
+          >
+            {xato ? 'Qo‘shish' : `${miqdor} ${birlik} qo‘shish`}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -262,10 +507,16 @@ export default function SotuvPage() {
   // Barcode skaner
   const [skanerOchiq, setSkanerOchiq] = useState(false)
   const skanerRef = useRef<Html5Qrcode | null>(null)
-  const oxirgiSkanRef = useRef<string>('')
+  const oxirgiSkanRef = useRef({ kod: '', vaqt: 0 })
   // Har doim oxirgi tovarlar ro'yxatini olish uchun ref
   const tovarlarRef = useRef<Tovar[]>([])
-  const savatQoshRef = useRef<(t: Tovar) => void>(() => {})
+  const kameraSkanRef = useRef<(kod: string) => void>(() => {})
+  // Skaner o'qigan mahsulot — miqdor so'rash oynasi (null — yopiq).
+  // `klaviatura`: USB skaner qidiruv maydoniga yozgan — oyna yopilgach
+  // fokus o'sha maydonga qaytadi, keyingi skan ham shu yerga tushsin.
+  const [skanOyna, setSkanOyna] = useState<{ tovar: Tovar; boshlangich: string; klaviatura: boolean } | null>(null)
+  const skanOynaOchiqRef = useRef(false)
+  const qidiruvInputRef = useRef<HTMLInputElement>(null)
 
   const skanerniYopish = useCallback(() => {
     const s = skanerRef.current
@@ -273,7 +524,7 @@ export default function SotuvPage() {
       if (s.isScanning) s.stop().then(() => s.clear()).catch(() => {})
       skanerRef.current = null
     }
-    oxirgiSkanRef.current = ''
+    oxirgiSkanRef.current = { kod: '', vaqt: 0 }
     setSkanerOchiq(false)
   }, [])
 
@@ -333,7 +584,7 @@ export default function SotuvPage() {
 
   const skanerniOchish = useCallback(async () => {
     setSkanerOchiq(true)
-    oxirgiSkanRef.current = ''
+    oxirgiSkanRef.current = { kod: '', vaqt: 0 }
     setTimeout(async () => {
       try {
         const { Html5Qrcode } = await import('html5-qrcode')
@@ -345,28 +596,22 @@ export default function SotuvPage() {
           (kod) => {
             const n = kod.trim()
             if (!n) return
-            // Bir xil kodni ketma-ket scan qilmasligi uchun
-            if (oxirgiSkanRef.current === n) return
-            oxirgiSkanRef.current = n
-            setTimeout(() => { oxirgiSkanRef.current = '' }, 1500)
+            // Kamera mahsulot ustida turganda uni sekundiga bir necha marta
+            // o'qiydi. Bir xil kod faqat 2 s ko'rinmay turgandan keyin qayta
+            // qabul qilinadi — aks holda miqdor tasdiqlangan zahoti
+            // (mahsulot hali kamera oldida) oyna yana ochilib ketardi.
+            const hozir = Date.now()
+            const oxirgi = oxirgiSkanRef.current
+            if (oxirgi.kod === n && hozir - oxirgi.vaqt < 2000) {
+              oxirgi.vaqt = hozir
+              return
+            }
+            // Miqdor oynasi ochiq — kassir avval uni tasdiqlasin
+            if (skanOynaOchiqRef.current) return
+            oxirgiSkanRef.current = { kod: n, vaqt: hozir }
 
             playBeep()
-            const topilgan = tovarniTopish(n)
-            if (topilgan) {
-              savatQoshRef.current(topilgan)
-              toast.success(`${topilgan.nomi} qo'shildi`)
-            } else {
-              // Local'da yo'q — API'dan qidiramiz (tovarlar yuklanmagan yoki yangi qo'shilgan bo'lishi mumkin)
-              tovarniApidanTopish(n).then(t => {
-                if (t) {
-                  savatQoshRef.current(t)
-                  toast.success(`${t.nomi} qo'shildi`)
-                } else {
-                  setQidiruv(n)
-                  toast.error(`Tovar topilmadi: ${n}`)
-                }
-              })
-            }
+            kameraSkanRef.current(n)
           },
           () => {}
         )
@@ -539,10 +784,15 @@ export default function SotuvPage() {
   )
   const korsatiladiganTovarlar = filteredTovarlar
 
-  function savatQosh(tovar: Tovar) {
+  /** Savatga `miqdor` birlik qo'shadi; qoldiq yetmasa rad etib `false` qaytaradi. */
+  function savatQosh(tovar: Tovar, miqdor = 1): boolean {
     if (tovar.qoldiq <= 0) {
       toast.error(`${tovar.nomi}: qoldiq yo'q`)
-      return
+      return false
+    }
+    const qoldiqYetmaydi = () => {
+      toast.error(`${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()}`)
+      return false
     }
     if (bonusTanlashRejimi) {
       // Bonus xuddi shu mahsulotdan ham bo'lishi mumkin (masalan 5ta sotib
@@ -552,25 +802,25 @@ export default function SotuvPage() {
       // qator ochilmaydi).
       const mavjudBonus = savat.find(s => s.tovarId === tovar.id && s.bonus)
       if (mavjudBonus) {
-        if (mavjudBonus.miqdor + 1 > tovar.qoldiq) {
-          toast.error(`${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()}`)
-          return
-        }
-        setSavat(prev => prev.map(s => (s.tovarId === tovar.id && s.bonus) ? { ...s, miqdor: s.miqdor + 1 } : s))
+        if (mavjudBonus.miqdor + miqdor > tovar.qoldiq) return qoldiqYetmaydi()
+        setSavat(prev => prev.map(s => (s.tovarId === tovar.id && s.bonus)
+          ? { ...s, miqdor: Math.min(miqdorYaxlitla(s.miqdor + miqdor), tovar.qoldiq) }
+          : s))
         setBonusTanlashRejimi(false)
         setMobileTab('savat')
         toast.success(`${tovar.nomi} bonus miqdori oshirildi`)
-        return
+        return true
       }
+      if (miqdor > tovar.qoldiq) return qoldiqYetmaydi()
       setSavat(prev => [{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: 0,
-        miqdor: 1, birlik: tovar.birlik, chegirma: 0,
+        miqdor, birlik: tovar.birlik, chegirma: 0,
         jami: 0, mavjudQoldiq: tovar.qoldiq, bonus: true,
       }, ...prev])
       setBonusTanlashRejimi(false)
       setMobileTab('savat')
       toast.success(`${tovar.nomi} bonus sifatida qo'shildi`)
-      return
+      return true
     }
     // Joriy tanlangan narx turi (chakana/optom/bo'lish) bo'yicha — mahsulotda
     // o'sha tur uchun narx kiritilmagan bo'lsa, oddiy sotish narxiga tushadi.
@@ -578,7 +828,9 @@ export default function SotuvPage() {
     // `savat` state'idan (setSavat ichidagi `prev`dan emas — u yangilanish
     // React tomonidan keyinroq bajarilishi mumkin) — shu mahsulot savatda
     // birinchi marta qo'shilayotganini oldindan bilib olamiz.
-    const yangiQator = !savat.some(s => s.tovarId === tovar.id && !s.bonus)
+    const savatdagi = savat.find(s => s.tovarId === tovar.id && !s.bonus)
+    const yangiQator = !savatdagi
+    if ((savatdagi?.miqdor ?? 0) + miqdor > tovar.qoldiq) return qoldiqYetmaydi()
     setSavat(prev => {
       // Faqat oddiy (bonus bo'lmagan) qator bilan birlashtiriladi — bonus
       // qatori (bor bo'lsa) tegilmasdan saqlanib qoladi. Mavjud qatorning
@@ -586,17 +838,17 @@ export default function SotuvPage() {
       // turini almashtirish kerak bo'lsa narxni qo'lda tahrirlash mumkin.
       const mavjud = prev.find(s => s.tovarId === tovar.id && !s.bonus)
       if (mavjud) {
-        if (mavjud.miqdor + 1 > tovar.qoldiq) {
-          toast.error(`${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()}`)
-          return prev
-        }
-        const yangilangan = { ...mavjud, miqdor: mavjud.miqdor + 1, jami: (mavjud.miqdor + 1) * mavjud.birlikNarxi }
+        // Qoldiq yuqorida `savat` bo'yicha tekshirildi; bu yerdagi cheklov —
+        // bir hodisada ketma-ket ikki qo'shish (state hali yangilanmagan)
+        // qoldiqdan oshirib yubormasligi uchun.
+        const yangiMiqdor = Math.min(miqdorYaxlitla(mavjud.miqdor + miqdor), tovar.qoldiq)
+        const yangilangan = { ...mavjud, miqdor: yangiMiqdor, jami: yangiMiqdor * mavjud.birlikNarxi }
         return [yangilangan, ...prev.filter(s => !(s.tovarId === tovar.id && !s.bonus))]
       }
       return [{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
-        miqdor: 1, birlik: tovar.birlik, chegirma: 0,
-        jami: narxSomda, mavjudQoldiq: tovar.qoldiq, narxTuri,
+        miqdor, birlik: tovar.birlik, chegirma: 0,
+        jami: narxSomda * miqdor, mavjudQoldiq: tovar.qoldiq, narxTuri,
       }, ...prev]
     })
     // Mijoz allaqachon tanlangan bo'lsa — bu mahsulot birinchi marta
@@ -605,9 +857,107 @@ export default function SotuvPage() {
     if (yangiQator && mijozId && mijozTarixi[tovar.id]) {
       eslatmaKorsat([{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
-        miqdor: 1, birlik: tovar.birlik, chegirma: 0, jami: narxSomda, mavjudQoldiq: tovar.qoldiq,
+        miqdor, birlik: tovar.birlik, chegirma: 0, jami: narxSomda * miqdor, mavjudQoldiq: tovar.qoldiq,
       }], mijozTarixi, mijozIsmi)
     }
+    return true
+  }
+
+  // ── Skanerdan miqdor bilan qo'shish ──
+  // Skanerlangan mahsulot darhol 1 dona qo'shilmaydi: avval nechta
+  // kerakligi so'raladi (5 kiritilsa — 5 dona).
+
+  function savatdagiMiqdor(tovarId: string, bonus: boolean) {
+    return savat.find(s => s.tovarId === tovarId && !!s.bonus === bonus)?.miqdor ?? 0
+  }
+
+  function miqdorSorash(tovar: Tovar, klaviatura: boolean) {
+    const qolgan = miqdorYaxlitla(tovar.qoldiq - savatdagiMiqdor(tovar.id, bonusTanlashRejimi))
+    if (qolgan <= 0) {
+      toast.error(tovar.qoldiq <= 0
+        ? `${tovar.nomi}: qoldiq yo'q`
+        : `${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()} — hammasi savatda`)
+      return
+    }
+    // Kasrli birlikda 1 dan kam qolgan bo'lishi mumkin (0.4 kg) — borini taklif qiladi
+    setSkanOyna({ tovar, boshlangich: String(Math.min(1, qolgan)), klaviatura })
+  }
+
+  /** Skaner o'qigan kod bo'yicha mahsulot — avval yuklangan ro'yxatdan, bo'lmasa API'dan. */
+  async function kodBoyichaTop(kod: string): Promise<Tovar | null> {
+    return tovarniTopish(kodniAjrat(kod)) ?? await tovarniApidanTopish(kod)
+  }
+
+  async function kameradanSkan(kod: string) {
+    const tovar = await kodBoyichaTop(kod)
+    if (tovar) miqdorSorash(tovar, false)
+    else {
+      setQidiruv(kod)
+      toast.error(`Tovar topilmadi: ${kod}`)
+    }
+  }
+
+  // USB skaner kodni qidiruv maydoniga yozib Enter bosadi. Kod topilmasa-yu,
+  // qidiruvdan bitta mahsulot qolgan bo'lsa — o'sha tanlanadi (klaviaturadan
+  // nom yozib Enter bosish ham shunday ishlaydi).
+  async function qidiruvdaEnter() {
+    const matn = qidiruv.trim()
+    if (!matn) return
+    const yagona = korsatiladiganTovarlar.length === 1 ? korsatiladiganTovarlar[0] : null
+    const tovar = tovarniTopish(kodniAjrat(matn))
+      ?? yagona
+      ?? (korsatiladiganTovarlar.length === 0 ? await tovarniApidanTopish(matn) : null)
+    if (tovar) {
+      setQidiruv('')
+      miqdorSorash(tovar, true)
+    } else if (korsatiladiganTovarlar.length === 0) {
+      toast.error(`Tovar topilmadi: ${matn}`)
+    }
+  }
+
+  function skanOynaniYop() {
+    const klaviatura = skanOyna?.klaviatura
+    setSkanOyna(null)
+    if (klaviatura) qidiruvInputRef.current?.focus()
+  }
+
+  function skanMiqdorniTasdiqla(miqdor: number) {
+    if (!skanOyna) return
+    const { tovar } = skanOyna
+    const bonus = bonusTanlashRejimi
+    if (!savatQosh(tovar, miqdor)) return
+    // Bonus rejimida savatQosh o'zi xabar beradi
+    if (!bonus) toast.success(`${tovar.nomi}: ${miqdor} ${tovar.birlik.toLowerCase()} qo'shildi`)
+    skanOynaniYop()
+  }
+
+  // Oyna ochiq turganda USB skaner yana kod o'qidi. Xuddi shu mahsulot
+  // bo'lsa — `true` (oyna miqdorni +1 qiladi). Boshqa mahsulot bo'lsa —
+  // joriysi skandan oldingi miqdor bilan savatga tushadi va yangisi uchun
+  // oyna ochiladi.
+  async function oynadaSkan(oldingiMatn: string, kod: string): Promise<boolean> {
+    const joriy = skanOyna
+    if (!joriy) return false
+    playBeep()
+    const yangi = await kodBoyichaTop(kod)
+    if (!yangi) {
+      toast.error(`Tovar topilmadi: ${kodniAjrat(kod)}`)
+      return false
+    }
+    if (yangi.id === joriy.tovar.id) return true
+    const oldingi = miqdorniOqi(oldingiMatn)
+    // Joriy miqdor noto'g'ri bo'lsa hech narsa jim tashlab yuborilmaydi:
+    // oyna o'z joyida qoladi, kassir tuzatib, keyingisini qayta skanerlaydi.
+    const xato = skanMiqdorXatosi(oldingi, joriy.tovar, savatdagiMiqdor(joriy.tovar.id, bonusTanlashRejimi))
+    if (xato) {
+      toast.error(`${joriy.tovar.nomi}: ${xato.toLowerCase()} — ${yangi.nomi} qo'shilmadi`)
+      return false
+    }
+    const bonus = bonusTanlashRejimi
+    if (!savatQosh(joriy.tovar, oldingi)) return false
+    if (!bonus) toast.success(`${joriy.tovar.nomi}: ${oldingi} ${joriy.tovar.birlik.toLowerCase()} qo'shildi`)
+    miqdorSorash(yangi, joriy.klaviatura)
+    return false
   }
 
   // Skaner uchun har doim eng so'nggi tovarlar va savatQosh funksiyasi
@@ -671,7 +1021,9 @@ export default function SotuvPage() {
   }, [kassaOchiq, kategoriyaVaraq])
 
   useEffect(() => { tovarlarRef.current = tovarlar }, [tovarlar])
-  useEffect(() => { savatQoshRef.current = savatQosh })
+  useEffect(() => { kameraSkanRef.current = kameradanSkan })
+  useEffect(() => { skanOynaOchiqRef.current = skanOyna !== null }, [skanOyna])
+  useBodyScrollLock(skanOyna !== null)
 
   // Bitta mahsulotdan bir vaqtda ham oddiy, ham bonus qator bo'lishi mumkin
   // (tovarId bir xil) — shuning uchun har doim `bonus` bayrog'i bilan birga
@@ -1881,8 +2233,14 @@ export default function SotuvPage() {
                   Bayroq faqat shu elementga ta'sir qiladi. */}
               <input
                 suppressHydrationWarning
+                ref={qidiruvInputRef}
                 value={qidiruv}
                 onChange={e => setQidiruv(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter') return
+                  e.preventDefault()
+                  qidiruvdaEnter()
+                }}
                 placeholder="Tovar qidirish yoki shtrix-kod..."
                 className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pos"
               />
@@ -2604,6 +2962,24 @@ export default function SotuvPage() {
           </div>
         )
       })()}
+
+      {/* Skanerlangan mahsulot — nechta qo'shilishi so'raladi */}
+      {skanOyna && (
+        <SkanMiqdorOynasi
+          key={skanOyna.tovar.id}
+          tovar={skanOyna.tovar}
+          bonus={bonusTanlashRejimi}
+          // Savatda qatori bor bo'lsa miqdor o'sha qatorga, o'sha narxda qo'shiladi
+          narx={bonusTanlashRejimi ? 0
+            : savat.find(s => s.tovarId === skanOyna.tovar.id && !s.bonus)?.birlikNarxi
+              ?? narxTuriBoyicha(skanOyna.tovar, narxTuri, kursi)}
+          savatda={savatdagiMiqdor(skanOyna.tovar.id, bonusTanlashRejimi)}
+          boshlangich={skanOyna.boshlangich}
+          onTasdiq={skanMiqdorniTasdiqla}
+          onYop={skanOynaniYop}
+          onSkan={oynadaSkan}
+        />
+      )}
 
       {/* Saqlangan savatlar modal */}
       {/* Zakazni saqlash — mijoz va izoh so'raladi */}
