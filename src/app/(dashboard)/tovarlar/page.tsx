@@ -860,15 +860,17 @@ export default function TovarlarPage() {
                   <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Miqdori</th>
                   <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Kelish narxi</th>
                   <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Sotish narxi</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Optom narxi</th>
+                  <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Bo&apos;lish narxi</th>
                   <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Kategoriya</th>
                   <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-3 whitespace-nowrap">Amal</th>
                 </tr>
               </thead>
               <tbody>
                 {yuklanmoqda ? (
-                  <tr><td colSpan={7} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
+                  <tr><td colSpan={9} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
                 ) : filteredTovarlar.length === 0 ? (
-                  <tr><td colSpan={7} className="py-12">
+                  <tr><td colSpan={9} className="py-12">
                     <div className="text-center">
                       <p className="text-gray-500 dark:text-gray-400 text-sm">
                         {qidiruv || aktifKategoriya || faqatQulflangan ? 'Shu shart bo\'yicha tovar topilmadi' : 'Hali tovar qo\'shilmagan'}
@@ -937,6 +939,14 @@ export default function TovarlarPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-green-600 text-sm font-semibold whitespace-nowrap">
                       {narxKorsat(t.sotishNarxi, t.valyuta)}
+                    </td>
+                    {/* Ranglar mahsulot kartasi va tafsilot oynasidagi bilan bir xil:
+                        optom — ko'k, bo'lish — sariq. Kiritilmagan narx "—". */}
+                    <td className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${t.optomNarxi === null ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}`}>
+                      {narxKorsat(t.optomNarxi, t.valyuta)}
+                    </td>
+                    <td className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${t.bolishNarxi === null ? 'text-gray-400 dark:text-gray-500' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {narxKorsat(t.bolishNarxi, t.valyuta)}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <span className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-lg font-medium" title={t.kategoriya.nomi}>{t.kategoriya.nomi}</span>

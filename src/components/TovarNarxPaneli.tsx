@@ -3,6 +3,7 @@
 import { formatNarx } from '@/lib/utils'
 
 // Mahsulot kartasidagi "Miqdori / Kelish / Sotish / Optom / Bo'lish" paneli.
+// Katalogda (Tovarlar) va kassada ishlatiladi.
 //
 // Ilgari bu uch ustunli grid edi va `tovarlar` hamda `sotuv` sahifalarida
 // ikki nusxada yozilgan edi. Muammo: har qiymatga kartaning ~33% i tegardi,
@@ -41,6 +42,15 @@ interface Props {
   valyuta?: string
   /** Sotish narxi rangi: katalogda yashil, kassada brend rangi. */
   sotishRangi?: string
+  /**
+   * Kassa: hozir qaysi narx bilan sotiladi. Berilsa o'sha qator ajratib
+   * ko'rsatiladi, qolgan narxlar xiralashadi — kassir narx turini
+   * almashtirganda kartalardagi narx ham shu zahoti almashadi.
+   * Berilmasa (katalog) uchala narx o'z rangida teng ko'rinadi.
+   */
+  aktivNarx?: 'sotish' | 'optom' | 'bolish'
+  /** Sotish qatori yorlig'i — kassada narx turi tugmasi bilan bir xil ("Chakana"). */
+  sotishYorligi?: string
   /** Kassa kartasi biroz kattaroq matn ishlatadi. */
   olcham?: 'ixcham' | 'keng'
   /**
@@ -58,13 +68,15 @@ function narxMatni(narx: number | string | null | undefined, valyuta?: string) {
   return formatNarx(narx, valyuta)
 }
 
-function Qator({ yorliq, qiymat, sarlavha, qiymatCls, olcham }: {
+function Qator({ yorliq, qiymat, sarlavha, qiymatCls, olcham, aktiv = false }: {
   yorliq: string
   qiymat: React.ReactNode
   /** `title` — juda uzun qiymat qirqilsa to'liq holi sichqoncha ostida ko'rinadi. */
   sarlavha: string
   qiymatCls: string
   olcham: 'ixcham' | 'keng'
+  /** Kassada hozir shu narx bilan sotiladi */
+  aktiv?: boolean
 }) {
   const matn = olcham === 'keng' ? 'text-sm' : 'text-xs sm:text-sm'
   return (
@@ -72,8 +84,10 @@ function Qator({ yorliq, qiymat, sarlavha, qiymatCls, olcham }: {
     // panelning butun enini oladi — narx qirqilib qolmasin. `ml-auto`
     // yangi qatorda ham o'ngga tekislaydi. `max-w-full` + `truncate` —
     // oxirgi to'siq: qiymat yolg'iz o'zi ham sig'masagina qirqiladi.
-    <div className="flex flex-wrap items-baseline justify-between gap-x-3 px-3 py-1.5">
-      <span className="shrink-0 text-gray-500 dark:text-gray-400 text-[11px]">{yorliq}</span>
+    <div className={`flex flex-wrap items-baseline justify-between gap-x-3 px-3 py-1.5 ${aktiv ? 'bg-pos/10 dark:bg-pos/20' : ''}`}>
+      <span className={`shrink-0 text-[11px] ${aktiv ? 'text-pos font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+        {yorliq}
+      </span>
       <span
         title={sarlavha}
         className={`ml-auto max-w-full truncate text-right tabular-nums ${matn} ${qiymatCls}`}
@@ -84,18 +98,35 @@ function Qator({ yorliq, qiymat, sarlavha, qiymatCls, olcham }: {
   )
 }
 
+// Katalogda uch narx bir-biridan rangi bilan ajraladi — mahsulot
+// tafsiloti oynasidagi bilan bir xil: sotish yashil, optom ko'k, bo'lish
+// sariq. Kassada esa rang turni emas, HOLATNI bildiradi: amaldagi narx
+// brend rangida, qolganlari xira.
+const OPTOM_RANGI = 'text-blue-600 dark:text-blue-400'
+const BOLISH_RANGI = 'text-amber-600 dark:text-amber-400'
+const XIRA_RANG = 'text-gray-500 dark:text-gray-400'
+
 export default function TovarNarxPaneli({
   qoldiq, birlik, kamQoldi = false,
   kelishNarxi, sotishNarxi, optomNarxi, bolishNarxi, valyuta,
   sotishRangi = 'text-green-600 dark:text-green-500',
   olcham = 'ixcham',
   miqdorKorsatilsinmi = true,
+  aktivNarx,
+  sotishYorligi = 'Sotish',
 }: Props) {
   const birlikMatni = birlik.toLowerCase()
   const kelish = narxMatni(kelishNarxi, valyuta)
   const sotish = narxMatni(sotishNarxi, valyuta)
   const optom = narxMatni(optomNarxi, valyuta)
   const bolish = narxMatni(bolishNarxi, valyuta)
+  const kassada = aktivNarx !== undefined
+  // Narx qatori rangi: kassada — amaldagimi yoki yo'q; katalogda — o'z rangi.
+  const narxRangi = (turi: 'sotish' | 'optom' | 'bolish', oziRangi: string, bor: boolean) => {
+    if (!bor) return `font-medium ${XIRA_RANG}`
+    if (!kassada) return `${turi === 'sotish' ? 'font-semibold' : 'font-medium'} ${oziRangi}`
+    return aktivNarx === turi ? 'font-bold text-pos' : `font-medium ${XIRA_RANG}`
+  }
 
   return (
     <div className="mt-2.5 sm:mt-3 bg-gray-50 dark:bg-neutral-800/60 rounded-xl py-1 divide-y divide-gray-200/70 dark:divide-neutral-700/70">
@@ -121,22 +152,24 @@ export default function TovarNarxPaneli({
         qiymatCls="text-gray-700 dark:text-gray-300 font-medium"
       />
       <Qator
-        yorliq="Sotish"
+        yorliq={sotishYorligi}
         olcham={olcham}
         sarlavha={sotish}
         qiymat={sotish}
-        qiymatCls={`font-semibold ${sotishRangi}`}
+        qiymatCls={narxRangi('sotish', sotishRangi, sotishNarxi !== null)}
+        aktiv={aktivNarx === 'sotish'}
       />
-      {/* Optom va bo'lish — asosiy sotish narxidan pastda va betaraf rangda.
-          Uchalasi bir xil urg'uda bo'lsa karta "uch narxli" bo'lib chalkashtirardi:
-          standart narx AYNAN sotish narxi, qolgan ikkitasi esa maxsus holat. */}
+      {/* Optom va bo'lish narxi kiritilmagan bo'lsa ham qator "—" bilan
+          turadi: kartalar bo'yi bir xil qoladi va kassir bu mahsulotda
+          shu narx yo'qligini ko'radi. */}
       {optomNarxi !== undefined && (
         <Qator
           yorliq="Optom"
           olcham={olcham}
           sarlavha={optom}
           qiymat={optom}
-          qiymatCls="text-gray-700 dark:text-gray-300 font-medium"
+          qiymatCls={narxRangi('optom', OPTOM_RANGI, optomNarxi !== null)}
+          aktiv={aktivNarx === 'optom'}
         />
       )}
       {bolishNarxi !== undefined && (
@@ -145,7 +178,8 @@ export default function TovarNarxPaneli({
           olcham={olcham}
           sarlavha={bolish}
           qiymat={bolish}
-          qiymatCls="text-gray-700 dark:text-gray-300 font-medium"
+          qiymatCls={narxRangi('bolish', BOLISH_RANGI, bolishNarxi !== null)}
+          aktiv={aktivNarx === 'bolish'}
         />
       )}
     </div>

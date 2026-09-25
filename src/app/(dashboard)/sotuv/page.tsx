@@ -56,6 +56,44 @@ function narxTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number): number {
     : tovar.sotishNarxi
   return tovar.valyuta === 'USD' ? Math.round(asosiy * kursi) : asosiy
 }
+
+/**
+ * Amalda qo'llanadigan narx turi: mahsulotda tanlangan tur uchun narx
+ * kiritilmagan bo'lsa, chakana narx olinadi. Savat qatoridagi "Optom"
+ * belgisi shu bilan to'g'ri chiqadi — narx chakana bo'lib, belgi "Optom"
+ * deb turmaydi.
+ */
+function amaldagiNarxTuri(tovar: Tovar, turi: NarxTuri): NarxTuri {
+  if (turi === 'optom' && tovar.optomNarxi == null) return 'sotish'
+  if (turi === 'bolish' && tovar.bolishNarxi == null) return 'sotish'
+  return turi
+}
+
+// API narxlarni Prisma Decimal sifatida — satr ko'rinishida ("12000.00")
+// qaytaradi. Kassada ular hisob-kitobga kiradi, shuning uchun yuklanganda
+// bir marta songa aylantiriladi.
+const sonYokiNull = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v))
+function tovarniMeyorla(x: Record<string, unknown>): Tovar {
+  return {
+    ...(x as unknown as Tovar),
+    sotishNarxi: Number(x.sotishNarxi ?? 0),
+    kelishNarxi: sonYokiNull(x.kelishNarxi),
+    optomNarxi: sonYokiNull(x.optomNarxi),
+    bolishNarxi: sonYokiNull(x.bolishNarxi),
+    qoldiq: Number(x.qoldiq ?? 0),
+  }
+}
+
+/** Kassa katalogi. `sotuvUchun=1` — qulflangan mahsulotlar serverda chiqarib tashlanadi. */
+async function sotuvTovarlariniOl(): Promise<Tovar[]> {
+  const r = await fetch('/api/tovarlar?sotuvUchun=1')
+  if (!r.ok) {
+    const errBody = await r.json().catch(() => ({}))
+    throw new Error(errBody.xato || `Server xatosi (${r.status})`)
+  }
+  const tv = await r.json()
+  return Array.isArray(tv.tovarlar) ? tv.tovarlar.map(tovarniMeyorla) : []
+}
 interface Mijoz { id: string; ism: string; telefon: string | null; telefon2?: string | null; qoshimchaTelefonlar?: string[]; manzil?: string | null; lokatsiyaLat?: number | null; lokatsiyaLng?: number | null }
 interface SavatItem {
   tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number; bonus?: boolean
@@ -143,6 +181,8 @@ interface SkanMiqdorProps {
   bonus: boolean
   /** Bir birlik narxi, so'mda (bonusda 0) */
   narx: number
+  /** Qaysi narx: "Chakana" / "Optom" / "Bo'lish" */
+  narxYorligi: string
   /** Savatdagi shu mahsulot qatorining miqdori */
   savatda: number
   /** Oyna ochilgandagi miqdor */
@@ -168,7 +208,7 @@ interface SkanMiqdorProps {
  * sekin bo'shliq (brauzer band bo'lgan lahza) skanni buzmasligi uchun har bir
  * bo'shliq emas, o'rtacha tezlik o'lchanadi.
  */
-function SkanMiqdorOynasi({ tovar, bonus, narx, savatda, boshlangich, onTasdiq, onYop, onSkan }: SkanMiqdorProps) {
+function SkanMiqdorOynasi({ tovar, bonus, narx, narxYorligi, savatda, boshlangich, onTasdiq, onYop, onSkan }: SkanMiqdorProps) {
   // Matn shu yerda saqlanadi, sahifada emas: har tugma bosilishi butun
   // kassani qayta chizmasin — og'ir render skaner belgilarini sekinlashtirib,
   // ularni odam yozuvidan ajratib bo'lmay qolardi.
@@ -236,7 +276,12 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, savatda, boshlangich, onTasdiq, 
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between gap-3 text-sm tabular-nums">
             <span className="text-gray-900 dark:text-gray-100 font-medium">
-              {bonus ? 'Bonus — bepul' :`${formatSum(narx)} / ${birlik}`}
+              {bonus ? 'Bonus — bepul' : (
+                <>
+                  <span className="text-xs font-semibold text-pos mr-1.5">{narxYorligi}</span>
+                  {formatSum(narx)} / {birlik}
+                </>
+              )}
             </span>
             <span className="text-gray-500 dark:text-gray-400 text-right">
               Qoldiq: {qolgan} {birlik}
@@ -563,17 +608,13 @@ export default function SotuvPage() {
       if (!r.ok) return null
       const data = await r.json()
       if (!data || !data.id) return null
-      const tovar: Tovar = {
-        id: data.id,
-        nomi: data.nomi,
-        sotishNarxi: Number(data.sotishNarxi),
-        kelishNarxi: data.kelishNarxi === null ? null : Number(data.kelishNarxi),
-        birlik: data.birlik,
-        qoldiq: Number(data.qoldiq ?? 0),
+      // Optom va bo'lish narxlari ham olinadi — aks holda skaner orqali
+      // topilgan mahsulot "Optom" rejimida ham chakana narxda tushardi.
+      const tovar = tovarniMeyorla({
+        ...data,
         shtrixKod: data.shtrixKod ?? null,
         rasmlar: data.rasmlar ?? [],
-        valyuta: data.valyuta,
-      }
+      })
       // Topilgan tovarni local cache'ga qo'shamiz — keyingi skanlar tezlashadi
       setTovarlar(prev => prev.some(t => t.id === tovar.id) ? prev : [tovar, ...prev])
       return tovar
@@ -637,14 +678,7 @@ export default function SotuvPage() {
     setTovarlarYuklanmoqda(true)
     setTovarlarXato(null)
     try {
-      // sotuvUchun=1 — qulflangan tovarlar serverda filtrlanadi
-      const r = await fetch('/api/tovarlar?sotuvUchun=1')
-      if (!r.ok) {
-        const errBody = await r.json().catch(() => ({}))
-        throw new Error(errBody.xato || `Server xatosi (${r.status})`)
-      }
-      const tv = await r.json()
-      setTovarlar(Array.isArray(tv.tovarlar) ? tv.tovarlar : [])
+      setTovarlar(await sotuvTovarlariniOl())
     } catch (e) {
       const xabar = e instanceof Error ? e.message : ''
       setTovarlarXato(xabar || 'Tovarlarni yuklashda xato')
@@ -733,6 +767,9 @@ export default function SotuvPage() {
         if (p.aralashSummalar) setAralashSummalar({ NAQD: '', KARTA: '', CLICK: '', BANK: '', ...p.aralashSummalar })
         if (p.qolBilanSumma) setQolBilanSumma(p.qolBilanSumma)
         if (p.nasiyaMuddat) setNasiyaMuddat(p.nasiyaMuddat)
+        // Optom savdo o'rtasida sahifa yangilansa, keyingi qo'shilgan
+        // mahsulot ham optom narxida tushsin
+        if (p.narxTuri === 'optom' || p.narxTuri === 'bolish') setNarxTuri(p.narxTuri)
       } catch {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -751,12 +788,12 @@ export default function SotuvPage() {
   useEffect(() => {
     if (savat.length > 0) {
       localStorage.setItem('aktiv-tolov', JSON.stringify({
-        tolovUsuli, mijozId, aralashSummalar, qolBilanSumma, nasiyaMuddat,
+        tolovUsuli, mijozId, aralashSummalar, qolBilanSumma, nasiyaMuddat, narxTuri,
       }))
     } else {
       localStorage.removeItem('aktiv-tolov')
     }
-  }, [savat.length, tolovUsuli, mijozId, aralashSummalar, qolBilanSumma, nasiyaMuddat])
+  }, [savat.length, tolovUsuli, mijozId, aralashSummalar, qolBilanSumma, nasiyaMuddat, narxTuri])
 
   // Tovarlar yuklangach savatdagi mavjud qoldiqni yangilash (stale data oldini olish)
   useEffect(() => {
@@ -848,7 +885,8 @@ export default function SotuvPage() {
       return [{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
         miqdor, birlik: tovar.birlik, chegirma: 0,
-        jami: narxSomda * miqdor, mavjudQoldiq: tovar.qoldiq, narxTuri,
+        jami: narxSomda * miqdor, mavjudQoldiq: tovar.qoldiq,
+        narxTuri: amaldagiNarxTuri(tovar, narxTuri),
       }, ...prev]
     })
     // Mijoz allaqachon tanlangan bo'lsa — bu mahsulot birinchi marta
@@ -1071,9 +1109,43 @@ export default function SotuvPage() {
     if (!tovar) return
     const narx = narxTuriBoyicha(tovar, turi, kursi)
     setSavat(prev => prev.map(s => (s.tovarId === tovarId && !s.bonus)
-      ? { ...s, birlikNarxi: narx, jami: s.miqdor * narx, narxTuri: turi }
+      ? { ...s, birlikNarxi: narx, jami: s.miqdor * narx, narxTuri: amaldagiNarxTuri(tovar, turi) }
       : s
     ))
+  }
+
+  // Yuqoridagi Chakana / Optom / Bo'lish tugmasi. Ilgari u faqat savatga
+  // KEYIN qo'shiladigan mahsulotga ta'sir qilardi — savatdagilar eski narxda
+  // qolib, kassir "tugma ishlamayapti" deb o'ylardi. Endi savatdagi barcha
+  // qatorlar ham shu zahoti tanlangan narxga o'tadi (bonus qatorlari
+  // tegilmaydi). Alohida qatorni boshqa narxda sotish kerak bo'lsa —
+  // savatdagi qatorning o'z tugmalari bor.
+  function narxTuriniTanlash(turi: NarxTuri) {
+    if (turi === narxTuri) return
+    setNarxTuri(turi)
+    const qatorlar = savat.filter(s => !s.bonus)
+    if (qatorlar.length === 0) return
+
+    let narxiYoq = 0
+    const yangiNarx = new Map<string, { narx: number; tur: NarxTuri }>()
+    for (const s of qatorlar) {
+      const tovar = tovarlar.find(t => t.id === s.tovarId)
+      if (!tovar) continue
+      const tur = amaldagiNarxTuri(tovar, turi)
+      if (tur !== turi) narxiYoq++
+      yangiNarx.set(s.tovarId, { narx: narxTuriBoyicha(tovar, turi, kursi), tur })
+    }
+    setSavat(prev => prev.map(s => {
+      const y = !s.bonus && yangiNarx.get(s.tovarId)
+      return y ? { ...s, birlikNarxi: y.narx, jami: s.miqdor * y.narx, narxTuri: y.tur } : s
+    }))
+
+    const nomi = NARX_TURI_LABEL[turi].toLowerCase()
+    if (narxiYoq > 0) {
+      toast.warning(`Savat ${nomi} narxiga o'tkazildi. ${narxiYoq} ta mahsulotda ${nomi} narxi kiritilmagan — chakana narxda qoldi`)
+    } else {
+      toast.success(`Savat ${nomi} narxiga o'tkazildi`)
+    }
   }
 
   const jamiSumma = savat.reduce((s, i) => s + i.miqdor * i.birlikNarxi, 0)
@@ -1315,8 +1387,9 @@ export default function SotuvPage() {
       setBonusTanlashRejimi(false)
       setTolovUsuli('NAQD')
       toast.success(`Sotuv yakunlandi! Chek: ${sotuv.chekRaqami}`)
-      const tv = await fetch('/api/tovarlar').then(r => r.json())
-      setTovarlar(tv.tovarlar || [])
+      // Qoldiqlar yangilanadi. Ilgari bu yerda `sotuvUchun=1` yo'q edi —
+      // birinchi sotuvdan keyin qulflangan mahsulotlar ham kassada chiqib qolardi.
+      sotuvTovarlariniOl().then(setTovarlar).catch(() => {})
     } else {
       const err = await res.json()
       toast.error(err.xato || 'Sotuv amalga oshmadi')
@@ -1385,8 +1458,7 @@ export default function SotuvPage() {
       setQaytarishModal(false)
       setQaytarishSotuv(null)
       setQaytarishSabab('')
-      const tv = await fetch('/api/tovarlar?limit=500').then(r => r.json())
-      setTovarlar(tv.tovarlar || [])
+      sotuvTovarlariniOl().then(setTovarlar).catch(() => {})
     } else {
       const err = await res.json()
       toast.error(err.xato || 'Xatolik yuz berdi')
@@ -1800,7 +1872,12 @@ export default function SotuvPage() {
             <div className="overflow-y-auto max-h-72">
               {savat.map(item => {
                 const itemTovar = tovarlar.find(t => t.id === item.tovarId)
-                const isNarxOzgartirilgan = item.birlikNarxi !== itemTovar?.sotishNarxi
+                // Qo'lda tahrirlangan narx ko'k bilan ajraladi. Qatorning o'z
+                // narx turiga qarab taqqoslanadi — ilgari faqat chakana bilan
+                // solishtirilgani uchun har bir optom qatori (va dollardagi
+                // har bir mahsulot) "o'zgartirilgan" bo'lib ko'rinardi.
+                const kutilganNarx = itemTovar ? narxTuriBoyicha(itemTovar, item.narxTuri ?? 'sotish', kursi) : Number(item.birlikNarxi)
+                const isNarxOzgartirilgan = Number(item.birlikNarxi) !== kutilganNarx
                 const isEditing = editNarx?.tovarId === item.tovarId
                 // Faqat narxi kiritilgan turlar ko'rsatiladi — bo'sh bo'lsa tugma chiqmaydi
                 const mavjudTurlar: NarxTuri[] = ['sotish',
@@ -2258,9 +2335,10 @@ export default function SotuvPage() {
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setNarxTuri(t)}
+                  onClick={() => narxTuriniTanlash(t)}
                   aria-pressed={narxTuri === t}
-                  className={`px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition ${narxTuri === t ? 'bg-white dark:bg-neutral-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                  title={`Kartalar va savat ${NARX_TURI_LABEL[t].toLowerCase()} narxida`}
+                  className={`px-3.5 py-2 rounded-lg text-xs whitespace-nowrap transition ${narxTuri === t ? 'bg-white dark:bg-neutral-700 shadow-sm text-pos font-semibold' : 'font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                 >
                   {NARX_TURI_LABEL[t]}
                 </button>
@@ -2507,6 +2585,11 @@ export default function SotuvPage() {
                       sotishRangi="text-pos"
                       olcham="keng"
                       miqdorKorsatilsinmi={false}
+                      // Karta bosilganda AYNAN qaysi narx bilan tushishi
+                      // ajralib turadi: tanlangan tur narxi kiritilmagan
+                      // mahsulotda — chakana.
+                      aktivNarx={amaldagiNarxTuri(t, narxTuri)}
+                      sotishYorligi={NARX_TURI_LABEL.sotish}
                     />
                   </div>
                 </button>
@@ -2969,22 +3052,24 @@ export default function SotuvPage() {
       })()}
 
       {/* Skanerlangan mahsulot — nechta qo'shilishi so'raladi */}
-      {skanOyna && (
+      {skanOyna && (() => {
+        // Savatda qatori bor bo'lsa miqdor o'sha qatorga, o'sha narxda qo'shiladi
+        const qator = savat.find(s => s.tovarId === skanOyna.tovar.id && !s.bonus)
+        return (
         <SkanMiqdorOynasi
           key={skanOyna.tovar.id}
           tovar={skanOyna.tovar}
           bonus={bonusTanlashRejimi}
-          // Savatda qatori bor bo'lsa miqdor o'sha qatorga, o'sha narxda qo'shiladi
-          narx={bonusTanlashRejimi ? 0
-            : savat.find(s => s.tovarId === skanOyna.tovar.id && !s.bonus)?.birlikNarxi
-              ?? narxTuriBoyicha(skanOyna.tovar, narxTuri, kursi)}
+          narx={bonusTanlashRejimi ? 0 : Number(qator?.birlikNarxi ?? narxTuriBoyicha(skanOyna.tovar, narxTuri, kursi))}
+          narxYorligi={NARX_TURI_LABEL[qator ? (qator.narxTuri ?? 'sotish') : amaldagiNarxTuri(skanOyna.tovar, narxTuri)]}
           savatda={savatdagiMiqdor(skanOyna.tovar.id, bonusTanlashRejimi)}
           boshlangich={skanOyna.boshlangich}
           onTasdiq={skanMiqdorniTasdiqla}
           onYop={skanOynaniYop}
           onSkan={oynadaSkan}
         />
-      )}
+        )
+      })()}
 
       {/* Saqlangan savatlar modal */}
       {/* Zakazni saqlash — mijoz va izoh so'raladi */}
