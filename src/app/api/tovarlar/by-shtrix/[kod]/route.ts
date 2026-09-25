@@ -23,15 +23,16 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ kod: s
 
     const egaScope = filialId ? {} : { egaId: sessionEgaId(session) }
 
-    let tovar = await prisma.tovar.findFirst({
+    let nomzodlar = await prisma.tovar.findMany({
       // Qulflangan tovar skaner orqali ham savatga tushmasligi kerak
       where: { holati: 'FAOL', qulflangan: false, shtrixKod: { in: variantlar }, ...(filialId ? { filialId } : {}), ...egaScope },
       include: { kategoriya: true },
+      take: 20,
     })
 
     // Trim qilingan kod bilan ham qidirish (DB'da bo'sh joy bilan saqlangan bo'lsa)
-    if (!tovar) {
-      tovar = await prisma.tovar.findFirst({
+    if (nomzodlar.length === 0) {
+      nomzodlar = await prisma.tovar.findMany({
         where: {
           holati: 'FAOL',
           qulflangan: false,
@@ -40,14 +41,19 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ kod: s
           ...egaScope,
         },
         include: { kategoriya: true },
+        take: 20,
       })
     }
 
-    if (!tovar) return NextResponse.json({ xato: 'Tovar topilmadi' }, { status: 404 })
+    if (nomzodlar.length === 0) return NextResponse.json({ xato: 'Tovar topilmadi' }, { status: 404 })
 
-    const stockMap = await getStockMap([tovar.id])
-    const stock = stockMap.get(tovar.id)
-    return NextResponse.json({ ...tovar, qoldiq: stock?.dokonQoldiq ?? 0 })
+    // Bir xil kod bir nechta mahsulotda bo'lishi mumkin: omborlararo
+    // o'tkazma qabul omborida o'sha mahsulotning nusxasini (kodi bilan)
+    // yaratadi. Sotiladigan qoldig'i eng ko'pi tanlanadi.
+    const stockMap = await getStockMap(nomzodlar.map(t => t.id))
+    const qoldiq = (id: string) => stockMap.get(id)?.dokonQoldiq ?? 0
+    const tovar = nomzodlar.reduce((eng, t) => (qoldiq(t.id) > qoldiq(eng.id) ? t : eng))
+    return NextResponse.json({ ...tovar, qoldiq: qoldiq(tovar.id) })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })

@@ -1,15 +1,25 @@
-// Filiallararo o'tkazmaning server tomoni — qabul filialida mos
-// mahsulotni topish yoki yaratish.
+// O'tkazmaning server tomoni — qabul omborida mos mahsulotni topish yoki
+// yaratish.
 //
-// Eng nozik joy: har bir filialning O'Z katalogi bor (Tovar.filialId),
-// ya'ni A filialdagi "Ariel" bilan B filialdagi "Ariel" — ikki xil qator.
-// Shuning uchun o'tkazmada manba mahsulotga qabul filialidan juft topiladi,
-// topilmasa yangisi yaratiladi.
+// Manzil = filial doirasi + nomli ombor (Ombor → Kategoriya → Tovar).
+// Mahsulot kategoriyasi orqali bitta omborda turadi, shuning uchun qabul
+// omborida manbaning jufti alohida qator bo'ladi:
+//   - bor bo'lsa  — o'tkazilgan miqdor o'sha mahsulot qoldig'iga qo'shiladi;
+//   - yo'q bo'lsa — manbadan nusxa ko'chirib yangi mahsulot yaratiladi.
+// Filiallar orasida ham xuddi shunday: har filialning O'Z katalogi bor.
 
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
+import { sessionIsRealEga } from './filial-scope'
 
 type PrismaTx = Prisma.TransactionClient | typeof prisma
+
+// O'tkazmani faqat bosh Ega boshqaradi — filial admini boshqa filialning
+// omboriga tega olmasligi kerak. /api/filiallar dagi bilan bir xil tekshiruv.
+export function faqatEga(session: unknown): boolean {
+  const s = session as { user?: { rol?: string } } | null
+  return !!s && s.user?.rol === 'ADMIN' && sessionIsRealEga(s as never)
+}
 
 /** O'tkazma uchun kerak bo'ladigan manba mahsulot maydonlari. */
 export type ManbaTovar = {
@@ -25,6 +35,17 @@ export type ManbaTovar = {
   bolishNarxi: Prisma.Decimal | null
   minimalQoldiq: number
   yaroqlilikMuddati: Date | null
+  rasmlar: string[]
+}
+
+/** Qabul manzili. */
+export interface QabulManzil {
+  /** null — Ega markaziy katalogi (filialsiz) */
+  filialId: string | null
+  /** null — omborga biriktirilmagan mahsulotlar ("Markaziy ombor") */
+  omborId: string | null
+  /** Yangi kategoriya nomi uchun: "Ichimliklar (Sovutgich)" */
+  omborNomi: string | null
 }
 
 /** Doiralash: filialga bog'langan yozuvda egaId bo'lmaydi va aksincha —
@@ -34,76 +55,112 @@ function doira(filialId: string | null, egaId: string | null) {
 }
 
 /**
- * Qabul doirasida shu nomli kategoriyani topadi, bo'lmasa yaratadi.
- * Kategoriya ham filialga bog'langan (@@unique([nomi, filialId, egaId])),
- * shuning uchun yangi filialda mahsulot yaratishdan oldin kerak bo'ladi.
+ * Qabul omborida manba kategoriyasiga mos kategoriyani topadi yoki yaratadi.
+ *
+ * Kategoriya nomi katalog ichida takrorlanmaydi va har kategoriya bitta
+ * omborga tegishli. Shu sababli bir katalogdagi boshqa omborga o'tkazilganda
+ * manba nomi odatda band bo'ladi — unda ombor nomi qo'shiladi:
+ * "Ichimliklar" → "Ichimliklar (Sovutgich)". Keyingi o'tkazmalar o'sha
+ * kategoriyani qayta ishlatadi.
  */
 async function qabulKategoriyasi(
   tx: PrismaTx,
   manbaKategoriyaId: string,
-  qabulFilialId: string | null,
+  qabul: QabulManzil,
   egaId: string | null,
 ): Promise<string> {
   const manba = await tx.kategoriya.findUnique({
     where: { id: manbaKategoriyaId },
     select: { nomi: true, tavsif: true },
   })
-  const nomi = manba?.nomi || 'Umumiy'
-  const d = doira(qabulFilialId, egaId)
+  const asosiy = manba?.nomi || 'Umumiy'
+  const qoshimcha = qabul.omborNomi || 'Markaziy'
+  const d = doira(qabul.filialId, egaId)
 
-  const mavjud = await tx.kategoriya.findFirst({
-    where: { nomi: { equals: nomi, mode: 'insensitive' }, ...d },
-    select: { id: true },
-  })
-  if (mavjud) return mavjud.id
+  const nomzodlar = [asosiy, `${asosiy} (${qoshimcha})`]
+  for (let i = 2; i <= 9; i++) nomzodlar.push(`${asosiy} (${qoshimcha} ${i})`)
 
-  const yangi = await tx.kategoriya.create({
-    data: { nomi, tavsif: manba?.tavsif ?? null, ...d },
-  })
-  return yangi.id
+  for (const nomi of nomzodlar) {
+    const band = await tx.kategoriya.findFirst({
+      where: { nomi: { equals: nomi, mode: 'insensitive' }, ...d },
+      select: { id: true, omborId: true },
+    })
+    if (band) {
+      // Shu omborda allaqachon bor — qayta ishlatiladi
+      if (band.omborId === qabul.omborId) return band.id
+      // Nom boshqa omborda band — keyingi nomzod
+      continue
+    }
+    const yangi = await tx.kategoriya.create({
+      data: { nomi, tavsif: manba?.tavsif ?? null, omborId: qabul.omborId, ...d },
+      select: { id: true },
+    })
+    return yangi.id
+  }
+  throw new Error("Qabul omborida kategoriya yaratib bo'lmadi")
 }
 
 /**
- * Qabul filialida manba mahsulotga mos qatorni topadi yoki yaratadi.
+ * Qabul omborida manba mahsulotga mos qatorni topadi yoki yaratadi.
  *
- * Tartib:
- *   1) shtrix-kod bo'yicha (`@@unique([shtrixKod, filialId])` shuni kafolatlaydi)
+ * Qidiruv FAQAT qabul omborining mahsulotlari orasida (kategoriyasi shu
+ * omborda), tartib `qabulJuftiniTop` (lib/otkazma.ts) bilan bir xil:
+ *   1) shtrix-kod bo'yicha
  *   2) nomi bo'yicha (registrga sezgir emas)
  *   3) topilmasa — manbadan nusxa ko'chirib yangi mahsulot
  *
- * Yangi yaratilganda narxlar ham ko'chiriladi: filial tovarni noldan
- * narxlashiga hojat qolmaydi, keyin xohlasa o'zgartiradi.
+ * Yangi yaratilganda narxlar va rasmlar ham ko'chiriladi: qabul ombori
+ * mahsulotni noldan to'ldirishiga hojat qolmaydi.
  */
 export async function qabulTovarniTop(
   tx: PrismaTx,
   manba: ManbaTovar,
-  qabulFilialId: string | null,
+  qabul: QabulManzil,
   egaId: string | null,
 ): Promise<{ id: string; yaratildi: boolean }> {
-  const d = doira(qabulFilialId, egaId)
+  const d = doira(qabul.filialId, egaId)
+  const omborda: Prisma.TovarWhereInput = {
+    ...d,
+    id: { not: manba.id },
+    // Arxivdagi mahsulotga qoldiq qo'shilsa, u ko'zdan yashirin qolardi
+    holati: 'FAOL',
+    kategoriya: { omborId: qabul.omborId },
+  }
 
   if (manba.shtrixKod) {
     const kodBoyicha = await tx.tovar.findFirst({
-      where: { shtrixKod: manba.shtrixKod, ...d },
+      where: { ...omborda, shtrixKod: manba.shtrixKod },
       select: { id: true },
     })
     if (kodBoyicha) return { id: kodBoyicha.id, yaratildi: false }
   }
 
   const nomBoyicha = await tx.tovar.findFirst({
-    where: { nomi: { equals: manba.nomi, mode: 'insensitive' }, ...d },
+    where: { ...omborda, nomi: { equals: manba.nomi, mode: 'insensitive' } },
     select: { id: true },
   })
   if (nomBoyicha) return { id: nomBoyicha.id, yaratildi: false }
 
-  const kategoriyaId = await qabulKategoriyasi(tx, manba.kategoriyaId, qabulFilialId, egaId)
+  const kategoriyaId = await qabulKategoriyasi(tx, manba.kategoriyaId, qabul, egaId)
+
+  // Shtrix-kod: bu o'sha jismoniy mahsulot, kod saqlanadi — kassa skaneri
+  // bir nechta mos kelganda tanlangan ombor va qoldiqqa qarab ajratadi.
+  // Faqat filial katalogida kod bazada unique (@@unique([shtrixKod,
+  // filialId])): u yerda band bo'lsa, nusxa kodsiz yaratiladi.
+  let shtrixKod = manba.shtrixKod
+  if (shtrixKod && qabul.filialId) {
+    const band = await tx.tovar.findFirst({
+      where: { shtrixKod, filialId: qabul.filialId },
+      select: { id: true },
+    })
+    if (band) shtrixKod = null
+  }
 
   const yangi = await tx.tovar.create({
     data: {
       nomi: manba.nomi,
       kategoriyaId,
-      // Shtrix-kod filial ichida unique — boshqa filialda bandligi to'sqinlik qilmaydi
-      shtrixKod: manba.shtrixKod,
+      shtrixKod,
       birlik: manba.birlik,
       valyuta: manba.valyuta,
       kelishNarxi: manba.kelishNarxi,
@@ -112,6 +169,7 @@ export async function qabulTovarniTop(
       bolishNarxi: manba.bolishNarxi,
       minimalQoldiq: manba.minimalQoldiq,
       yaroqlilikMuddati: manba.yaroqlilikMuddati,
+      rasmlar: manba.rasmlar,
       ...d,
     },
     select: { id: true },
@@ -133,13 +191,15 @@ export const MANBA_TOVAR_SELECT = {
   bolishNarxi: true,
   minimalQoldiq: true,
   yaroqlilikMuddati: true,
+  rasmlar: true,
 } as const
 
 // ─── O'tkazmani bajarish ─────────────────────────────────────────────────────
 
 export interface OtkazmaBajarParams {
   manbaFilialId: string | null
-  qabulFilialId: string | null
+  manbaOmborId: string | null
+  qabul: QabulManzil
   manbaJoy: 'OMBOR' | 'DOKON'
   qabulJoy: 'OMBOR' | 'DOKON'
   izoh: string | null
@@ -173,7 +233,9 @@ export async function otkazmaniBajar(
   const otkazma = await tx.otkazma.create({
     data: {
       manbaFilialId: p.manbaFilialId,
-      qabulFilialId: p.qabulFilialId,
+      qabulFilialId: p.qabul.filialId,
+      manbaOmborId: p.manbaOmborId,
+      qabulOmborId: p.qabul.omborId,
       manbaJoy: p.manbaJoy,
       qabulJoy: p.qabulJoy,
       izoh: p.izoh,
@@ -184,15 +246,21 @@ export async function otkazmaniBajar(
 
   let yangiTovarSoni = 0
   let qatorSoni = 0
+  // Filial ham, ombor ham bir xil — faqat joy (ombor ↔ do'kon) almashadi:
+  // mahsulot o'sha-o'sha, nusxa yaratilmaydi.
+  const ichki = (p.manbaFilialId ?? null) === (p.qabul.filialId ?? null)
+    && (p.manbaOmborId ?? null) === (p.qabul.omborId ?? null)
 
   for (const q of p.qatorlar) {
     if (!(q.miqdor > 0)) continue
     const manba = p.tovarMap.get(q.tovarId)
     if (!manba) continue
 
-    // Qabul doirasida juftini topamiz. Mavjud bo'lsa o'sha qaytadi —
+    // Qabul omborida juftini topamiz. Mavjud bo'lsa o'sha qaytadi —
     // shuning uchun ikkinchi o'tkazmada qoldiq ustiga qo'shiladi.
-    const qabul = await qabulTovarniTop(tx, manba, p.qabulFilialId, p.egaId)
+    const qabul = ichki
+      ? { id: manba.id, yaratildi: false }
+      : await qabulTovarniTop(tx, manba, p.qabul, p.egaId)
     if (qabul.yaratildi) yangiTovarSoni++
 
     await tx.otkazmaTarkibi.create({
@@ -214,7 +282,7 @@ export async function otkazmaniBajar(
         miqdor: q.miqdor,
         narx: manba.kelishNarxi,
         otkazmaId: otkazma.id,
-        izoh: "Filiallararo o'tkazma",
+        izoh: "Omborlararo o'tkazma",
         foydalanuvchiId: p.foydalanuvchiId,
       },
     })
@@ -227,7 +295,7 @@ export async function otkazmaniBajar(
         miqdor: q.miqdor,
         narx: manba.kelishNarxi,
         otkazmaId: otkazma.id,
-        izoh: "Filiallararo o'tkazma",
+        izoh: "Omborlararo o'tkazma",
         foydalanuvchiId: p.foydalanuvchiId,
       },
     })

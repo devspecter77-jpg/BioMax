@@ -578,22 +578,32 @@ export default function SotuvPage() {
     const n = kod.trim()
     if (!n) return undefined
     const list = tovarlarRef.current
-    // 1) Aynan mos keladigan
-    let topilgan = list.find(t => t.shtrixKod === n)
-    if (topilgan) return topilgan
-    // 2) Trim qilingan
-    topilgan = list.find(t => (t.shtrixKod || '').trim() === n)
-    if (topilgan) return topilgan
-    // 3) Boshidagi 0 ni olib tashlab taqqoslash (EAN-13 vs UPC-A)
+    // Bir xil kod bir nechta mahsulotda bo'lishi mumkin: omborlararo
+    // o'tkazma qabul omborida mahsulot nusxasini (kodi bilan) yaratadi.
+    // Unda tanlangan ombordagisi, keyin sotiladigan qoldig'i ko'pi olinadi.
+    const eng = (mos: Tovar[]): Tovar | undefined => {
+      if (mos.length <= 1) return mos[0]
+      const ball = (t: Tovar) =>
+        (aktifOmbor && kategoriyaOmbori.get(t.kategoriya?.id ?? '') === aktifOmbor ? 1e12 : 0)
+        + Math.max(0, t.qoldiq)
+      return mos.reduce((a, b) => (ball(b) > ball(a) ? b : a))
+    }
     const nNoZero = n.replace(/^0+/, '')
-    topilgan = list.find(t => {
-      const kodi = (t.shtrixKod || '').trim()
-      return kodi.replace(/^0+/, '') === nNoZero
-    })
-    if (topilgan) return topilgan
-    // 4) Nol bilan to'ldirib taqqoslash (UPC-A → EAN-13)
-    topilgan = list.find(t => (t.shtrixKod || '').trim() === '0' + n)
-    return topilgan
+    const bosqichlar: Array<(kodi: string) => boolean> = [
+      // 1) Aynan mos keladigan
+      kodi => kodi === n,
+      // 2) Trim qilingan
+      kodi => kodi.trim() === n,
+      // 3) Boshidagi 0 ni olib tashlab taqqoslash (EAN-13 vs UPC-A)
+      kodi => kodi.trim().replace(/^0+/, '') === nNoZero,
+      // 4) Nol bilan to'ldirib taqqoslash (UPC-A → EAN-13)
+      kodi => kodi.trim() === '0' + n,
+    ]
+    for (const mosmi of bosqichlar) {
+      const topilgan = eng(list.filter(t => mosmi(t.shtrixKod || '')))
+      if (topilgan) return topilgan
+    }
+    return undefined
   }
 
   // Local cache'da topilmasa API'dan to'g'ridan-to'g'ri qidirish.

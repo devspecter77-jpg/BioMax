@@ -16,6 +16,12 @@ export const JOY_LABEL: Record<OmborJoy, string> = {
 /** Filial tanlovi. `null` — Ega markaziy ombori (filialsiz katalog). */
 export type FilialTanlov = string | null
 
+/**
+ * Nomli ombor tanlovi (Ombor → Kategoriya → Tovar). `null` — omborga
+ * biriktirilmagan mahsulotlar: Ega doirasida "Markaziy ombor".
+ */
+export type OmborTanlov = string | null
+
 export interface OtkazmaQator {
   tovarId: string
   /** Manbadagi mavjud qoldiq — tekshiruv shunga tayanadi. */
@@ -26,6 +32,8 @@ export interface OtkazmaQator {
 export interface OtkazmaKiritma {
   manbaFilialId: FilialTanlov
   qabulFilialId: FilialTanlov
+  manbaOmborId?: OmborTanlov
+  qabulOmborId?: OmborTanlov
   manbaJoy: OmborJoy
   qabulJoy: OmborJoy
   qatorlar: OtkazmaQator[]
@@ -35,14 +43,18 @@ export function joyMi(qiymat: unknown): qiymat is OmborJoy {
   return qiymat === 'OMBOR' || qiymat === 'DOKON'
 }
 
-/** Manba va qabul bir xil joymi (filial + ombor/do'kon juftligi). */
+/** Manba va qabul bir xil joymi (filial + nomli ombor + ombor/do'kon). */
 export function birXilManzil(k: {
   manbaFilialId: FilialTanlov
   qabulFilialId: FilialTanlov
+  manbaOmborId?: OmborTanlov
+  qabulOmborId?: OmborTanlov
   manbaJoy: OmborJoy
   qabulJoy: OmborJoy
 }): boolean {
-  return (k.manbaFilialId ?? null) === (k.qabulFilialId ?? null) && k.manbaJoy === k.qabulJoy
+  return (k.manbaFilialId ?? null) === (k.qabulFilialId ?? null)
+    && (k.manbaOmborId ?? null) === (k.qabulOmborId ?? null)
+    && k.manbaJoy === k.qabulJoy
 }
 
 export interface TekshiruvNatija {
@@ -94,9 +106,45 @@ export function otkazmaniTekshir(k: OtkazmaKiritma): TekshiruvNatija {
   return { ok: true, xato: null, xatoTovarlar: [] }
 }
 
-/** Manba/qabul nomini o'qiladigan qilib yozish: "Markaziy ombor · Ombor". */
-export function manzilNomi(filialNomi: string | null | undefined, joy: OmborJoy): string {
-  return `${filialNomi || 'Markaziy ombor'} · ${JOY_LABEL[joy]}`
+/**
+ * Filial va nomli ombor nomidan bitta sarlavha: "Markaziy ombor",
+ * "Oziq-ovqat ombori", "Chilonzor", "Chilonzor · Sovutgich".
+ */
+export function omborSarlavhasi(filialNomi: string | null | undefined, omborNomi: string | null | undefined): string {
+  if (filialNomi) return omborNomi ? `${filialNomi} · ${omborNomi}` : filialNomi
+  return omborNomi || 'Markaziy ombor'
+}
+
+/** Manba/qabul nomini o'qiladigan qilib yozish: "Oziq-ovqat ombori · Do'kon". */
+export function manzilNomi(
+  filialNomi: string | null | undefined,
+  joy: OmborJoy,
+  omborNomi?: string | null,
+): string {
+  return `${omborSarlavhasi(filialNomi, omborNomi)} · ${JOY_LABEL[joy]}`
+}
+
+/** Juftlash uchun kerakli mahsulot maydonlari. */
+export interface JuftTovar { id: string; nomi: string; shtrixKod: string | null }
+
+/**
+ * Qabul omboridagi mahsulotlar orasidan manbaning juftini topadi:
+ * avval shtrix-kod, keyin nom (registrga sezgir emas). Topilsa o'tkazilgan
+ * miqdor o'sha mahsulot qoldig'iga qo'shiladi, topilmasa yangisi yaratiladi.
+ *
+ * Server (`otkazma-server.ts`) bazada AYNAN shu tartibda qidiradi; bu
+ * funksiya esa oynada "ustiga qo'shiladi / yangi yaratiladi" deb oldindan
+ * ko'rsatish uchun.
+ */
+export function qabulJuftiniTop<T extends JuftTovar>(manba: JuftTovar, qabulTovarlar: T[]): T | null {
+  const boshqalar = qabulTovarlar.filter(t => t.id !== manba.id)
+  const kod = manba.shtrixKod?.trim()
+  if (kod) {
+    const kodBoyicha = boshqalar.find(t => t.shtrixKod?.trim() === kod)
+    if (kodBoyicha) return kodBoyicha
+  }
+  const nom = manba.nomi.trim().toLocaleLowerCase('uz')
+  return boshqalar.find(t => t.nomi.trim().toLocaleLowerCase('uz') === nom) ?? null
 }
 
 /** Tanlangan joydagi qoldiqni qaytaradi (ombor/qoldiq maydonlaridan). */

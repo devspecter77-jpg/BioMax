@@ -1,27 +1,37 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import {
-  ArrowRightLeft, Loader2, Plus, X, Send, History, Package, ChevronDown,
+  ArrowRight, ArrowRightLeft, Loader2, Plus, X, Send, History, Package, ChevronDown, Warehouse,
 } from 'lucide-react'
 import { formatSanaVaVaqt, uzSearch } from '@/lib/utils'
 import {
-  JOY_LABEL, otkazmaniTekshir, manzilNomi, joydagiQoldiq,
-  type OmborJoy, type FilialTanlov,
+  JOY_LABEL, otkazmaniTekshir, manzilNomi, omborSarlavhasi, joydagiQoldiq, qabulJuftiniTop,
+  type OmborJoy,
 } from '@/lib/otkazma'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
-interface Filial { id: string; nomi: string; faol: boolean }
+/** `/api/otkazmalar/manzillar` qaytaradigan manzil */
+interface Manzil {
+  filialId: string | null
+  filialNomi: string | null
+  omborId: string | null
+  omborNomi: string | null
+  faol: boolean
+  tovarSoni: number
+}
 
-interface ManbaTovar {
+interface OmbordagiTovar {
   id: string
   nomi: string
   birlik: string
   shtrixKod: string | null
   omborQoldiq: number | null
   dokonQoldiq: number | null
+  kategoriya: { omborId: string | null } | null
 }
 
 interface OtkazmaTarkib {
@@ -39,20 +49,22 @@ interface Otkazma {
   sana: string
   manbaFilial: { id: string; nomi: string } | null
   qabulFilial: { id: string; nomi: string } | null
+  manbaOmbor: { id: string; nomi: string } | null
+  qabulOmbor: { id: string; nomi: string } | null
   foydalanuvchi: { ism: string } | null
   tarkiblar: OtkazmaTarkib[]
 }
 
-const MARKAZIY = '__markaziy__'
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition text-sm'
 
-/** Select qiymati (`__markaziy__` yoki filial id) → API kutadigan `null | id` */
-function tanlovdanId(v: string): FilialTanlov {
-  return v === MARKAZIY ? null : v
-}
+// Select qiymati: "filialId|omborId" (bo'sh qism — null)
+const manzilKaliti = (m: { filialId: string | null; omborId: string | null }) =>
+  `${m.filialId ?? ''}|${m.omborId ?? ''}`
+
+const manzilSarlavhasi = (m: Manzil) => omborSarlavhasi(m.filialNomi, m.omborNomi)
 
 export default function OtkazmalarPage() {
-  const [filiallar, setFiliallar] = useState<Filial[]>([])
+  const [manzillar, setManzillar] = useState<Manzil[]>([])
   const [otkazmalar, setOtkazmalar] = useState<Otkazma[]>([])
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [modal, setModal] = useState(false)
@@ -60,11 +72,12 @@ export default function OtkazmalarPage() {
   const yukla = useCallback(async () => {
     setYuklanmoqda(true)
     try {
-      const [fl, ot] = await Promise.all([
-        fetch('/api/filiallar').then(r => r.ok ? r.json() : []).catch(() => []),
+      const [mz, ot] = await Promise.all([
+        fetch('/api/otkazmalar/manzillar').then(r => r.ok ? r.json() : null).catch(() => null),
         fetch('/api/otkazmalar').then(r => r.ok ? r.json() : []).catch(() => []),
       ])
-      setFiliallar(Array.isArray(fl) ? fl : [])
+      if (!mz) toast.error("Omborlar ro'yxati yuklanmadi")
+      setManzillar(Array.isArray(mz?.manzillar) ? mz.manzillar : [])
       setOtkazmalar(Array.isArray(ot) ? ot : [])
     } finally {
       setYuklanmoqda(false)
@@ -72,6 +85,8 @@ export default function OtkazmalarPage() {
   }, [])
 
   useEffect(() => { void yukla() }, [yukla])
+
+  const nomliOmborSoni = manzillar.filter(m => m.omborId).length
 
   return (
     <div className="space-y-4">
@@ -87,16 +102,34 @@ export default function OtkazmalarPage() {
         </div>
         <button
           onClick={() => setModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl font-medium transition text-sm"
+          disabled={yuklanmoqda || manzillar.length === 0}
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition text-sm"
         >
           <Plus size={16} /> Yangi o&apos;tkazma
         </button>
       </div>
 
-      {filiallar.length === 0 && !yuklanmoqda && (
+      {!yuklanmoqda && manzillar.length > 0 && nomliOmborSoni === 0 && (
         <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/10 p-3 text-sm text-amber-800 dark:text-amber-400">
-          Hali filial ochilmagan — hozircha faqat <b>Markaziy ombor</b> ning ombori va do&apos;koni
-          o&apos;rtasida o&apos;tkazish mumkin. Filial qo&apos;shsangiz, u ham ro&apos;yxatda chiqadi.
+          Hali ombor yaratilmagan — hozircha faqat <b>Markaziy ombor</b>ning zaxirasi va do&apos;koni
+          o&apos;rtasida o&apos;tkazish mumkin.{' '}
+          <Link href="/omborlar" className="font-medium underline underline-offset-2">Omborlar</Link>{' '}
+          sahifasida ombor qo&apos;shsangiz, u shu yerda chiqadi.
+        </div>
+      )}
+
+      {!yuklanmoqda && manzillar.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {manzillar.map(m => (
+            <span
+              key={manzilKaliti(m)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300"
+            >
+              <Warehouse size={13} className="text-primary" />
+              {manzilSarlavhasi(m)}
+              <span className="text-gray-400 tabular-nums">· {m.tovarSoni} mahsulot</span>
+            </span>
+          ))}
         </div>
       )}
 
@@ -118,7 +151,7 @@ export default function OtkazmalarPage() {
 
       {modal && (
         <YangiOtkazmaModal
-          filiallar={filiallar}
+          manzillar={manzillar}
           onYopish={() => setModal(false)}
           onSaqlandi={() => { setModal(false); void yukla() }}
         />
@@ -142,11 +175,11 @@ function OtkazmaKartochka({ otkazma: o }: { otkazma: Otkazma }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm flex-wrap">
             <span className="font-medium text-gray-900 dark:text-gray-100">
-              {manzilNomi(o.manbaFilial?.nomi, o.manbaJoy)}
+              {manzilNomi(o.manbaFilial?.nomi, o.manbaJoy, o.manbaOmbor?.nomi)}
             </span>
-            <ArrowRightLeft size={14} className="text-primary shrink-0" />
+            <ArrowRight size={14} className="text-primary shrink-0" />
             <span className="font-medium text-gray-900 dark:text-gray-100">
-              {manzilNomi(o.qabulFilial?.nomi, o.qabulJoy)}
+              {manzilNomi(o.qabulFilial?.nomi, o.qabulJoy, o.qabulOmbor?.nomi)}
             </span>
           </div>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
@@ -182,57 +215,95 @@ function OtkazmaKartochka({ otkazma: o }: { otkazma: Otkazma }) {
 
 // ─── Yangi o'tkazma ──────────────────────────────────────────────────────────
 
+/** Bitta filial doirasining (null — markaziy katalog) mahsulotlari va qoldig'i. */
+async function doiraTovarlari(filialId: string | null): Promise<OmbordagiTovar[]> {
+  const qs = filialId ? `?filialId=${encodeURIComponent(filialId)}` : ''
+  const r = await fetch(`/api/ombor${qs}`)
+  if (!r.ok) throw new Error('yuklanmadi')
+  const d = await r.json()
+  return Array.isArray(d) ? d : []
+}
+
+const omborda = (t: OmbordagiTovar, omborId: string | null) => (t.kategoriya?.omborId ?? null) === omborId
+
 function YangiOtkazmaModal({
-  filiallar, onYopish, onSaqlandi,
-}: { filiallar: Filial[]; onYopish: () => void; onSaqlandi: () => void }) {
+  manzillar, onYopish, onSaqlandi,
+}: { manzillar: Manzil[]; onYopish: () => void; onSaqlandi: () => void }) {
   useBodyScrollLock(true)
 
-  const [manbaFilial, setManbaFilial] = useState(MARKAZIY)
-  const [qabulFilial, setQabulFilial] = useState(MARKAZIY)
-  const [manbaJoy, setManbaJoy] = useState<OmborJoy>('OMBOR')
-  const [qabulJoy, setQabulJoy] = useState<OmborJoy>('OMBOR')
+  // Boshlang'ich tanlov: mahsuloti bor birinchi manzil → undan boshqa birinchisi
+  const [manbaKalit, setManbaKalit] = useState(() =>
+    manzilKaliti(manzillar.find(m => m.tovarSoni > 0) ?? manzillar[0]))
+  const [qabulKalit, setQabulKalit] = useState(() =>
+    manzilKaliti(manzillar.find(m => manzilKaliti(m) !== manbaKalit) ?? manzillar[0]))
+  // Kirimlar odatda do'konga yoziladi — sotiladigan qoldiq shu yerda
+  const [manbaJoy, setManbaJoy] = useState<OmborJoy>('DOKON')
+  const [qabulJoy, setQabulJoy] = useState<OmborJoy>('DOKON')
   const [izoh, setIzoh] = useState('')
 
-  const [tovarlar, setTovarlar] = useState<ManbaTovar[]>([])
-  const [tovarYuklanmoqda, setTovarYuklanmoqda] = useState(false)
+  const manba = manzillar.find(m => manzilKaliti(m) === manbaKalit) ?? manzillar[0]
+  const qabul = manzillar.find(m => manzilKaliti(m) === qabulKalit) ?? manzillar[0]
+
+  // Mahsulotlar filial doirasi bo'yicha keshlanadi: bir katalog ichidagi
+  // omborlar almashtirilganda qayta so'rov yuborilmaydi.
+  const [doiralar, setDoiralar] = useState<Record<string, OmbordagiTovar[]>>({})
+  const soralgan = useRef(new Set<string>())
   const [qidiruv, setQidiruv] = useState('')
   const [miqdorlar, setMiqdorlar] = useState<Record<string, string>>({})
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
 
-  // Manba o'zgarganda o'sha ombordagi mahsulotlar qayta yuklanadi.
-  // Mavjud /api/ombor endpoint'i Ega uchun filialId parametrini
-  // qo'llab-quvvatlaydi va omborQoldiq/dokonQoldiq qaytaradi.
   useEffect(() => {
-    let bekor = false
-    async function yukla() {
-      setTovarYuklanmoqda(true)
-      setMiqdorlar({})
-      try {
-        const fid = tanlovdanId(manbaFilial)
-        const qs = fid ? `?filialId=${encodeURIComponent(fid)}` : ''
-        const d = await fetch(`/api/ombor${qs}`).then(r => r.ok ? r.json() : [])
-        if (!bekor) setTovarlar(Array.isArray(d) ? d : [])
-      } catch {
-        if (!bekor) toast.error('Mahsulotlar yuklanmadi')
-      } finally {
-        if (!bekor) setTovarYuklanmoqda(false)
-      }
+    for (const filialId of new Set([manba.filialId, qabul.filialId])) {
+      const k = filialId ?? ''
+      if (soralgan.current.has(k)) continue
+      soralgan.current.add(k)
+      doiraTovarlari(filialId)
+        .then(list => setDoiralar(d => ({ ...d, [k]: list })))
+        .catch(() => {
+          toast.error('Mahsulotlar yuklanmadi')
+          setDoiralar(d => ({ ...d, [k]: [] }))
+        })
     }
-    void yukla()
-    return () => { bekor = true }
-  }, [manbaFilial])
+  }, [manba.filialId, qabul.filialId])
 
-  // Faqat tanlangan joyda (ombor yoki do'kon) qoldig'i bor mahsulotlar
-  const korinadigan = useMemo(() => {
-    return tovarlar
-      .filter(t => joydagiQoldiq(t, manbaJoy) > 0)
-      .filter(t => !qidiruv || uzSearch(t.nomi, qidiruv) || (t.shtrixKod || '').includes(qidiruv))
-  }, [tovarlar, manbaJoy, qidiruv])
+  // Manba o'zgarsa kiritilgan miqdorlar boshqa omborga tegishli bo'lib qoladi
+  const manbaniTanla = (kalit: string) => { setManbaKalit(kalit); setMiqdorlar({}) }
+  const manbaJoyiniTanla = (joy: OmborJoy) => { setManbaJoy(joy); setMiqdorlar({}) }
+
+  const manbaTovarlari = useMemo(
+    () => (doiralar[manba.filialId ?? ''] ?? []).filter(t => omborda(t, manba.omborId)),
+    [doiralar, manba.filialId, manba.omborId],
+  )
+  const qabulTovarlari = useMemo(
+    () => (doiralar[qabul.filialId ?? ''] ?? []).filter(t => omborda(t, qabul.omborId)),
+    [doiralar, qabul.filialId, qabul.omborId],
+  )
+  const tovarYuklanmoqda = !doiralar[manba.filialId ?? '']
+  const ichki = manbaKalit === qabulKalit
+
+  // Tanlangan joyda qoldig'i bor mahsulotlar
+  const qoldiqlilar = useMemo(
+    () => manbaTovarlari.filter(t => joydagiQoldiq(t, manbaJoy) > 0),
+    [manbaTovarlari, manbaJoy],
+  )
+  const korinadigan = useMemo(
+    () => qoldiqlilar.filter(t => !qidiruv || uzSearch(t.nomi, qidiruv) || (t.shtrixKod || '').includes(qidiruv)),
+    [qoldiqlilar, qidiruv],
+  )
+  const boshqaJoy: OmborJoy = manbaJoy === 'OMBOR' ? 'DOKON' : 'OMBOR'
+  const boshqaJoydagiSoni = manbaTovarlari.filter(t => joydagiQoldiq(t, boshqaJoy) > 0).length
+
+  /** Qabul omborida nima bo'ladi: ustiga qo'shiladi / yangi yaratiladi. */
+  const juftlar = useMemo(() => {
+    const m = new Map<string, OmbordagiTovar | null>()
+    for (const t of manbaTovarlari) m.set(t.id, ichki ? t : qabulJuftiniTop(t, qabulTovarlari))
+    return m
+  }, [manbaTovarlari, qabulTovarlari, ichki])
 
   const qatorlar = useMemo(() => {
     return Object.entries(miqdorlar)
       .map(([tovarId, v]) => {
-        const t = tovarlar.find(x => x.id === tovarId)
+        const t = manbaTovarlari.find(x => x.id === tovarId)
         return {
           tovarId,
           miqdor: parseFloat(v) || 0,
@@ -240,11 +311,14 @@ function YangiOtkazmaModal({
         }
       })
       .filter(q => q.miqdor > 0)
-  }, [miqdorlar, tovarlar, manbaJoy])
+  }, [miqdorlar, manbaTovarlari, manbaJoy])
+  const yangiSoni = qatorlar.filter(q => !juftlar.get(q.tovarId)).length
 
   const tekshiruv = otkazmaniTekshir({
-    manbaFilialId: tanlovdanId(manbaFilial),
-    qabulFilialId: tanlovdanId(qabulFilial),
+    manbaFilialId: manba.filialId,
+    qabulFilialId: qabul.filialId,
+    manbaOmborId: manba.omborId,
+    qabulOmborId: qabul.omborId,
     manbaJoy, qabulJoy, qatorlar,
   })
 
@@ -256,17 +330,19 @@ function YangiOtkazmaModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          manbaFilialId: tanlovdanId(manbaFilial),
-          qabulFilialId: tanlovdanId(qabulFilial),
+          manbaFilialId: manba.filialId,
+          qabulFilialId: qabul.filialId,
+          manbaOmborId: manba.omborId,
+          qabulOmborId: qabul.omborId,
           manbaJoy, qabulJoy, izoh,
           tarkiblar: qatorlar.map(q => ({ tovarId: q.tovarId, miqdor: q.miqdor })),
         }),
       })
-      const d = await res.json()
+      const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.xato || "O'tkazma amalga oshmadi"); return }
       toast.success(
-        `${d.qatorlar} ta mahsulot o'tkazildi` +
-        (d.yangiTovarSoni > 0 ? ` (${d.yangiTovarSoni} tasi qabul omborda yangi yaratildi)` : ''),
+        `${d.qatorlar} ta mahsulot «${manzilSarlavhasi(qabul)}» ga o'tkazildi` +
+        (d.yangiTovarSoni > 0 ? ` (${d.yangiTovarSoni} tasi u yerda yangi yaratildi)` : ''),
       )
       onSaqlandi()
     } finally {
@@ -274,31 +350,50 @@ function YangiOtkazmaModal({
     }
   }
 
-  const filialTanlov = (qiymat: string, ozgartir: (v: string) => void) => (
-    <select value={qiymat} onChange={e => ozgartir(e.target.value)} className={inputCls}>
-      <option value={MARKAZIY}>Markaziy ombor</option>
-      {filiallar.map(f => (
-        <option key={f.id} value={f.id}>{f.nomi}{f.faol ? '' : ' (nofaol)'}</option>
-      ))}
+  const filialBor = manzillar.some(m => m.filialId)
+  const variant = (m: Manzil) => (
+    <option key={manzilKaliti(m)} value={manzilKaliti(m)}>
+      {filialBor ? (m.omborNomi || 'Omborga biriktirilmagan') : manzilSarlavhasi(m)}
+      {` — ${m.tovarSoni} mahsulot`}{m.faol ? '' : ' (nofaol)'}
+    </option>
+  )
+  // Filiallar bo'lsa har doira alohida guruh; bo'lmasa oddiy ro'yxat
+  const manzilTanlov = (id: string, qiymat: string, ozgartir: (v: string) => void) => (
+    <select id={id} value={qiymat} onChange={e => ozgartir(e.target.value)} className={inputCls}>
+      {filialBor
+        ? Array.from(new Set(manzillar.map(m => m.filialId ?? ''))).map(fid => {
+            const guruh = manzillar.filter(m => (m.filialId ?? '') === fid)
+            return (
+              <optgroup key={fid || 'markaziy'} label={guruh[0].filialNomi || 'Markaziy'}>
+                {guruh.map(variant)}
+              </optgroup>
+            )
+          })
+        : manzillar.map(variant)}
     </select>
   )
 
   const joyTanlov = (qiymat: OmborJoy, ozgartir: (v: OmborJoy) => void) => (
-    <div className="grid grid-cols-2 gap-1.5">
-      {(['OMBOR', 'DOKON'] as const).map(j => (
-        <button
-          key={j}
-          type="button"
-          onClick={() => ozgartir(j)}
-          className={`py-2 rounded-xl text-xs font-medium border transition ${
-            qiymat === j
-              ? 'bg-primary border-primary text-white'
-              : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400'
-          }`}
-        >
-          {JOY_LABEL[j]}
-        </button>
-      ))}
+    <div className="space-y-1">
+      <p className="text-[11px] text-gray-500 dark:text-gray-400">Qoldiq joyi</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        {(['OMBOR', 'DOKON'] as const).map(j => (
+          <button
+            key={j}
+            type="button"
+            onClick={() => ozgartir(j)}
+            aria-pressed={qiymat === j}
+            title={j === 'OMBOR' ? 'Zaxira — sotuvga chiqarilmagan qoldiq' : "Do'kon — kassada sotiladigan qoldiq"}
+            className={`py-2 rounded-xl text-xs font-medium border transition ${
+              qiymat === j
+                ? 'bg-primary border-primary text-white'
+                : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400'
+            }`}
+          >
+            {JOY_LABEL[j]}
+          </button>
+        ))}
+      </div>
     </div>
   )
 
@@ -307,7 +402,7 @@ function YangiOtkazmaModal({
       <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-2xl max-h-[85vh] flex flex-col">
         <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
           <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi o&apos;tkazma</h3>
-          <button onClick={onYopish} className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
+          <button onClick={onYopish} aria-label="Yopish" className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
             <X size={18} />
           </button>
         </div>
@@ -315,32 +410,33 @@ function YangiOtkazmaModal({
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-gray-700 dark:text-gray-300 text-sm font-medium block">Qayerdan</label>
-              {filialTanlov(manbaFilial, setManbaFilial)}
-              {joyTanlov(manbaJoy, setManbaJoy)}
+              <label htmlFor="otkazma-manba" className="text-gray-700 dark:text-gray-300 text-sm font-medium block">Qayerdan</label>
+              {manzilTanlov('otkazma-manba', manbaKalit, manbaniTanla)}
+              {joyTanlov(manbaJoy, manbaJoyiniTanla)}
             </div>
             <div className="space-y-2">
-              <label className="text-gray-700 dark:text-gray-300 text-sm font-medium block">Qayerga</label>
-              {filialTanlov(qabulFilial, setQabulFilial)}
+              <label htmlFor="otkazma-qabul" className="text-gray-700 dark:text-gray-300 text-sm font-medium block">Qayerga</label>
+              {manzilTanlov('otkazma-qabul', qabulKalit, setQabulKalit)}
               {joyTanlov(qabulJoy, setQabulJoy)}
             </div>
           </div>
 
           <div>
-            <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+            <label htmlFor="otkazma-izoh" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
               Izoh <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
             </label>
-            <input value={izoh} onChange={e => setIzoh(e.target.value)}
+            <input id="otkazma-izoh" value={izoh} onChange={e => setIzoh(e.target.value)}
               placeholder="masalan: haftalik tarqatish" className={inputCls} />
           </div>
 
           <div className="border-t border-gray-100 dark:border-neutral-800 pt-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-gray-700 dark:text-gray-300 text-sm font-medium flex items-center gap-1.5">
-                <Package size={15} /> Mahsulotlar
+              <span className="text-gray-700 dark:text-gray-300 text-sm font-medium flex items-center gap-1.5 min-w-0">
+                <Package size={15} className="shrink-0" />
+                <span className="truncate">«{manzilSarlavhasi(manba)}» dagi mahsulotlar</span>
               </span>
               {qatorlar.length > 0 && (
-                <span className="text-xs text-primary font-medium">{qatorlar.length} ta tanlandi</span>
+                <span className="text-xs text-primary font-medium shrink-0">{qatorlar.length} ta tanlandi</span>
               )}
             </div>
             <SearchBar value={qidiruv} onChange={setQidiruv} placeholder="Mahsulot nomi yoki shtrix-kod..." />
@@ -348,30 +444,56 @@ function YangiOtkazmaModal({
             {tovarYuklanmoqda ? (
               <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-primary" /></div>
             ) : korinadigan.length === 0 ? (
-              <p className="text-center text-gray-500 dark:text-gray-400 py-8 text-sm">
-                {qidiruv
-                  ? 'Hech narsa topilmadi'
-                  : `${JOY_LABEL[manbaJoy]}da qoldiqli mahsulot yo'q`}
-              </p>
+              <div className="text-center text-gray-500 dark:text-gray-400 py-8 text-sm space-y-2">
+                {qidiruv ? (
+                  <p>Hech narsa topilmadi</p>
+                ) : manbaTovarlari.length === 0 ? (
+                  <p>Bu omborda mahsulot yo&apos;q</p>
+                ) : (
+                  <>
+                    <p>{JOY_LABEL[manbaJoy]}da qoldig&apos;i bor mahsulot yo&apos;q</p>
+                    {boshqaJoydagiSoni > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => manbaJoyiniTanla(boshqaJoy)}
+                        className="text-primary font-medium hover:underline"
+                      >
+                        {JOY_LABEL[boshqaJoy]}da {boshqaJoydagiSoni} ta mahsulot bor — o&apos;tish
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             ) : (
-              <div className="border border-gray-200 dark:border-neutral-800 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800 max-h-64 overflow-y-auto">
+              <div className="border border-gray-200 dark:border-neutral-800 rounded-xl divide-y divide-gray-100 dark:divide-neutral-800 max-h-72 overflow-y-auto">
                 {korinadigan.map(t => {
                   const mavjud = joydagiQoldiq(t, manbaJoy)
                   const xatoli = tekshiruv.xatoTovarlar.includes(t.id)
+                  const birlik = t.birlik.toLowerCase()
+                  const juft = juftlar.get(t.id)
+                  const tanlangan = (parseFloat(miqdorlar[t.id] || '') || 0) > 0
                   return (
-                    <div key={t.id} className="px-3 py-2.5 flex items-center gap-3">
+                    <div key={t.id} className={`px-3 py-2.5 flex items-center gap-3 ${tanlangan ? 'bg-primary/5' : ''}`}>
                       <div className="min-w-0 flex-1">
                         <p className="text-gray-900 dark:text-gray-100 text-sm truncate">{t.nomi}</p>
-                        <p className="text-gray-500 dark:text-gray-400 text-xs">
-                          Mavjud: {mavjud} {t.birlik.toLowerCase()}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-2">
+                          <span className="tabular-nums">Mavjud: {mavjud} {birlik}</span>
+                          {!ichki && (juft ? (
+                            <span className="text-emerald-700 dark:text-emerald-400">
+                              → bor, ustiga qo&apos;shiladi (hozir {joydagiQoldiq(juft, qabulJoy)} {birlik})
+                            </span>
+                          ) : (
+                            <span className="text-blue-600 dark:text-blue-400">→ u yerda yangi yaratiladi</span>
+                          ))}
                         </p>
                       </div>
                       <input
                         type="text"
                         inputMode="decimal"
+                        aria-label={`${t.nomi} — o'tkaziladigan miqdor`}
                         value={miqdorlar[t.id] || ''}
                         onChange={e => {
-                          const v = e.target.value.replace(/[^0-9.]/g, '')
+                          const v = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '')
                           setMiqdorlar(p => ({ ...p, [t.id]: v }))
                         }}
                         placeholder="0"
@@ -397,9 +519,14 @@ function YangiOtkazmaModal({
         </div>
 
         <div className="p-5 border-t border-gray-200 dark:border-neutral-800 shrink-0 space-y-2">
-          {!tekshiruv.ok && qatorlar.length > 0 && (
+          {qatorlar.length > 0 && (tekshiruv.ok ? (
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              {qatorlar.length} ta mahsulot «{manzilSarlavhasi(manba)}» dan ayiriladi va «{manzilSarlavhasi(qabul)}» ga qo&apos;shiladi
+              {!ichki && yangiSoni > 0 && ` — ${yangiSoni} tasi u yerda yangi yaratiladi`}
+            </p>
+          ) : (
             <p className="text-xs text-red-600">{tekshiruv.xato}</p>
-          )}
+          ))}
           <div className="flex gap-3">
             <button type="button" onClick={onYopish}
               className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">

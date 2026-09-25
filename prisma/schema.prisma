@@ -1123,6 +1123,11 @@ model Otkazma {
   qabulFilialId  String?
   manbaJoy       Joylashuv @default(OMBOR)
   qabulJoy       Joylashuv @default(OMBOR)
+  // Nomli ombor (Ombor → Kategoriya → Tovar). null — omborga biriktirilmagan
+  // mahsulotlar ("Markaziy ombor"). Ombor o'chirilsa hujjat qoladi, havola
+  // bo'shaydi.
+  manbaOmborId   String?
+  qabulOmborId   String?
   izoh           String?
   sana           DateTime  @default(now())
   foydalanuvchiId String
@@ -1130,6 +1135,8 @@ model Otkazma {
 
   manbaFilial    Filial?       @relation("OtkazmaManba", fields: [manbaFilialId], references: [id])
   qabulFilial    Filial?       @relation("OtkazmaQabul", fields: [qabulFilialId], references: [id])
+  manbaOmbor     Ombor?        @relation("OtkazmaManbaOmbor", fields: [manbaOmborId], references: [id], onDelete: SetNull)
+  qabulOmbor     Ombor?        @relation("OtkazmaQabulOmbor", fields: [qabulOmborId], references: [id], onDelete: SetNull)
   foydalanuvchi  Foydalanuvchi @relation(fields: [foydalanuvchiId], references: [id])
   tarkiblar      OtkazmaTarkibi[]
   harakatlar     OmborHarakati[]
@@ -1443,6 +1450,8 @@ model Ombor {
   filial        Filial?         @relation(fields: [filialId], references: [id])
   ega           Foydalanuvchi?  @relation("OmborEgasi", fields: [egaId], references: [id])
   kategoriyalar Kategoriya[]
+  yuborilganOtkazmalar Otkazma[] @relation("OtkazmaManbaOmbor")
+  qabulOtkazmalar      Otkazma[] @relation("OtkazmaQabulOmbor")
 
   @@unique([nomi, filialId, egaId])
   @@index([filialId])

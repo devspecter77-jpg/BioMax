@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionIsRealEga, sessionEgaId } from '@/lib/filial-scope'
+import { sessionEgaId } from '@/lib/filial-scope'
 import { getStockMap } from '@/lib/stock'
 import { joyMi, otkazmaniTekshir, type OmborJoy, type OtkazmaQator } from '@/lib/otkazma'
-import { otkazmaniBajar, MANBA_TOVAR_SELECT } from '@/lib/otkazma-server'
-
-// Filiallararo o'tkazmani faqat bosh Ega boshqaradi — filial admini
-// boshqa filialning omboriga tega olmasligi kerak. /api/filiallar dagi
-// bilan bir xil tekshiruv.
-function faqatEga(session: unknown): boolean {
-  const s = session as { user?: { rol?: string } } | null
-  return !!s && s.user?.rol === 'ADMIN' && sessionIsRealEga(s as never)
-}
+import { otkazmaniBajar, faqatEga, MANBA_TOVAR_SELECT } from '@/lib/otkazma-server'
 
 // ─── Ro'yxat ────────────────────────────────────────────────────────────────
 
@@ -30,6 +22,8 @@ export async function GET(req: NextRequest) {
       include: {
         manbaFilial: { select: { id: true, nomi: true } },
         qabulFilial: { select: { id: true, nomi: true } },
+        manbaOmbor: { select: { id: true, nomi: true } },
+        qabulOmbor: { select: { id: true, nomi: true } },
         foydalanuvchi: { select: { ism: true } },
         tarkiblar: {
           include: {
@@ -63,6 +57,8 @@ export async function POST(req: NextRequest) {
 
     const manbaFilialId: string | null = data.manbaFilialId || null
     const qabulFilialId: string | null = data.qabulFilialId || null
+    const manbaOmborId: string | null = data.manbaOmborId || null
+    const qabulOmborId: string | null = data.qabulOmborId || null
     const manbaJoy: OmborJoy = joyMi(data.manbaJoy) ? data.manbaJoy : 'OMBOR'
     const qabulJoy: OmborJoy = joyMi(data.qabulJoy) ? data.qabulJoy : 'OMBOR'
 
@@ -71,26 +67,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ xato: 'Kamida bitta mahsulot kiriting' }, { status: 400 })
     }
 
-    // Filiallar haqiqatdan mavjudmi (null = markaziy ombor, tekshirilmaydi)
+    // Filiallar haqiqatdan mavjudmi (null = markaziy katalog, tekshirilmaydi)
     for (const fid of [manbaFilialId, qabulFilialId]) {
       if (!fid) continue
       const bor = await prisma.filial.findUnique({ where: { id: fid }, select: { id: true } })
       if (!bor) return NextResponse.json({ xato: 'Filial topilmadi' }, { status: 404 })
     }
 
-    // Manba mahsulotlar — SHU manba doirasidan ekanini tekshiramiz, aks holda
-    // boshqa filialning tovarini "o'tkazib" yuborish mumkin bo'lardi.
+    // Nomli ombor AYNAN tanlangan filial doirasiga tegishli bo'lishi shart —
+    // aks holda boshqa katalogning omboriga mahsulot yaratib yuborilardi.
+    const omborDoirasi = (filialId: string | null) =>
+      filialId ? { filialId } : { filialId: null, egaId }
+    let qabulOmborNomi: string | null = null
+    for (const [omborId, filialId, qabulmi] of [
+      [manbaOmborId, manbaFilialId, false],
+      [qabulOmborId, qabulFilialId, true],
+    ] as const) {
+      if (!omborId) continue
+      const ombor = await prisma.ombor.findFirst({
+        where: { id: omborId, ...omborDoirasi(filialId) },
+        select: { nomi: true },
+      })
+      if (!ombor) return NextResponse.json({ xato: 'Ombor topilmadi' }, { status: 404 })
+      if (qabulmi) qabulOmborNomi = ombor.nomi
+    }
+
+    // Manba mahsulotlar — SHU manba ombordan ekanini tekshiramiz, aks holda
+    // boshqa ombor yoki filialning tovarini "o'tkazib" yuborish mumkin bo'lardi.
     const tovarIdlar: string[] = Array.from(
       new Set(xomQatorlar.map((t: { tovarId?: string }) => String(t.tovarId || '')).filter(Boolean)),
     )
-    const manbaDoira = manbaFilialId ? { filialId: manbaFilialId } : { filialId: null, egaId }
     const manbaTovarlar = await prisma.tovar.findMany({
-      where: { id: { in: tovarIdlar }, ...manbaDoira },
+      where: {
+        id: { in: tovarIdlar },
+        ...omborDoirasi(manbaFilialId),
+        kategoriya: { omborId: manbaOmborId },
+      },
       select: MANBA_TOVAR_SELECT,
     })
     if (manbaTovarlar.length !== tovarIdlar.length) {
       return NextResponse.json(
-        { xato: "Ba'zi mahsulotlar manba omborda topilmadi" },
+        { xato: "Ba'zi mahsulotlar tanlangan manba omborda topilmadi" },
         { status: 400 },
       )
     }
@@ -107,7 +124,9 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    const tekshiruv = otkazmaniTekshir({ manbaFilialId, qabulFilialId, manbaJoy, qabulJoy, qatorlar })
+    const tekshiruv = otkazmaniTekshir({
+      manbaFilialId, qabulFilialId, manbaOmborId, qabulOmborId, manbaJoy, qabulJoy, qatorlar,
+    })
     if (!tekshiruv.ok) {
       return NextResponse.json(
         { xato: tekshiruv.xato, xatoTovarlar: tekshiruv.xatoTovarlar },
@@ -119,7 +138,10 @@ export async function POST(req: NextRequest) {
     // Mantiq otkazma-server.ts da: testlar AYNAN shu funksiyani chaqiradi.
     const natija = await prisma.$transaction(
       (tx) => otkazmaniBajar(tx, {
-        manbaFilialId, qabulFilialId, manbaJoy, qabulJoy,
+        manbaFilialId,
+        manbaOmborId,
+        qabul: { filialId: qabulFilialId, omborId: qabulOmborId, omborNomi: qabulOmborNomi },
+        manbaJoy, qabulJoy,
         izoh: typeof data.izoh === 'string' && data.izoh.trim() ? data.izoh.trim() : null,
         egaId,
         foydalanuvchiId,
