@@ -6,6 +6,7 @@ import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, LayoutGrid, Search, Lock, Unlock, QrCode, Printer, Check } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
 import { normalizeUzbek } from '@/lib/utils'
 import ViewToggle from '@/components/ViewToggle'
@@ -727,7 +728,7 @@ export default function TovarlarPage() {
             </label>
           )}
           {qoshishRuxsat && (
-            <button onClick={() => ochModal()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
+            <button onClick={() => ochModal()} aria-label="Tovar qo'shish" title="Tovar qo'shish" className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
               <Plus size={16} />
               <span className="hidden sm:inline">Tovar qo&apos;shish</span>
             </button>
@@ -1126,15 +1127,14 @@ export default function TovarlarPage() {
 
       {/* Kategoriyalarni boshqarish modali — qo'shish, tahrirlash, o'chirish. Tovar modali ustida chiqishi uchun yuqoriroq z-index */}
       {katModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={() => setKatModal(false)}>
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Kategoriyalarni boshqarish</h3>
-              <button onClick={() => setKatModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+        <Modal
+          olcham="sm"
+          sarlavha={<>Kategoriyalarni boshqarish</>}
+          onYopish={() => setKatModal(false)}
+          tashqaridanYopish={true}
+          zClassName="z-[60]"
+        >
+          <div className="space-y-4">
               {/* Yangi kategoriya qo'shish */}
               <div className="flex gap-2">
                 <input
@@ -1191,23 +1191,30 @@ export default function TovarlarPage() {
                   </div>
                 ))}
               </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">{tahrirlash ? 'Tovarni tahrirlash' : 'Yangi tovar'}</h3>
-              <button onClick={() => setModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={saqlash} className="p-5 space-y-4">
+        <Modal
+          olcham="lg"
+          sarlavha={<>{tahrirlash ? 'Tovarni tahrirlash' : 'Yangi tovar'}</>}
+          onYopish={() => setModal(false)}
+          onSubmit={saqlash}
+          footer={<>
+            <button type="button" onClick={() => setModal(false)}
+              className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+              Bekor qilish
+            </button>
+            <button type="submit" disabled={saqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+              {saqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
+              {saqlanmoqda ? 'Saqlanmoqda...' : (tahrirlash ? 'Saqlash' : "Qo'shish")}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Nomi *</label>
                 <input value={form.nomi} onChange={e => setForm(f => ({...f, nomi: e.target.value}))} required className={inputCls} />
@@ -1481,19 +1488,8 @@ export default function TovarlarPage() {
                   />
                 </div>
               )}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor qilish
-                </button>
-                <button type="submit" disabled={saqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {saqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
-                  {saqlanmoqda ? 'Saqlanmoqda...' : (tahrirlash ? 'Saqlash' : "Qo'shish")}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Rasm lightbox */}
@@ -1536,8 +1532,8 @@ export default function TovarlarPage() {
 
       {/* Ko'rinish sozlamalari — bog'langan admindan mahsulot yashirish */}
       {korinishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4" onClick={() => setKorinishModal(false)}>
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => setKorinishModal(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Ko'rinish sozlamalari" className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[calc(100dvh-0.75rem)] sm:max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
                 <EyeOff size={18} className="text-primary" />
@@ -1628,20 +1624,24 @@ export default function TovarlarPage() {
       {/* Mahsulot batafsil ma'lumoti */}
       {/* ── QR yorliqlarni chop etish ── */}
       {qrModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
-          onClick={() => setQrModal(false)}>
-          <div onClick={e => e.stopPropagation()}
-            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-md">
-            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                <QrCode size={18} className="text-primary" /> QR yorliqlar
-              </h3>
-              <button onClick={() => setQrModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
+        <Modal
+          belgi={<QrCode size={18} className="text-primary" />}
+          sarlavha={<>QR yorliqlar</>}
+          onYopish={() => setQrModal(false)}
+          tashqaridanYopish={true}
+          footer={<>
+            <button onClick={() => void qrChopEt()} disabled={qrTayyorlanmoqda}
+              className="flex-1 py-2.5 bg-primary text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+              {qrTayyorlanmoqda ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
+              Chop etish
+            </button>
+            <button onClick={() => setQrModal(false)}
+              className="px-5 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl font-medium">
+              Yopish
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 <span className="font-semibold text-gray-900 dark:text-gray-100">{tanlangan.size} ta</span> mahsulot
                 tanlandi. Har bir yorliqda QR, nomi, narxi va kodi bo&apos;ladi.
@@ -1673,21 +1673,8 @@ export default function TovarlarPage() {
                 Jami {tanlangan.size * qrNusxa} ta yorliq chiqadi. QR skanerlanganda
                 mahsulot nomi va narxi ko&apos;rinadi.
               </p>
-
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => void qrChopEt()} disabled={qrTayyorlanmoqda}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
-                  {qrTayyorlanmoqda ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
-                  Chop etish
-                </button>
-                <button onClick={() => setQrModal(false)}
-                  className="px-5 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl font-medium">
-                  Yopish
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Suzuvchi kategoriya tanlagich ──

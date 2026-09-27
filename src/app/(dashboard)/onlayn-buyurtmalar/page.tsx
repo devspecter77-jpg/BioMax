@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
+import Modal from '@/components/ui/modal'
 import {
   AlertTriangle, Banknote, Bike, Info, Receipt, Lock, CreditCard, Globe, Loader2, MessageSquare,
   Phone, RefreshCw, Search, Settings, Store, User, X, Clock, Package, Truck, MapPinCheck, Navigation, CheckCircle2,
@@ -770,13 +771,19 @@ function SozlamaModal({ onYopish }: { onYopish: () => void }) {
 
   const inputCls = 'w-full px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={e => { if (e.target === e.currentTarget) onYopish() }}>
-      <div role="dialog" aria-modal="true" aria-label="Sayt sozlamalari" className="bg-white dark:bg-neutral-900 w-full max-w-md rounded-3xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Onlayn do‘kon aloqa ma‘lumotlari</h2>
-          <button onClick={onYopish} aria-label="Yopish" className="p-2 -mr-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-neutral-800"><X size={20} /></button>
-        </div>
-        <p className="text-sm text-gray-500">Saytning pastki qismida va buyurtma sahifasida ko‘rinadi. Telefon va manzil chekda ham shu qiymatdan olinadi.</p>
+    <Modal
+      sarlavha="Onlayn do‘kon aloqa ma‘lumotlari"
+      tavsif="Saytning pastki qismida va buyurtma sahifasida ko‘rinadi. Telefon va manzil chekda ham shu qiymatdan olinadi."
+      onYopish={onYopish}
+      tashqaridanYopish={false}
+      yopishMumkin={!band}
+      footer={q ? (
+        <button onClick={() => void saqla()} disabled={band} className="w-full min-h-11 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+          {band && <Loader2 size={16} className="animate-spin" />} Saqlash
+        </button>
+      ) : undefined}
+    >
+      <div className="space-y-4">
         {!q ? (
           <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary" /></div>
         ) : (
@@ -792,12 +799,9 @@ function SozlamaModal({ onYopish }: { onYopish: () => void }) {
               <textarea value={q.qaytarish_shartlari} onChange={e => setQ({ ...q, qaytarish_shartlari: e.target.value })} rows={4} maxLength={2000} className={inputCls} suppressHydrationWarning />
               <span className="block text-xs text-gray-500">Mahsulot sahifasida va «Qaytarish» sahifasida ko‘rinadi.</span>
             </label>
-            <button onClick={() => void saqla()} disabled={band} className="w-full py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
-              {band && <Loader2 size={16} className="animate-spin" />} Saqlash
-            </button>
           </>
         )}
       </div>
-    </div>
+    </Modal>
   )
 }

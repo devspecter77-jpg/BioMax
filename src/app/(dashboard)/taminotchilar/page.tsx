@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  Truck, Plus, Loader2, X, Save, Pencil, Trash2, Phone, MapPin, User, Package, ShoppingBag,
+  Truck, Plus, Loader2, Save, Pencil, Trash2, Phone, MapPin, User, Package, ShoppingBag,
 } from 'lucide-react'
 import { formatSum, formatPhone, uzSearch } from '@/lib/utils'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal from '@/components/ui/modal'
 import { useConfirm } from '@/components/ConfirmProvider'
 import { useRuxsat } from '@/hooks/useRuxsat'
 import TaminotchiTafsilot from '@/components/TaminotchiTafsilot'
@@ -316,21 +317,30 @@ export default function TaminotchilarPage() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-24 sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm max-h-[85dvh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between sticky top-0 bg-white dark:bg-neutral-900">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">
-                {tahrirlash ? "Ta'minotchini tahrirlash" : "Yangi ta'minotchi"}
-              </h3>
-              <button
-                onClick={() => { setModal(false); setTahrirlash(null) }}
-                className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={saqla} className="p-5 space-y-4">
+        <Modal
+          olcham="sm"
+          sarlavha={<>{tahrirlash ? "Ta'minotchini tahrirlash" : "Yangi ta'minotchi"}</>}
+          onYopish={() => { setModal(false); setTahrirlash(null) }}
+          onSubmit={saqla}
+          footer={<>
+            <button
+              type="button"
+              onClick={() => { setModal(false); setTahrirlash(null) }}
+              className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium"
+            >
+              Bekor
+            </button>
+            <button
+              type="submit"
+              disabled={saqlanmoqda}
+              className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2"
+            >
+              {saqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Saqlash
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
                   Nomi <span className="text-red-500">*</span>
@@ -402,27 +412,8 @@ export default function TaminotchilarPage() {
                   className={inputCls}
                 />
               </div>
-
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => { setModal(false); setTahrirlash(null) }}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium"
-                >
-                  Bekor
-                </button>
-                <button
-                  type="submit"
-                  disabled={saqlanmoqda}
-                  className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2"
-                >
-                  {saqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  Saqlash
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
       {tafsilotId && (
         <TaminotchiTafsilot

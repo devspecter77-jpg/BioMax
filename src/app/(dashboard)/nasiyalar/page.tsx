@@ -6,8 +6,9 @@ import DokonQarzPanel from '@/components/DokonQarzPanel'
 import XarajatPanel from '@/components/XarajatPanel'
 import { QARZ_TOLOV_USULLARI, TOLOV_MALUMOTI, tolovQisqa } from '@/lib/tolov-usullari'
 import { toast } from 'sonner'
-import { Phone, Banknote, X, Clock, Plus, Trash2, PlusCircle, Pencil, AlertTriangle, CheckCircle, Download, Upload, Loader2, Calendar } from 'lucide-react'
+import { Phone, Banknote, Clock, Plus, Trash2, PlusCircle, Pencil, AlertTriangle, CheckCircle, Download, Upload, Loader2, Calendar } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal from '@/components/ui/modal'
 import ViewToggle from '@/components/ViewToggle'
 import MoneyInput from '@/components/ui/money-input'
 import DateInput from '@/components/ui/date-input'
@@ -435,6 +436,8 @@ export default function NasiyalarPage() {
         </label>}
         {qarzRuxsat && <button
           onClick={() => setQoshishModal(true)}
+          aria-label="Nasiya qo'shish"
+          title="Nasiya qo'shish"
           className="flex items-center gap-1.5 p-2.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition">
           <Plus size={16} />
           <span className="hidden sm:inline">Nasiya qo&apos;shish</span>
@@ -632,17 +635,22 @@ export default function NasiyalarPage() {
 
       {/* Tahrirlash modal */}
       {tahrirlashModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Nasiyani tahrirlash</h3>
-              <button
-                onClick={() => setTahrirlashModal(null)}
-                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={tahrirlash} className="p-5 space-y-4">
+        <Modal
+          sarlavha={<>Nasiyani tahrirlash</>}
+          onYopish={() => setTahrirlashModal(null)}
+          onSubmit={tahrirlash}
+          footer={<>
+            <button type="button" onClick={() => setTahrirlashModal(null)}
+              className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+              Bekor
+            </button>
+            <button type="submit" disabled={tahrirlashYuklash}
+              className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition disabled:opacity-50">
+              {tahrirlashYuklash ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
                 <input
@@ -694,38 +702,30 @@ export default function NasiyalarPage() {
                   onChange={v => setTahrirlashForm(f => ({ ...f, muddat: v }))}
                 />
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setTahrirlashModal(null)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button type="submit" disabled={tahrirlashYuklash}
-                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition disabled:opacity-50">
-                  {tahrirlashYuklash ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Qarz qo'shish modal */}
       {qarzQoshishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-sm max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Qarz qo&apos;shish</h3>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">{qarzQoshishModal.mijoz.ism}</p>
-                <p className="text-xs text-gray-400 mt-1">Hozirgi qarz: <span className="text-red-600 font-medium">{formatSum(qarzQoshishModal.qoldiq)}</span></p>
-              </div>
-              <button
-                onClick={() => setQarzQoshishModal(null)}
-                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={qarzQoshish} className="p-5 space-y-4">
+        <Modal
+          olcham="sm"
+          sarlavha={<>Qarz qo&apos;shish</>}
+          tavsif={<><p className="text-gray-500 dark:text-gray-400 text-sm">{qarzQoshishModal.mijoz.ism}</p> <p className="text-xs text-gray-400 mt-1">Hozirgi qarz: <span className="text-red-600 font-medium">{formatSum(qarzQoshishModal.qoldiq)}</span></p></>}
+          onYopish={() => setQarzQoshishModal(null)}
+          onSubmit={qarzQoshish}
+          footer={<>
+            <button type="button" onClick={() => setQarzQoshishModal(null)}
+              className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+              Bekor
+            </button>
+            <button type="submit" disabled={qarzQoshishYuklash}
+              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition disabled:opacity-50">
+              {qarzQoshishYuklash ? 'Saqlanmoqda...' : 'Qo\'shish'}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Qo&apos;shiladigan summa *</label>
                 <MoneyInput
@@ -744,34 +744,28 @@ export default function NasiyalarPage() {
                 />
                 <p className="text-xs text-gray-400 mt-1">Bo&apos;sh qoldirilsa, eski muddat saqlanadi.</p>
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setQarzQoshishModal(null)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button type="submit" disabled={qarzQoshishYuklash}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition disabled:opacity-50">
-                  {qarzQoshishYuklash ? 'Saqlanmoqda...' : 'Qo\'shish'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Nasiya qo'shish modal */}
       {qoshishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Nasiya qo&apos;shish</h3>
-              <button
-                onClick={() => setQoshishModal(false)}
-                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={nasiyaQoshish} className="p-5 space-y-4">
+        <Modal
+          sarlavha={<>Nasiya qo&apos;shish</>}
+          onYopish={() => setQoshishModal(false)}
+          onSubmit={nasiyaQoshish}
+          footer={<>
+            <button type="button" onClick={() => setQoshishModal(false)}
+              className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+              Bekor
+            </button>
+            <button type="submit" disabled={qoshishYuklash}
+              className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition disabled:opacity-50">
+              {qoshishYuklash ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               {/* Mavjud mijozni tanlash — ism yozib qidirish o'rniga.
                   Ilgari faqat ism/manzil bo'yicha moslashtirilardi va bir
                   xil ismli ikkinchi mijoz yaratilib ketishi mumkin edi. */}
@@ -870,163 +864,139 @@ export default function NasiyalarPage() {
                   type="tel"
                 />
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setQoshishModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button type="submit" disabled={qoshishYuklash}
-                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition disabled:opacity-50">
-                  {qoshishYuklash ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* To'lov modal */}
       {tolovModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            {/* Modal header with progress info */}
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold">To&apos;lov qabul qilish</h3>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">{tolovModal.mijoz.ism}</p>
-                <div className="flex gap-3 mt-1 text-xs flex-wrap">
-                  <span className="text-gray-400">Jami: {formatSum(tolovModal.jamiQarz)}</span>
-                  <span className="text-green-600">To&apos;langan: {formatSum(tolovModal.tolangan)}</span>
-                  <span className="text-red-600 font-semibold">Qoldiq: {formatSum(tolovModal.qoldiq)}</span>
-                </div>
-                {/* Progress bar in modal header */}
-                <div className="mt-2 h-1.5 bg-gray-100 dark:bg-neutral-800 rounded-full">
-                  <div
-                    className="h-1.5 bg-green-500 rounded-full"
-                    style={{ width: `${Math.min(100, (Number(tolovModal.tolangan) / Number(tolovModal.jamiQarz)) * 100)}%` }}
-                  />
-                </div>
+        <Modal
+          sarlavha={<>To&apos;lov qabul qilish</>}
+          tavsif={<>
+            <span className="block text-sm text-gray-500 dark:text-gray-400">{tolovModal.mijoz.ism}</span>
+            <span className="mt-1 flex flex-wrap gap-x-3 tabular-nums">
+              <span className="text-gray-400">Jami: {formatSum(tolovModal.jamiQarz)}</span>
+              <span className="text-green-600">To&apos;langan: {formatSum(tolovModal.tolangan)}</span>
+              <span className="text-red-600 font-semibold">Qoldiq: {formatSum(tolovModal.qoldiq)}</span>
+            </span>
+          </>}
+          onYopish={() => setTolovModal(null)}
+          tashqaridanYopish={false}
+          tanaClassName="p-0!"
+        >
+          <form onSubmit={tolovQilish} className="p-5 space-y-4">
+            {/* To'lov summasi with "To'liq to'lash" shortcut */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-gray-700 dark:text-gray-300 text-sm font-medium">To&apos;lov summasi *</label>
+                <button
+                  type="button"
+                  onClick={() => setTolovForm(f => ({ ...f, summa: String(tolovModal?.qoldiq ?? '') }))}
+                  className="text-xs text-green-600 hover:text-green-500 font-medium">
+                  To&apos;liq to&apos;lash ({formatSum(tolovModal?.qoldiq ?? 0)})
+                </button>
               </div>
-              <button
-                onClick={() => setTolovModal(null)}
-                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
-                <X size={18} />
+              <MoneyInput
+                value={tolovForm.summa}
+                onChange={v => setTolovForm(f => ({ ...f, summa: v }))}
+                required
+                min={1}
+                max={tolovModal ? Number(tolovModal.qoldiq) : undefined}
+                placeholder="0"
+              />
+            </div>
+
+            {/* To'lov usuli — toggle buttons instead of select */}
+            <div>
+              <label className="text-gray-700 dark:text-gray-300 text-sm mb-2 block font-medium">To&apos;lov usuli</label>
+              <div className="grid grid-cols-2 gap-2">
+                {QARZ_TOLOV_USULLARI.map(usul => (
+                  <button
+                    key={usul}
+                    type="button"
+                    onClick={() => setTolovForm(f => ({ ...f, tolovUsuli: usul }))}
+                    className={`py-2 rounded-xl text-sm font-medium border transition ${tolovForm.tolovUsuli === usul ? 'bg-green-600 border-green-600 text-white' : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400'}`}>
+                    {TOLOV_MALUMOTI[usul].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Izoh */}
+            <div>
+              <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Izoh</label>
+              <input
+                value={tolovForm.izoh}
+                onChange={e => setTolovForm(f => ({ ...f, izoh: e.target.value }))}
+                className={inputCls}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setTolovModal(null)}
+                className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
+              <button type="submit" className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl font-medium transition">
+                To&apos;lovni tasdiqlash
               </button>
             </div>
-            <form onSubmit={tolovQilish} className="p-5 space-y-4">
-              {/* To'lov summasi with "To'liq to'lash" shortcut */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-gray-700 dark:text-gray-300 text-sm font-medium">To&apos;lov summasi *</label>
-                  <button
-                    type="button"
-                    onClick={() => setTolovForm(f => ({ ...f, summa: String(tolovModal?.qoldiq ?? '') }))}
-                    className="text-xs text-green-600 hover:text-green-500 font-medium">
-                    To&apos;liq to&apos;lash ({formatSum(tolovModal?.qoldiq ?? 0)})
-                  </button>
-                </div>
-                <MoneyInput
-                  value={tolovForm.summa}
-                  onChange={v => setTolovForm(f => ({ ...f, summa: v }))}
-                  required
-                  min={1}
-                  max={tolovModal ? Number(tolovModal.qoldiq) : undefined}
-                  placeholder="0"
-                />
-              </div>
+          </form>
 
-              {/* To'lov usuli — toggle buttons instead of select */}
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-2 block font-medium">To&apos;lov usuli</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {QARZ_TOLOV_USULLARI.map(usul => (
-                    <button
-                      key={usul}
-                      type="button"
-                      onClick={() => setTolovForm(f => ({ ...f, tolovUsuli: usul }))}
-                      className={`py-2 rounded-xl text-sm font-medium border transition ${tolovForm.tolovUsuli === usul ? 'bg-green-600 border-green-600 text-white' : 'bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400'}`}>
-                      {TOLOV_MALUMOTI[usul].label}
-                    </button>
+          {/* Qarz tarixi — qarz qo'shilgan sanalar */}
+          {tolovModal.qarzTarixi && tolovModal.qarzTarixi.length > 0 && (
+            <div className="px-5 pb-3">
+              <div className="border-t border-gray-200 dark:border-neutral-800 pt-4">
+                <h4 className="text-gray-700 dark:text-gray-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                  <PlusCircle size={14} className="text-red-500" />
+                  Qarz tarixi ({tolovModal.qarzTarixi.length} ta)
+                </h4>
+                <div className="space-y-2 max-h-36 overflow-y-auto">
+                  {tolovModal.qarzTarixi.map(q => (
+                    <div key={q.id} className="flex items-center justify-between gap-2 py-2 border-b border-gray-100 dark:border-neutral-800 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{formatSum(q.summa)}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">
+                          {formatSana(q.sana)}
+                          {q.izoh && ` • ${q.izoh}`}
+                        </p>
+                      </div>
+                      <span className="text-red-600 text-xs font-medium shrink-0 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 rounded-lg">
+                        +{formatSum(q.summa)}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Izoh */}
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Izoh</label>
-                <input
-                  value={tolovForm.izoh}
-                  onChange={e => setTolovForm(f => ({ ...f, izoh: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setTolovModal(null)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl font-medium transition">
-                  To&apos;lovni tasdiqlash
-                </button>
-              </div>
-            </form>
-
-            {/* Qarz tarixi — qarz qo'shilgan sanalar */}
-            {tolovModal.qarzTarixi && tolovModal.qarzTarixi.length > 0 && (
-              <div className="px-5 pb-3">
-                <div className="border-t border-gray-200 dark:border-neutral-800 pt-4">
-                  <h4 className="text-gray-700 dark:text-gray-300 text-sm font-semibold mb-3 flex items-center gap-2">
-                    <PlusCircle size={14} className="text-red-500" />
-                    Qarz tarixi ({tolovModal.qarzTarixi.length} ta)
-                  </h4>
-                  <div className="space-y-2 max-h-36 overflow-y-auto">
-                    {tolovModal.qarzTarixi.map(q => (
-                      <div key={q.id} className="flex items-center justify-between gap-2 py-2 border-b border-gray-100 dark:border-neutral-800 last:border-0">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{formatSum(q.summa)}</p>
-                          <p className="text-gray-500 dark:text-gray-400 text-xs">
-                            {formatSana(q.sana)}
-                            {q.izoh && ` • ${q.izoh}`}
-                          </p>
-                        </div>
-                        <span className="text-red-600 text-xs font-medium shrink-0 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 rounded-lg">
-                          +{formatSum(q.summa)}
-                        </span>
+          {/* To'lovlar tarixi */}
+          {tolovModal.tolovlar.length > 0 && (
+            <div className="px-5 pb-5">
+              <div className="border-t border-gray-200 dark:border-neutral-800 pt-4">
+                <h4 className="text-gray-700 dark:text-gray-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Clock size={14} />
+                  To&apos;lovlar tarixi ({tolovModal.tolovlar.length} ta)
+                </h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {tolovModal.tolovlar.map(t => (
+                    <div key={t.id} className="flex items-center justify-between gap-2 py-2 border-b border-gray-100 dark:border-neutral-800 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{formatSum(t.summa)}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">
+                          {formatSana(t.sana)} • {tolovQisqa(t.tolovUsuli)}
+                          {t.izoh && ` • ${t.izoh}`}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                      <span className="text-green-600 text-xs font-medium shrink-0 bg-green-50 dark:bg-green-950/30 px-2 py-0.5 rounded-lg">
+                        +{formatSum(t.summa)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
-
-            {/* To'lovlar tarixi */}
-            {tolovModal.tolovlar.length > 0 && (
-              <div className="px-5 pb-5">
-                <div className="border-t border-gray-200 dark:border-neutral-800 pt-4">
-                  <h4 className="text-gray-700 dark:text-gray-300 text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Clock size={14} />
-                    To&apos;lovlar tarixi ({tolovModal.tolovlar.length} ta)
-                  </h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {tolovModal.tolovlar.map(t => (
-                      <div key={t.id} className="flex items-center justify-between gap-2 py-2 border-b border-gray-100 dark:border-neutral-800 last:border-0">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-gray-900 dark:text-gray-100 text-sm font-medium">{formatSum(t.summa)}</p>
-                          <p className="text-gray-500 dark:text-gray-400 text-xs">
-                            {formatSana(t.sana)} • {tolovQisqa(t.tolovUsuli)}
-                            {t.izoh && ` • ${t.izoh}`}
-                          </p>
-                        </div>
-                        <span className="text-green-600 text-xs font-medium shrink-0 bg-green-50 dark:bg-green-950/30 px-2 py-0.5 rounded-lg">
-                          +{formatSum(t.summa)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   )

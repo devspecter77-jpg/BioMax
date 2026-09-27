@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  Gift, Settings, Users, History, Loader2, Plus, Minus, X, Save, Percent,
+  Gift, Settings, Users, History, Loader2, Plus, Minus, Save, Percent,
 } from 'lucide-react'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
 import { toliqManzil } from '@/lib/hudud'
@@ -14,6 +14,7 @@ import {
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
 
 interface BalansMijoz {
@@ -318,21 +319,25 @@ function TuzatishModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-        <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-          <div className="min-w-0">
-            <h3 className="text-gray-900 dark:text-gray-100 font-semibold truncate">{mijoz.ism}</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-xs">
-              {formatBall(mijoz.ballBalans)} ball &middot; {formatSum(mijoz.keshbekBalans)}
-            </p>
-          </div>
-          <button onClick={onYopish} className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={saqla} className="p-5 space-y-4">
+    <Modal
+      olcham="sm"
+      sarlavha={<>{mijoz.ism}</>}
+      tavsif={<><p className="text-gray-500 dark:text-gray-400 text-xs"> {formatBall(mijoz.ballBalans)} ball &middot; {formatSum(mijoz.keshbekBalans)} </p></>}
+      onYopish={onYopish}
+      onSubmit={saqla}
+      footer={<>
+        <button type="button" onClick={onYopish}
+          className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+          Bekor
+        </button>
+        <button type="submit" disabled={saqlanmoqda}
+          className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+          {saqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Saqlash
+        </button>
+      </>}
+    >
+      <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
             {(['KESHBEK', 'BALL'] as const).map(h => (
               <button
@@ -411,21 +416,8 @@ function TuzatishModal({
               className={inputCls}
             />
           </div>
-
-          <div className="flex gap-3">
-            <button type="button" onClick={onYopish}
-              className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-              Bekor
-            </button>
-            <button type="submit" disabled={saqlanmoqda}
-              className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-              {saqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              Saqlash
-            </button>
-          </div>
-        </form>
       </div>
-    </div>
+    </Modal>
   )
 }
 

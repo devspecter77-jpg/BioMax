@@ -5,6 +5,7 @@ import { formatNarx, formatSana } from '@/lib/utils'
 import { toast } from 'sonner'
 import { AlertTriangle, X, History, ArrowRightLeft, Pencil, Trash2, Package, Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal from '@/components/ui/modal'
 import TovarTafsilot from '@/components/TovarTafsilot'
 import { harakatMalumoti } from '@/lib/harakat-turlari'
 import ViewToggle from '@/components/ViewToggle'
@@ -462,7 +463,7 @@ export default function OmborPage() {
       {/* Harakatlar tarixi modal */}
       {tarix && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-4xl flex flex-col" style={{ maxHeight: '90vh' }}>
+          <div role="dialog" aria-modal="true" aria-label="Ombor harakatlari tarixi" className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-4xl flex flex-col max-h-[90dvh]">
             <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between gap-3 flex-wrap shrink-0">
               <h2 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
                 <History size={16} className="text-blue-500" />
@@ -532,18 +533,25 @@ export default function OmborPage() {
       {/* Ommaviy kirim modal */}
       {/* O'tkazma modal */}
       {otkazmaModal && otkazmaTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                <ArrowRightLeft size={18} className="text-blue-500" />
-                Do&apos;konga o&apos;tkazma
-              </h3>
-              <button onClick={() => setOtkazmaModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={otkazmaQilish} className="p-5 space-y-4">
+        <Modal
+          olcham="sm"
+          belgi={<ArrowRightLeft size={18} className="text-blue-500" />}
+          sarlavha={<>Do&apos;konga o&apos;tkazma</>}
+          onYopish={() => setOtkazmaModal(false)}
+          onSubmit={otkazmaQilish}
+          footer={<>
+            <button type="button" onClick={() => setOtkazmaModal(false)}
+              className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
+              Bekor
+            </button>
+            <button type="submit" disabled={otkazmaSaqlanmoqda}
+              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+              {otkazmaSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : <ArrowRightLeft size={15} />}
+              {otkazmaSaqlanmoqda ? "O'tkazilmoqda..." : "O'tkazish"}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl p-3">
                 <p className="text-blue-800 dark:text-blue-200 font-semibold text-sm">{otkazmaTovar.nomi}</p>
                 <p className="text-blue-600 dark:text-blue-400 text-xs mt-1">Omborda: <strong>{otkazmaTovar.omborQoldiq}</strong> {otkazmaTovar.birlik.toLowerCase()} | Do&apos;konda: <strong>{otkazmaTovar.dokonQoldiq}</strong> {otkazmaTovar.birlik.toLowerCase()}</p>
@@ -563,34 +571,27 @@ export default function OmborPage() {
                   autoFocus
                 />
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setOtkazmaModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button type="submit" disabled={otkazmaSaqlanmoqda}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {otkazmaSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : <ArrowRightLeft size={15} />}
-                  {otkazmaSaqlanmoqda ? "O'tkazilmoqda..." : "O'tkazish"}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Tahrirlash modal */}
       {tahrirModal && tahrirTovar && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                <Pencil size={18} className="text-amber-500" />
-                Mahsulotni tahrirlash
-              </h3>
-              <button onClick={() => setTahrirModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"><X size={18} /></button>
-            </div>
-            <form onSubmit={tahrirSaqlash} className="p-5 space-y-4">
+        <Modal
+          olcham="lg"
+          belgi={<Pencil size={18} className="text-amber-500" />}
+          sarlavha={<>Mahsulotni tahrirlash</>}
+          onYopish={() => setTahrirModal(false)}
+          onSubmit={tahrirSaqlash}
+          footer={<>
+            <button type="button" onClick={() => setTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
+            <button type="submit" disabled={tahrirSaqlanmoqda} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+              {tahrirSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
+              {tahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Mahsulot nomi *</label>
                 <input value={tahrirForm.nomi} onChange={e => setTahrirForm(f => ({ ...f, nomi: e.target.value }))} required className={inputCls} autoFocus />
@@ -653,16 +654,8 @@ export default function OmborPage() {
                   className={inputCls}
                 />
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" disabled={tahrirSaqlanmoqda} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {tahrirSaqlanmoqda ? <Loader2 size={15} className="animate-spin" /> : null}
-                  {tahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Rasm lightbox */}

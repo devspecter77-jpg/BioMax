@@ -195,7 +195,7 @@ export default function LokatsiyaTanlash({
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-2xl flex flex-col max-h-[92vh]"
+            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-2xl flex flex-col max-h-[92dvh]"
           >
             <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between gap-3 shrink-0">
               <div className="min-w-0">

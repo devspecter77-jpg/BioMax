@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import type { Html5Qrcode } from 'html5-qrcode'
 import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, LayoutGrid, Link2, Share2, Package, Plus, Minus, Gift, Percent, MapPin, Send } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal, { ModalAsosiy, ModalBekor } from '@/components/ui/modal'
 import { jsPDF } from 'jspdf'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -236,44 +237,26 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, narxYorligi, savatda, boshlangic
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
-      onClick={onYop}
-      onKeyDown={e => {
-        if (e.key !== 'Escape') return
-        // Sahifadagi Esc tinglovchisi kassa oynasini ham yopib yubormasin
-        e.stopPropagation()
-        onYop()
-      }}
+    <Modal
+      olcham="sm"
+      onYopish={onYop}
+      belgi={bonus ? <Gift size={18} className="text-violet-500" /> : <ScanLine size={18} className="text-pos" />}
+      sarlavha={<span className="line-clamp-2">{tovar.nomi}</span>}
+      tavsif={bonus ? 'Bonusga nechta qo‘shilsin?' : 'Savatga nechta qo‘shilsin?'}
+      footer={<>
+        <ModalBekor onClick={onYop} />
+        <ModalAsosiy
+          type="button"
+          keng
+          rang={bonus ? 'binafsha' : 'pos'}
+          onClick={() => { if (!xato) onTasdiq(miqdor) }}
+          disabled={!!xato}
+        >
+          {xato ? 'Qo‘shish' : `${miqdor} ${birlik} qo‘shish`}
+        </ModalAsosiy>
+      </>}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="skan-miqdor-sarlavha"
-        className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-              {bonus ? <Gift size={14} className="text-violet-500" /> : <ScanLine size={14} className="text-pos" />}
-              {bonus ? 'Bonusga nechta qo‘shilsin?' : 'Savatga nechta qo‘shilsin?'}
-            </p>
-            <h3 id="skan-miqdor-sarlavha" className="mt-1 text-gray-900 dark:text-gray-100 font-semibold leading-snug line-clamp-2">
-              {tovar.nomi}
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onYop}
-            aria-label="Yopish"
-            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-3">
+        <div className="space-y-3">
           <div className="flex items-center justify-between gap-3 text-sm tabular-nums">
             <span className="text-gray-900 dark:text-gray-100 font-medium">
               {bonus ? 'Bonus — bepul' : (
@@ -383,25 +366,7 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, narxYorligi, savatda, boshlangic
           </p>
         </div>
 
-        <div className="p-4 pt-0 flex gap-2 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <button
-            type="button"
-            onClick={onYop}
-            className="flex-1 py-3 rounded-xl border border-gray-300 dark:border-neutral-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition"
-          >
-            Bekor qilish
-          </button>
-          <button
-            type="button"
-            onClick={() => { if (!xato) onTasdiq(miqdor) }}
-            disabled={!!xato}
-            className={`flex-[2] py-3 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50 ${bonus ? 'bg-violet-600 hover:bg-violet-700' : 'bg-pos hover:opacity-90'}`}
-          >
-            {xato ? 'Qo‘shish' : `${miqdor} ${birlik} qo‘shish`}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -1059,7 +1024,7 @@ export default function SotuvPage() {
   useEffect(() => {
     if (!kassaOchiq && !kategoriyaVaraq) return
     const bosildi = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || e.defaultPrevented) return
       // Ustidagi oyna avval yopiladi
       if (kategoriyaVaraq) setKategoriyaVaraq(false)
       else setKassaOchiq(false)
@@ -2789,15 +2754,21 @@ export default function SotuvPage() {
 
       {/* Mijoz ma'lumotlari modal — har bir sotuvda so'raladi */}
       {mijozModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Mijoz ma&apos;lumotlari</h3>
-              <button onClick={() => setMijozModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={mijozTasdiqlaVaYubor} className="p-5 space-y-4">
+        <Modal
+          olcham="sm"
+          sarlavha="Mijoz ma'lumotlari"
+          tavsif="Telefon yoki ism yozing — mavjud mijoz ro'yxatdan chiqadi"
+          onYopish={() => setMijozModal(false)}
+          onSubmit={mijozTasdiqlaVaYubor}
+          yopishMumkin={!mijozAniqlanmoqda}
+          footer={<>
+            <ModalBekor onClick={() => setMijozModal(false)} disabled={mijozAniqlanmoqda} />
+            <ModalAsosiy rang="tolov" yuklanmoqda={mijozAniqlanmoqda} belgi={<CheckCircle size={16} />}>
+              {mijozAniqlanmoqda ? 'Sotilmoqda...' : 'Sotish'}
+            </ModalAsosiy>
+          </>}
+        >
+          <div className="space-y-4">
               <div className="relative">
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Telefon raqam *</label>
                 <PhoneInput
@@ -2863,18 +2834,8 @@ export default function SotuvPage() {
                   <MapPin size={14} /> Mijozning GPS joylashuvi — xaritada ko&apos;rish
                 </a>
               )}
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setMijozModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button type="submit" disabled={mijozAniqlanmoqda} className="flex-1 py-2.5 bg-pos-pay hover:bg-pos-pay-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {mijozAniqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  {mijozAniqlanmoqda ? 'Sotilmoqda...' : 'Sotish'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Chek modal */}
@@ -2887,9 +2848,11 @@ export default function SotuvPage() {
         const kassirTel = s.kassir?.telefon || ''
 
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm overflow-hidden">
-              <div className="bg-pos-pay px-5 py-4 flex items-center justify-between">
+          // Telefonda pastdan varaq; chek matni o'rtada scroll bo'ladi, sarlavha va
+          // tugmalar qotib turadi — uzun chekda "Yopish" ekrandan chiqib ketmaydi.
+          <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4 animate-qoplama">
+            <div role="dialog" aria-modal="true" aria-label="Sotuv amalga oshdi" className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full sm:max-w-sm overflow-hidden flex flex-col max-h-[calc(100dvh-0.75rem)] sm:max-h-[92dvh] animate-varaq sm:animate-oyna">
+              <div className="shrink-0 bg-pos-pay px-5 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-7 h-7 text-white shrink-0" />
                   <div>
@@ -2906,7 +2869,7 @@ export default function SotuvPage() {
                 </button>
               </div>
 
-              <div className="chek-print bg-white max-h-[55vh] overflow-y-auto" style={{ fontFamily: "'Courier New', Consolas, monospace", fontSize: 12, color: '#000', width: '100%', padding: '12px 16px' }}>
+              <div className="chek-print bg-white flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ fontFamily: "'Courier New', Consolas, monospace", fontSize: 12, color: '#000', width: '100%', padding: '12px 16px' }}>
                 <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>{dokonNomi}</div>
                 {manzil && <div style={{ textAlign: 'center', fontSize: 11, marginBottom: 1 }}>{manzil}</div>}
                 {tel && <div style={{ textAlign: 'center', fontSize: 11 }}>Tel: {tel}</div>}
@@ -2976,7 +2939,7 @@ export default function SotuvPage() {
                 <div style={{ textAlign: 'center', fontSize: 11 }}>{t('Rahmat')}!</div>
               </div>
 
-              <div className="p-4 space-y-2">
+              <div className="shrink-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4 space-y-2 border-t border-gray-100 dark:border-neutral-800">
                 {/* Chek linki */}
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-neutral-800 rounded-xl">
                   <Link2 size={14} className="text-gray-400 shrink-0" />
@@ -3084,19 +3047,21 @@ export default function SotuvPage() {
       {/* Saqlangan savatlar modal */}
       {/* Zakazni saqlash — mijoz va izoh so'raladi */}
       {saqlashModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-sm">
-            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Archive size={18} className="text-emerald-600" />
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Zakazni saqlab qo&apos;yish</h3>
-              </div>
-              <button onClick={() => setSaqlashModal(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3">
+        <Modal
+          olcham="sm"
+          belgi={<Archive size={18} className="text-emerald-600" />}
+          sarlavha="Zakazni saqlab qo'yish"
+          onYopish={() => setSaqlashModal(false)}
+          tashqaridanYopish={false}
+          yopishMumkin={!zakazSaqlanmoqda}
+          footer={<>
+            <ModalBekor onClick={() => setSaqlashModal(false)} disabled={zakazSaqlanmoqda} />
+            <ModalAsosiy type="button" rang="yashil" onClick={zakazniSaqlash} yuklanmoqda={zakazSaqlanmoqda} belgi={<Archive size={16} />}>
+              Saqlash
+            </ModalAsosiy>
+          </>}
+        >
+            <div className="space-y-3">
               <div className="flex items-center justify-between text-sm bg-gray-50 dark:bg-neutral-800/60 rounded-xl px-3 py-2">
                 <span className="text-gray-500 dark:text-gray-400">{savat.length} ta mahsulot</span>
                 <span className="text-gray-900 dark:text-gray-100 font-semibold">{formatSum(jamiSumma)}</span>
@@ -3135,39 +3100,18 @@ export default function SotuvPage() {
                 </p>
               </div>
 
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setSaqlashModal(false)}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                  Bekor
-                </button>
-                <button
-                  type="button"
-                  onClick={zakazniSaqlash}
-                  disabled={zakazSaqlanmoqda}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2"
-                >
-                  {zakazSaqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Archive size={16} />}
-                  Saqlash
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {saqlanganiModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-md max-h-[90vh] overflow-hidden">
-            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Archive size={18} className="text-violet-600" />
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Saqlangan zakazlar</h3>
-              </div>
-              <button onClick={() => setSaqlanganiModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="overflow-y-auto max-h-[70vh]">
+        <Modal
+          belgi={<Archive size={18} className="text-violet-600" />}
+          sarlavha="Saqlangan zakazlar"
+          onYopish={() => setSaqlanganiModal(false)}
+          tanaClassName="p-0!"
+        >
+            <div>
               {zakazlarYuklanmoqda ? (
                 <div className="p-8 flex justify-center"><Loader2 size={20} className="animate-spin text-violet-600" /></div>
               ) : saqlanganiSavatlar.length === 0 ? (
@@ -3234,25 +3178,27 @@ export default function SotuvPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Qaytarish modal */}
       {qaytarishModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <RotateCcw size={18} className="text-amber-600" />
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Qaytarish</h3>
-              </div>
-              <button onClick={() => setQaytarishModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
+        <Modal
+          olcham="lg"
+          belgi={<RotateCcw size={18} className="text-amber-600" />}
+          sarlavha="Qaytarish"
+          tavsif={qaytarishSotuv ? 'Qaytariladigan mahsulot va miqdorni belgilang' : 'Qaysi chek bo‘yicha qaytariladi?'}
+          onYopish={() => setQaytarishModal(false)}
+          tashqaridanYopish={false}
+          yopishMumkin={!qaytarishYuklanmoqda}
+          footer={qaytarishSotuv ? <>
+            <ModalBekor onClick={() => setQaytarishModal(false)} disabled={qaytarishYuklanmoqda} />
+            <ModalAsosiy type="button" rang="ogohlantirish" onClick={qaytarishYuborish} yuklanmoqda={qaytarishYuklanmoqda} belgi={<RotateCcw size={16} />}>
+              Qaytarish
+            </ModalAsosiy>
+          </> : undefined}
+        >
+            <div className="space-y-4">
               {/* Chek tanlash */}
               {!qaytarishSotuv && (
                 <div>
@@ -3395,22 +3341,10 @@ export default function SotuvPage() {
                     />
                   </div>
 
-                  <div className="flex gap-3">
-                    <button type="button" onClick={() => setQaytarishModal(false)}
-                      className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">
-                      Bekor qilish
-                    </button>
-                    <button type="button" onClick={qaytarishYuborish} disabled={qaytarishYuklanmoqda}
-                      className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                      {qaytarishYuklanmoqda ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
-                      Qaytarish
-                    </button>
-                  </div>
                 </>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

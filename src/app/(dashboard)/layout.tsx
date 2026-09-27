@@ -9,7 +9,9 @@ import LokatsiyaKuzatuv from '@/components/LokatsiyaKuzatuv'
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="h-screen overflow-hidden bg-gray-50 dark:bg-neutral-950">
+      {/* `h-dvh`, `h-screen` emas: mobil brauzerda 100vh manzil satri
+          yashiringandagi balandlik — sahifa pasti uning ostida qolardi. */}
+      <div className="h-dvh overflow-hidden bg-gray-50 dark:bg-neutral-950">
         {/* Klaviatura foydalanuvchisi uchun: Tab bosilganda birinchi chiqadi
             va menyudan sakrab to'g'ridan-to'g'ri kontentga olib boradi. */}
         <a href="#asosiy" className="asosiyga-otish">

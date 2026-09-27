@@ -6,6 +6,7 @@ import { formatPhone } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Phone, MapPin, Building, X, Users, Check, UserPlus, Eye, EyeOff, Pencil, Trash2, Loader2, ToggleLeft, ToggleRight, Save, ShieldCheck } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal from '@/components/ui/modal'
 import PhoneInput from '@/components/ui/phone-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useConfirm } from '@/components/ConfirmProvider'
@@ -477,15 +478,18 @@ export default function FiliallarPage() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi hisob qo&apos;shish</h3>
-              <button onClick={() => setModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={saqlash} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <Modal
+          sarlavha={<>Yangi hisob qo&apos;shish</>}
+          onYopish={() => setModal(false)}
+          onSubmit={saqlash}
+          footer={<>
+            <button type="button" onClick={() => setModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
+            <button type="submit" disabled={saqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition">
+              {saqlanmoqda ? 'Saqlanmoqda...' : "Qo'shish"}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1.5 block font-medium">Hisob turi</label>
                 <div className="flex items-center bg-gray-100 dark:bg-neutral-800 rounded-xl p-1 gap-1">
@@ -587,28 +591,24 @@ export default function FiliallarPage() {
                   </button>
                 </div>
               </div>
-
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" disabled={saqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition">
-                  {saqlanmoqda ? 'Saqlanmoqda...' : "Qo'shish"}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {tahrirModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Filial va uning egasini tahrirlash</h3>
-              <button onClick={() => setTahrirModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={tahrirlashSaqlash} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <Modal
+          sarlavha={<>Filial va uning egasini tahrirlash</>}
+          onYopish={() => setTahrirModal(false)}
+          onSubmit={tahrirlashSaqlash}
+          footer={<>
+            <button type="button" onClick={() => setTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
+            <button type="submit" disabled={tahrirSaqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+              {tahrirSaqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {tahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide">
                 <Building size={13} /> Filial ma&apos;lumotlari
               </div>
@@ -666,29 +666,24 @@ export default function FiliallarPage() {
                   </div>
                 </>
               )}
-
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" disabled={tahrirSaqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {tahrirSaqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {tahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {egaTahrirModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Hisobni tahrirlash</h3>
-              <button onClick={() => setEgaTahrirModal(false)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={egaTahrirSaqlash} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <Modal
+          sarlavha={<>Hisobni tahrirlash</>}
+          onYopish={() => setEgaTahrirModal(false)}
+          onSubmit={egaTahrirSaqlash}
+          footer={<>
+            <button type="button" onClick={() => setEgaTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
+            <button type="submit" disabled={egaTahrirSaqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
+              {egaTahrirSaqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {egaTahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </>}
+        >
+          <div className="space-y-4">
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
                 <input required value={egaTahrirForm.ism} onChange={e => setEgaTahrirForm(p => ({ ...p, ism: e.target.value }))} className={inputCls} />
@@ -723,17 +718,8 @@ export default function FiliallarPage() {
                   {egaTahrirForm.faol ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                 </button>
               </div>
-
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setEgaTahrirModal(false)} className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" disabled={egaTahrirSaqlanmoqda} className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {egaTahrirSaqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {egaTahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

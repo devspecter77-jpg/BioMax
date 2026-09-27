@@ -398,8 +398,8 @@ function YangiOtkazmaModal({
   )
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4">
+      <div role="dialog" aria-modal="true" aria-label="Yangi o'tkazma" className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-2xl max-h-[calc(100dvh-0.75rem)] sm:max-h-[90dvh] flex flex-col">
         <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
           <h3 className="text-gray-900 dark:text-gray-100 font-semibold">Yangi o&apos;tkazma</h3>
           <button onClick={onYopish} aria-label="Yopish" className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
@@ -518,7 +518,7 @@ function YangiOtkazmaModal({
           </div>
         </div>
 
-        <div className="p-5 border-t border-gray-200 dark:border-neutral-800 shrink-0 space-y-2">
+        <div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5 border-t border-gray-200 dark:border-neutral-800 shrink-0 space-y-2">
           {qatorlar.length > 0 && (tekshiruv.ok ? (
             <p className="text-xs text-gray-600 dark:text-gray-400">
               {qatorlar.length} ta mahsulot «{manzilSarlavhasi(manba)}» dan ayiriladi va «{manzilSarlavhasi(qabul)}» ga qo&apos;shiladi

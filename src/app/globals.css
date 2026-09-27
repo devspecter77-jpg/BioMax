@@ -28,6 +28,13 @@
   --color-danger: #EF4444;
   --color-info: #3B82F6;
 
+  /* Modal oyna harakati (components/ui/modal.tsx). Token sifatida — shunda
+     `sm:` kabi variantlar bilan ishlaydi: telefonda varaq pastdan chiqadi,
+     kattaroq ekranda oyna joyida paydo bo'ladi. Kalit kadrlar pastda. */
+  --animate-varaq: slideInUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-oyna: scaleIn 0.18s ease-out;
+  --animate-qoplama: qoplamaPaydo 0.18s ease-out;
+
   /* Shrift */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-data: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -163,6 +170,11 @@ body {
   to { transform: translateY(0); }
 }
 
+@keyframes qoplamaPaydo {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
 }
@@ -257,6 +269,23 @@ label:has(> input[type="checkbox"]:only-child) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TELEFONDA MAYDONGA BOSILGANDA SAHIFA KATTALASHMASIN
+   iPhone Safari shrifti 16px dan kichik maydonga fokus berilganda sahifani
+   avtomatik kattalashtiradi: oyna chetga surilib, "tepaga chiqib ketgan"
+   bo'lib qoladi va kassir qo'lda kichraytirishga majbur bo'ladi. Maydonlar
+   asosan `text-sm` (14px). Faqat sensorli ekranda 16px — kompyuterda zich
+   ko'rinish o'zgarmaydi. `maximum-scale=1` bilan yopish mumkin edi, lekin
+   u ko'rishi past foydalanuvchiga barmoq bilan kattalashtirishni ham taqiqlaydi.
+   ───────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Yonma-yon turgan amal tugmalari orasida bo'shliq — "Tahrirlash" o'rniga

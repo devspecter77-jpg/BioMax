@@ -9,6 +9,7 @@ import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, Shoppin
 import { buildChekHtml, buildMijozTarixHtml, chekChopEtish } from '@/lib/chek-print'
 import { tolovQisqa } from '@/lib/tolov-usullari'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal, { ModalAsosiy, ModalBekor } from '@/components/ui/modal'
 import ViewToggle from '@/components/ViewToggle'
 import PhoneInput from '@/components/ui/phone-input'
 import Combobox from '@/components/ui/combobox'
@@ -424,7 +425,7 @@ export default function MijozlarPage() {
             <span className="hidden sm:inline">{importYuklanmoqda ? 'Yuklanmoqda...' : 'Excel import'}</span>
             <input suppressHydrationWarning type="file" accept=".xlsx,.xls" className="hidden" disabled={importYuklanmoqda} onChange={excelTanlash} />
           </label>}
-          {ruxsat.bor('mijozlar.qoshish') && <button onClick={() => modalOchish()} className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
+          {ruxsat.bor('mijozlar.qoshish') && <button onClick={() => modalOchish()} aria-label="Mijoz qo'shish" title="Mijoz qo'shish" className="flex items-center gap-2 p-2.5 sm:px-5 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition whitespace-nowrap">
             <UserPlus size={16} />
             <span className="hidden sm:inline">Mijoz qo&apos;shish</span>
           </button>}
@@ -693,19 +694,25 @@ export default function MijozlarPage() {
       </div>
 
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:shadow-none dark:border dark:border-neutral-800 w-full max-w-md">
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-              <h3 className="text-gray-900 dark:text-gray-100 font-semibold">{tahrirlash ? 'Mijozni tahrirlash' : 'Yangi mijoz'}</h3>
-              <button onClick={() => { setModal(false); setTahrirlash(null) }} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={saqlash} className="p-5 space-y-4">
+        <Modal
+          sarlavha={tahrirlash ? 'Mijozni tahrirlash' : 'Yangi mijoz'}
+          tavsif={tahrirlash ? undefined : "Faqat ism majburiy — qolganini keyin ham to'ldirish mumkin"}
+          belgi={tahrirlash ? <Pencil size={18} /> : <UserPlus size={18} />}
+          onYopish={() => { setModal(false); setTahrirlash(null) }}
+          onSubmit={saqlash}
+          yopishMumkin={!saqlanmoqda}
+          footer={<>
+            <ModalBekor onClick={() => { setModal(false); setTahrirlash(null) }} disabled={saqlanmoqda} />
+            <ModalAsosiy yuklanmoqda={saqlanmoqda}>
+              {saqlanmoqda ? 'Saqlanmoqda...' : (tahrirlash ? 'Saqlash' : "Qo'shish")}
+            </ModalAsosiy>
+          </>}
+        >
+          <div className="space-y-4">
               {/* Ism field */}
               <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism *</label>
-                <input type="text" required
+                <label htmlFor="mijoz-ism" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Ism <span className="text-red-600" aria-hidden>*</span></label>
+                <input id="mijoz-ism" type="text" required autoComplete="off" enterKeyHint="next"
                   value={form.ism}
                   onChange={e => setForm(prev => ({ ...prev, ism: e.target.value }))}
                   className={inputCls} />
@@ -841,17 +848,8 @@ export default function MijozlarPage() {
                   </button>
                 )}
               </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => { setModal(false); setTahrirlash(null) }}
-                  className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium">Bekor</button>
-                <button type="submit" disabled={saqlanmoqda} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white rounded-xl font-medium transition flex items-center justify-center gap-2">
-                  {saqlanmoqda ? <Loader2 size={16} className="animate-spin" /> : null}
-                  {saqlanmoqda ? 'Saqlanmoqda...' : (tahrirlash ? 'Saqlash' : "Qo'shish")}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Chekni ochib ko'rish ──
@@ -925,8 +923,8 @@ export default function MijozlarPage() {
 
       {/* Mijoz tafsilotlari — xaridlar tarixi */}
       {detailModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div role="dialog" aria-modal="true" className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[calc(100dvh-0.75rem)] sm:max-h-[90dvh] overflow-y-auto overscroll-contain">
             <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between sticky top-0 bg-white dark:bg-neutral-900 z-10">
               <h3 className="text-gray-900 dark:text-gray-100 font-semibold truncate">
                 {detailYuklanmoqda ? 'Yuklanmoqda...' : tanlanganMijoz?.ism || 'Mijoz'}

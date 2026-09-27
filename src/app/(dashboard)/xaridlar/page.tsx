@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
 import { tolovQisqa, tolovBadge, tolovKanallari } from '@/lib/tolov-usullari'
-import { Receipt, Phone, User, Calendar, Search, Download, X, Wallet, CreditCard, RotateCcw } from 'lucide-react'
+import { Receipt, Phone, User, Calendar, Search, Download, Wallet, CreditCard, RotateCcw } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
 
 interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
@@ -245,24 +246,15 @@ export default function XaridlarPage() {
 
       {/* Batafsil ma'lumot modali */}
       {tafsilot && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4" onClick={() => setTafsilot(null)}>
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3 shrink-0">
-              <div>
-                <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
-                  <Receipt size={18} className="text-primary" />
-                  {tafsilot.chekRaqami}
-                </h3>
-                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 flex items-center gap-1">
-                  <Calendar size={11} />{formatSanaVaVaqt(tafsilot.sana)}
-                </p>
-              </div>
-              <button onClick={() => setTafsilot(null)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+        <Modal
+          olcham="lg"
+          belgi={<Receipt size={18} className="text-primary" />}
+          sarlavha={<>{tafsilot.chekRaqami}</>}
+          tavsif={<><p className="text-gray-500 dark:text-gray-400 text-xs mt-1 flex items-center gap-1"> <Calendar size={11} />{formatSanaVaVaqt(tafsilot.sana)} </p></>}
+          onYopish={() => setTafsilot(null)}
+          tashqaridanYopish={true}
+        >
+          <div className="space-y-4">
               <div className="flex flex-wrap gap-2 text-sm">
                 <span className={`inline-flex items-center px-2.5 py-1 rounded-lg font-medium ${tolovBadge(tafsilot.tolovUsuli)}`}>
                   {tolovQisqa(tafsilot.tolovUsuli)}
@@ -333,9 +325,8 @@ export default function XaridlarPage() {
                   <span className="text-green-600 font-bold text-lg">{formatSum(tafsilot.yakuniySumma)}</span>
                 </div>
               </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

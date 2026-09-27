@@ -61,9 +61,9 @@ export function NasiyaDrillDownModal({
     <div
       role="dialog"
       aria-labelledby="drilldown-title"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40"
     >
-      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-3xl max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-3xl max-h-[calc(100dvh-0.75rem)] sm:max-h-[90dvh] flex flex-col">
         <header className="p-5 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
           <div>
             <h2
