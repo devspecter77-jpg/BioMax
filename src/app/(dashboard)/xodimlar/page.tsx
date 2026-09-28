@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   UsersRound, Plus, Loader2, X, Search, Wallet, Gift, Check,
-  Phone, Building, ShieldCheck, Banknote, Trash2, History, Package, ShoppingBag, LayoutDashboard,
+  Phone, Building, ShieldCheck, Banknote, Trash2, Pencil, History, Package, ShoppingBag, LayoutDashboard,
 } from 'lucide-react'
 import { formatSum, formatPhone, formatSanaVaVaqt, uzSearch } from '@/lib/utils'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
-import Modal from '@/components/ui/modal'
+import Modal, { ModalAsosiy, ModalBekor } from '@/components/ui/modal'
 import { useConfirm } from '@/components/ConfirmProvider'
 import { XaritadaKorish } from '@/components/LokatsiyaModal'
 import XodimMulkPanel from '@/components/xodim/XodimMulkPanel'
@@ -40,6 +40,33 @@ interface Xodim {
   mulk: { soni: number; qiymati: number }
   /** Tanlangan davrdagi sotuvlari — ko'rish ruxsati bo'lmasa `null` */
   davrSotuv: { soni: number; summa: number } | null
+  /** Shu hisobni tahrirlash / o'chirish mumkinmi (server hal qiladi) */
+  amallar?: { tahrir: boolean; ochirish: boolean }
+}
+
+/** Tahrirlash formasi — `Xodim`dan to'ldiriladi, faqat o'zgargan maydonlar yuboriladi. */
+interface TahrirForma {
+  ism: string
+  login: string
+  parol: string
+  rol: string
+  telefon: string
+  filialId: string
+  oylikMaosh: string
+  faol: boolean
+}
+
+function tahrirFormasi(x: Xodim): TahrirForma {
+  return {
+    ism: x.ism,
+    login: x.login,
+    parol: '',
+    rol: x.rol,
+    telefon: x.telefon ?? '',
+    filialId: x.filialId ?? '',
+    oylikMaosh: x.oylikMaosh ? String(x.oylikMaosh) : '',
+    faol: x.faol,
+  }
 }
 
 interface Tolov {
@@ -109,6 +136,12 @@ export default function XodimlarPage() {
   // Oynadagi "Umumiy" varaq ma'lumoti: joylashuv, sotuvlar xulosasi, qo'lidagi mulk
   const [tafsilot, setTafsilot] = useState<XodimTafsiloti | null>(null)
   const [sotuvlarKoraOladi, setSotuvlarKoraOladi] = useState(false)
+
+  // Tahrirlash va o'chirish
+  const [tahrirXodim, setTahrirXodim] = useState<Xodim | null>(null)
+  const [tahrirForma, setTahrirForma] = useState<TahrirForma | null>(null)
+  const [tahrirSaqlanmoqda, setTahrirSaqlanmoqda] = useState(false)
+  const [ochirilayotgan, setOchirilayotgan] = useState<string | null>(null)
 
   useBodyScrollLock(yangiModal || !!tanlangan)
 
@@ -195,6 +228,89 @@ export default function XodimlarPage() {
       toast.error('Tarmoq xatosi')
     } finally {
       setSaqlanmoqda(false)
+    }
+  }
+
+  function tahrirOch(x: Xodim) {
+    setTahrirXodim(x)
+    setTahrirForma(tahrirFormasi(x))
+  }
+
+  function tahrirYop() {
+    if (tahrirSaqlanmoqda) return
+    setTahrirXodim(null)
+    setTahrirForma(null)
+  }
+
+  async function tahrirSaqla(e: React.FormEvent) {
+    e.preventDefault()
+    if (!tahrirXodim || !tahrirForma) return
+    const asl = tahrirFormasi(tahrirXodim)
+    const f = tahrirForma
+    // Faqat o'zgargan maydonlar: server har biriga alohida ruxsat tekshiradi
+    // (oylik — `xodimlar.oylik`), tegilmagani esa o'zgarmaydi
+    const tana: Record<string, unknown> = {}
+    if (f.ism.trim() !== asl.ism) tana.ism = f.ism.trim()
+    if (f.login.trim() !== asl.login) tana.login = f.login.trim()
+    if (f.telefon.replace(/\D/g, '') !== asl.telefon) tana.telefon = f.telefon
+    if (f.rol !== asl.rol) tana.rol = f.rol
+    if (f.filialId !== asl.filialId) tana.filialId = f.filialId || null
+    if (f.faol !== asl.faol) tana.faol = f.faol
+    if (oylikBeraOladi && f.oylikMaosh !== asl.oylikMaosh) {
+      tana.oylikMaosh = f.oylikMaosh === '' ? null : Number(f.oylikMaosh)
+    }
+    if (f.parol) {
+      if (f.parol.length < 6) { toast.error('Yangi parol kamida 6 belgi'); return }
+      tana.parol = f.parol
+    }
+    if (Object.keys(tana).length === 0) { tahrirYop(); return }
+
+    setTahrirSaqlanmoqda(true)
+    try {
+      const r = await fetch(`/api/xodimlar/${tahrirXodim.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tana),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.xato || 'Saqlanmadi'); return }
+      toast.success(`«${j.ism}» ma'lumotlari saqlandi${tana.parol ? ' — yangi parol bilan kiradi' : ''}`)
+      // Ochiq xodim oynasi ham yangi ma'lumotni ko'rsatsin
+      setTanlangan(t => (t && t.id === j.id ? { ...t, ...j } : t))
+      setTahrirXodim(null)
+      setTahrirForma(null)
+      void yukla()
+    } catch {
+      toast.error('Tarmoq xatosi')
+    } finally {
+      setTahrirSaqlanmoqda(false)
+    }
+  }
+
+  async function xodimniOchir(x: Xodim) {
+    const ok = await confirm({
+      title: 'Xodimni o‘chirish',
+      message: `«${x.ism}» tizimga kira olmaydi va ro'yxatdan olib tashlanadi. Uning sotuvlari, oyliklari va boshqa yozuvlari hisobotlarda saqlanib qoladi.`,
+      confirmText: 'O‘chirish',
+      danger: true,
+    })
+    if (!ok) return
+    setOchirilayotgan(x.id)
+    try {
+      const r = await fetch(`/api/xodimlar/${x.id}`, { method: 'DELETE' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.xato || 'O‘chirilmadi'); return }
+      toast.success(j.holat === 'arxivlandi'
+        ? `«${x.ism}» o‘chirildi — tarixi hisobotlarda saqlandi`
+        : `«${x.ism}» o‘chirildi`)
+      if (tanlangan?.id === x.id) setTanlangan(null)
+      if (tahrirXodim?.id === x.id) { setTahrirXodim(null); setTahrirForma(null) }
+      setXodimlar(p => p.filter(y => y.id !== x.id))
+      void yukla()
+    } catch {
+      toast.error('Tarmoq xatosi')
+    } finally {
+      setOchirilayotgan(null)
     }
   }
 
@@ -363,6 +479,9 @@ export default function XodimlarPage() {
                       {sotuvlarKoraOladi && (
                         <th className="text-right text-gray-500 dark:text-gray-400 text-xs font-medium px-4 py-2.5 whitespace-nowrap hidden md:table-cell">Sotuv ({davr})</th>
                       )}
+                      {boshqaraOladi && (
+                        <th className="w-px px-2 py-2.5"><span className="sr-only">Amallar</span></th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -427,6 +546,27 @@ export default function XodimlarPage() {
                                   <span className="block text-[11px] text-gray-500">{x.davrSotuv.soni} ta chek</span>
                                 </button>
                               ) : <span className="text-gray-400">—</span>}
+                            </td>
+                          )}
+                          {boshqaraOladi && (
+                            // Qator bosilsa xodim oynasi ochiladi — tugmalar buni to'xtatadi
+                            <td className="px-2 py-2.5 text-right" onClick={e => e.stopPropagation()}>
+                              <div className="amal-tugmalari justify-end">
+                                {x.amallar?.tahrir && (
+                                  <button type="button" onClick={() => tahrirOch(x)}
+                                    aria-label={`${x.ism} — tahrirlash`} title="Tahrirlash"
+                                    className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition">
+                                    <Pencil size={15} />
+                                  </button>
+                                )}
+                                {x.amallar?.ochirish && (
+                                  <button type="button" onClick={() => void xodimniOchir(x)} disabled={ochirilayotgan === x.id}
+                                    aria-label={`${x.ism} — o‘chirish`} title="O‘chirish"
+                                    className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 transition">
+                                    {ochirilayotgan === x.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           )}
                         </tr>
@@ -503,6 +643,101 @@ export default function XodimlarPage() {
         </Modal>
       )}
 
+      {/* ── Xodimni tahrirlash ── */}
+      {tahrirXodim && tahrirForma && (() => {
+        const ozi = tahrirXodim.id === meId
+        const f = tahrirForma
+        const ozgartir = (p: Partial<TahrirForma>) => setTahrirForma(v => (v ? { ...v, ...p } : v))
+        return (
+          <Modal
+            // Xodim oynasi ustida ochiladi
+            zClassName="z-[60]"
+            belgi={<Pencil size={18} />}
+            sarlavha="Xodimni tahrirlash"
+            tavsif={<>{tahrirXodim.ism} · @{tahrirXodim.login}</>}
+            onYopish={tahrirYop}
+            onSubmit={tahrirSaqla}
+            yopishMumkin={!tahrirSaqlanmoqda}
+            footer={<>
+              <ModalBekor onClick={tahrirYop} disabled={tahrirSaqlanmoqda} />
+              <ModalAsosiy yuklanmoqda={tahrirSaqlanmoqda} belgi={<Check size={16} />}>
+                {tahrirSaqlanmoqda ? 'Saqlanmoqda...' : 'Saqlash'}
+              </ModalAsosiy>
+            </>}
+          >
+            <div className="space-y-3">
+              <Maydon label="Ism *">
+                <input value={f.ism} onChange={e => ozgartir({ ism: e.target.value })}
+                  required autoComplete="off" className={inputCls} />
+              </Maydon>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Maydon label="Login *" izoh="tizimga kirish uchun">
+                  <input value={f.login} onChange={e => ozgartir({ login: e.target.value })}
+                    required minLength={3} autoComplete="off" autoCapitalize="none" spellCheck={false} className={inputCls} />
+                </Maydon>
+                <Maydon label="Yangi parol" izoh="o‘zgarmasa bo‘sh qoldiring">
+                  <input type="text" value={f.parol} onChange={e => ozgartir({ parol: e.target.value })}
+                    minLength={6} autoComplete="new-password" autoCapitalize="none" spellCheck={false}
+                    placeholder="kamida 6 belgi" className={inputCls} />
+                </Maydon>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Maydon label="Rol" izoh={ozi ? 'o‘z rolingiz' : undefined}>
+                  <select value={f.rol} onChange={e => ozgartir({ rol: e.target.value })} disabled={ozi}
+                    className={`${inputCls} disabled:opacity-60`}>
+                    {/* Administrator rolini faqat administrator beradi (server ham tekshiradi) */}
+                    {ROLLAR.filter(r => adminmi || r !== 'ADMIN' || f.rol === 'ADMIN').map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </Maydon>
+                <Maydon label="Telefon">
+                  <input value={f.telefon} onChange={e => ozgartir({ telefon: e.target.value })}
+                    inputMode="numeric" placeholder="901234567" className={inputCls} />
+                </Maydon>
+              </div>
+              {filiallar.length > 0 && !ozi && (
+                <Maydon label="Filial">
+                  <select value={f.filialId} onChange={e => ozgartir({ filialId: e.target.value })} className={inputCls}>
+                    <option value="">Markaziy (filialsiz)</option>
+                    {filiallar.map(fl => <option key={fl.id} value={fl.id}>{fl.nomi}</option>)}
+                  </select>
+                </Maydon>
+              )}
+              {oylikBeraOladi && (
+                <Maydon label="Oylik maosh" izoh="so‘m">
+                  <input value={f.oylikMaosh} onChange={e => ozgartir({ oylikMaosh: e.target.value.replace(/\D/g, '') })}
+                    inputMode="numeric" placeholder="3000000" className={inputCls} />
+                </Maydon>
+              )}
+              {!ozi && (
+                <label className="flex items-start gap-3 rounded-xl border border-gray-200 dark:border-neutral-800 p-3 cursor-pointer">
+                  <input type="checkbox" checked={f.faol} onChange={e => ozgartir({ faol: e.target.checked })}
+                    className="mt-0.5 w-4 h-4 accent-red-600" />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">Hisob faol</span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                      O‘chirilsa xodim tizimga kira olmaydi, lekin ro‘yxatda qoladi va istalgan payt qayta yoqiladi.
+                    </span>
+                  </span>
+                </label>
+              )}
+              {tahrirXodim.amallar?.ochirish && (
+                <div className="pt-3 border-t border-gray-200 dark:border-neutral-800 flex items-start justify-between gap-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Xodim butunlay ketgan bo‘lsa — o‘chiring. Sotuv va oylik tarixi hisobotlarda saqlanadi.
+                  </p>
+                  <button type="button" onClick={() => void xodimniOchir(tahrirXodim)}
+                    disabled={ochirilayotgan === tahrirXodim.id || tahrirSaqlanmoqda}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition">
+                    {ochirilayotgan === tahrirXodim.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    O‘chirish
+                  </button>
+                </div>
+              )}
+            </div>
+          </Modal>
+        )
+      })()}
+
       {/* ── Xodim: oylik va to'lovlar ── */}
       {tanlangan && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
@@ -518,10 +753,18 @@ export default function XodimlarPage() {
                   {tanlangan.filial && <span className="flex items-center gap-1"><Building size={10} />{tanlangan.filial.nomi}</span>}
                 </p>
               </div>
-              <button onClick={() => setTanlangan(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                {tanlangan.amallar?.tahrir && (
+                  <button type="button" onClick={() => tahrirOch(tanlangan)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 transition">
+                    <Pencil size={14} aria-hidden /> Tahrirlash
+                  </button>
+                )}
+                <button onClick={() => setTanlangan(null)} aria-label="Yopish"
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition shrink-0">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="px-4 pt-3 shrink-0">
@@ -682,14 +925,16 @@ export default function XodimlarPage() {
   )
 }
 
+// Yorliq maydonni o'rab oladi: yorliqqa bosilganda maydon fokus oladi va
+// ekran o'quvchi maydon nomini aytadi.
 function Maydon({ label, izoh, children }: { label: string; izoh?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+    <label className="block">
+      <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
         {label} {izoh && <span className="text-gray-400 font-normal text-xs">({izoh})</span>}
-      </label>
+      </span>
       {children}
-    </div>
+    </label>
   )
 }
 

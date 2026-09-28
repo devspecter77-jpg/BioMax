@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import type { Session } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 import { amalRuxsatiBormi, bolimRuxsatiBormi } from '@/lib/ruxsat-server'
 import { davrKaliti, tolovlarniYigindi } from '@/lib/xodim-oylik'
 import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
+import { xodimlarDoirasi, xodimAmallari, ARXIV_PREFIKS } from '@/lib/xodim-hisob'
 
 // Xodimlar bo'limi — oylik, bonus va yangi xodim yaratish.
 //
 // Ko'rish doirasi: filialga bog'langan xodim faqat o'z filialidagilarni,
-// filialsiz Ega esa hammasini ko'radi (`/api/foydalanuvchilar` bilan
-// bir xil qoida).
-
-function doira(session: Session | null) {
-  const filialId = sessionFilialId(session)
-  return filialId ? { filialId } : {}
-}
+// filialsiz Ega esa o'zi va o'ziga ulangan xodimlarni ko'radi — boshqa
+// do'kon egalari va ularning xodimlari ko'rinmaydi (lib/xodim-hisob.ts).
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,10 +26,10 @@ export async function GET(req: NextRequest) {
     const davr = searchParams.get('davr') || davrKaliti()
 
     const xodimlar = await prisma.foydalanuvchi.findMany({
-      where: doira(session),
+      where: xodimlarDoirasi(session),
       select: {
         id: true, ism: true, login: true, rol: true, faol: true, telefon: true,
-        oylikMaosh: true, yaratilgan: true, filialId: true,
+        oylikMaosh: true, yaratilgan: true, filialId: true, ulashilganEgaId: true,
         // Kartadagi "Xaritada" tugmasi shu koordinataga tayanadi —
         // alohida so'rov yubormaslik uchun shu yerda qaytariladi.
         lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
@@ -97,8 +92,10 @@ export async function GET(req: NextRequest) {
       meId: (session.user as { id?: string }).id ?? null,
       adminmi: (session.user as unknown as { rol?: string }).rol === 'ADMIN',
       filiallar,
-      xodimlar: xodimlar.map(x => ({
+      xodimlar: xodimlar.map(({ ulashilganEgaId, ...x }) => ({
         ...x,
+        // Qatordagi "Tahrirlash / O'chirish" tugmalari shunga qarab chiqadi
+        amallar: xodimAmallari(session, { ...x, ulashilganEgaId }, boshqaraOladi),
         oylikMaosh: x.oylikMaosh === null ? null : Number(x.oylikMaosh),
         davrYigindisi: tolovlarniYigindi(
           (boyicha.get(x.id) ?? []).map(t => ({ turi: t.turi, summa: Number(t.summa) })),
@@ -133,6 +130,7 @@ export async function POST(req: NextRequest) {
 
     if (!ism) return NextResponse.json({ xato: 'Ism majburiy' }, { status: 400 })
     if (login.length < 3) return NextResponse.json({ xato: 'Login kamida 3 belgi' }, { status: 400 })
+    if (login.startsWith(ARXIV_PREFIKS)) return NextResponse.json({ xato: 'Bu login ishlatib bo‘lmaydi' }, { status: 400 })
     if (parol.length < 6) return NextResponse.json({ xato: 'Parol kamida 6 belgi' }, { status: 400 })
     if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK'].includes(rol)) {
       return NextResponse.json({ xato: 'Rol noto‘g‘ri' }, { status: 400 })

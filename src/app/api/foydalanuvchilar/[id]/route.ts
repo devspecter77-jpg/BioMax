@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { sessionFilialId } from '@/lib/filial-scope'
 import { ruxsatKeshiniTozala } from '@/lib/ruxsat-server'
+import { xodimniOchir } from '@/lib/xodim-hisob'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -72,24 +73,12 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ ok: true, holat: 'nofaol' })
     }
 
-    try {
-      await prisma.foydalanuvchi.delete({ where: { id } })
-      ruxsatKeshiniTozala(id)
-      return NextResponse.json({ ok: true, holat: 'ochirildi' })
-    } catch {
-      // Bu hisob nomidan haqiqiy savdo/ombor/xarid tarixi bor — yozuvni
-      // butunlay o'chirish o'sha tarixni buzadi, shuning uchun faqat login
-      // (telefon raqami) bo'shatiladi va parol bekor qilinadi, yozuv esa
-      // eski hisobotlar uchun nofaol holicha saqlanadi.
-      await prisma.foydalanuvchi.update({
-        where: { id },
-        data: {
-          login: `ochirilgan_${Date.now()}_${nishon.login}`,
-          parolHash: await bcrypt.hash(`o'chirilgan_${Date.now()}_${Math.random()}`, 10),
-        },
-      })
-      return NextResponse.json({ ok: true, holat: 'anonimlashtirildi' })
-    }
+    // Ikkinchi bosqich. To'g'ridan-to'g'ri `delete` EMAS: oylik to'lovlari
+    // va biriktirilgan mulk `onDelete: Cascade` bilan bog'langan — butunlay
+    // o'chirish ularni jimgina yo'q qilardi. Tarixi bor hisob yopiladi.
+    const natija = await xodimniOchir(id)
+    if (natija.holat === 'rad') return NextResponse.json({ xato: natija.xato }, { status: 409 })
+    return NextResponse.json({ ok: true, holat: natija.holat === 'ochirildi' ? 'ochirildi' : 'anonimlashtirildi' })
   } catch {
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }

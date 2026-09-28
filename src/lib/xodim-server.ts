@@ -2,17 +2,17 @@ import { NextResponse } from 'next/server'
 import type { Session } from 'next-auth'
 import { auth } from './auth'
 import { prisma } from './prisma'
-import { sessionFilialId } from './filial-scope'
 import { amalRuxsatiBormi } from './ruxsat-server'
+import { xodimlarDoirasi } from './xodim-hisob'
 
 // Xodimlar bo'limi marshrutlari uchun umumiy tekshiruv.
 //
-// Doira `/api/xodimlar` bilan bir xil: filialga bog'langan foydalanuvchi faqat
-// o'z filiali xodimlarini, filialsiz Ega esa hammasini ko'radi.
+// Doira `/api/xodimlar` bilan bir xil (lib/xodim-hisob.ts): filialga
+// bog'langan foydalanuvchi faqat o'z filiali xodimlarini, filialsiz Ega esa
+// o'zi va o'ziga ulangan xodimlarni ko'radi — boshqa do'konnikini emas.
 
 export function xodimDoirasi(session: Session | null) {
-  const filialId = sessionFilialId(session)
-  return filialId ? { filialId } : {}
+  return xodimlarDoirasi(session)
 }
 
 export interface XodimKontekst {
