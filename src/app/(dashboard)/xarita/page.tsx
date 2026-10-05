@@ -108,6 +108,16 @@ export default function XaritaPage() {
   const [belgilash, setBelgilash] = useState<Filial | null>(null)
   const [saqlanmoqda, setSaqlanmoqda] = useState(false)
   const birinchiRef = useRef(true)
+  // Telefonda ro'yxat xaritaning OSTIDA — nuqta tanlanganda xarita ko'rinmay
+  // qolardi. Tanlov xarita ekrandan chiqib ketgan bo'lsagina unga suriladi.
+  const xaritaIdishRef = useRef<HTMLDivElement>(null)
+  const nuqtagaBor = useCallback((kalit: string) => {
+    setFokus(kalit)
+    const el = xaritaIdishRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
 
   const yukla = useCallback(async () => {
     if (birinchiRef.current) setYuklanmoqda(true)
@@ -259,8 +269,8 @@ export default function XaritaPage() {
 
   return (
     <div className="flex flex-col gap-3 lg:h-full">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <MapPin size={22} className="text-primary" />
             Xarita
@@ -269,7 +279,7 @@ export default function XaritaPage() {
             Xodim, mijoz, ta&apos;minotchi va filiallar — har {YANGILANISH_MS / 1000} soniyada yangilanadi
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">
             {jonliSoni} ta harakatda
           </span>
@@ -277,6 +287,7 @@ export default function XaritaPage() {
             onClick={() => { birinchiRef.current = false; void yukla() }}
             className="p-2.5 rounded-xl border border-gray-300 dark:border-neutral-700 text-gray-500 hover:text-primary hover:border-primary/50 transition"
             title="Yangilash"
+            aria-label="Xaritani yangilash"
           >
             <RefreshCw size={16} />
           </button>
@@ -322,7 +333,13 @@ export default function XaritaPage() {
 
       <div className="flex flex-col lg:flex-row gap-3 lg:flex-1 lg:min-h-0">
         {/* Xarita */}
-        <div className="flex-1 min-w-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-neutral-800 h-[55vh] lg:h-auto relative">
+        {/* Balandlik: telefon/planshetda aniq (dvh — manzil satri hisobga olinadi),
+            kompyuterda qolgan joyni egallaydi. `flex-1` faqat lg da — ustun
+            tartibida u balandlikni nolga tushirib, xarita ko'rinmay qolardi. */}
+        <div
+          ref={xaritaIdishRef}
+          className="min-w-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-neutral-800 h-[62dvh] min-h-[320px] max-h-[720px] lg:max-h-none lg:h-auto lg:min-h-[480px] lg:flex-1 relative scroll-mt-4"
+        >
           {yuklanmoqda ? (
             <div className="h-full flex items-center justify-center bg-gray-100 dark:bg-neutral-800">
               <Loader2 size={22} className="animate-spin text-primary" />
@@ -336,6 +353,17 @@ export default function XaritaPage() {
                 ? (lat, lng) => { void filialJoylashuviniSaqla(belgilash, lat, lng) }
                 : undefined}
             />
+          )}
+          {!yuklanmoqda && nuqtalar.length === 0 && !belgilash && (
+            <div className="absolute inset-x-3 bottom-3 z-[500] pointer-events-none flex justify-center">
+              <div className="pointer-events-auto max-w-sm rounded-xl bg-white/95 dark:bg-neutral-900/95 border border-gray-200 dark:border-neutral-800 shadow-lg px-4 py-3 text-sm">
+                <p className="font-medium text-gray-900 dark:text-gray-100">Xaritada hali belgi yo&apos;q</p>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Mijoz yoki ta&apos;minotchi kartasida «GPS joylashuv»ni belgilang — shu yerda paydo bo&apos;ladi.
+                  Xodimlar ilovani ochganda o&apos;zi chiqadi.
+                </p>
+              </div>
+            </div>
           )}
           {saqlanmoqda && (
             <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-[500]">
@@ -379,7 +407,7 @@ export default function XaritaPage() {
                     return (
                       <div key={x.id} className="flex items-center hover:bg-gray-50 dark:hover:bg-neutral-800/40 transition">
                         <button
-                          onClick={() => bor && setFokus('x:' + x.id)}
+                          onClick={() => bor && nuqtagaBor('x:' + x.id)}
                           className="flex-1 min-w-0 px-4 py-2.5 flex items-center gap-2.5 text-left"
                         >
                           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${YANGILIK_RANG[y]}`} />
@@ -429,7 +457,7 @@ export default function XaritaPage() {
                   {korMijozlar.map(m => (
                     <div key={m.id} className="flex items-center hover:bg-gray-50 dark:hover:bg-neutral-800/40 transition">
                       <button
-                        onClick={() => setFokus('m:' + m.id)}
+                        onClick={() => nuqtagaBor('m:' + m.id)}
                         className="flex-1 min-w-0 px-4 py-2.5 text-left"
                       >
                         <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{m.ism}</p>
@@ -464,7 +492,7 @@ export default function XaritaPage() {
                   {korTaminotchilar.map(t => (
                     <div key={t.id} className="flex items-center hover:bg-gray-50 dark:hover:bg-neutral-800/40 transition">
                       <button
-                        onClick={() => setFokus('t:' + t.id)}
+                        onClick={() => nuqtagaBor('t:' + t.id)}
                         className="flex-1 min-w-0 px-4 py-2.5 text-left"
                       >
                         <p className="text-gray-900 dark:text-gray-100 text-sm font-medium truncate">{t.nomi}</p>
@@ -501,7 +529,7 @@ export default function XaritaPage() {
                     return (
                       <div key={f.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
                         <button
-                          onClick={() => bor && setFokus('f:' + f.id)}
+                          onClick={() => bor && nuqtagaBor('f:' + f.id)}
                           disabled={!bor}
                           className="min-w-0 text-left flex-1 disabled:cursor-default"
                         >

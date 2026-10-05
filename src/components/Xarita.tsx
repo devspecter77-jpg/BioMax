@@ -184,6 +184,7 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className, boshlang
   useEffect(() => {
     let bekor = false
     let xarita: LeafletMap | null = null
+    let kuzatuvchi: ResizeObserver | null = null
 
     async function boshla() {
       const L = await import('leaflet')
@@ -200,6 +201,10 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className, boshlang
       qatlamRef.current = L.layerGroup().addTo(xarita)
       xarita.on('click', (e) => onBosildiRef.current?.(e.latlng.lat, e.latlng.lng))
       xaritaRef.current = xarita
+      if (typeof ResizeObserver !== 'undefined') {
+        kuzatuvchi = new ResizeObserver(() => xaritaRef.current?.invalidateSize({ pan: false }))
+        kuzatuvchi.observe(idishRef.current)
+      }
     }
 
     void boshla()
@@ -208,6 +213,7 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className, boshlang
     const markerlar = markerlarRef.current
     return () => {
       bekor = true
+      kuzatuvchi?.disconnect()
       xaritaRef.current?.remove()
       xaritaRef.current = null
       qatlamRef.current = null
@@ -302,6 +308,20 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className, boshlang
   const [qatlam, setQatlam] = useState<QatlamKaliti>('oddiy')
   const [qatlamOchiq, setQatlamOchiq] = useState(false)
   const qatlamRefKalit = useRef<QatlamKaliti>('oddiy')
+  const tanlagichRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!qatlamOchiq) return
+    const tashqari = (e: PointerEvent) => {
+      if (!tanlagichRef.current?.contains(e.target as Node)) setQatlamOchiq(false)
+    }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setQatlamOchiq(false) }
+    document.addEventListener('pointerdown', tashqari)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('pointerdown', tashqari)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [qatlamOchiq])
   const LRef = useRef<typeof import('leaflet') | null>(null)
   const taylRef = useRef<{ asos: TileLayer | null; ust: TileLayer | null }>({ asos: null, ust: null })
 
@@ -353,10 +373,13 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className, boshlang
         {/* ── Ko'rinish tanlagich ──
             Xarita ustida suzib turadi. Leaflet'ning o'z boshqaruvi
             o'rniga ilova uslubida — qolgan bo'limlar bilan bir xil. */}
-        <div className="absolute top-3 right-3 z-[1000]">
+        <div ref={tanlagichRef} className="absolute top-3 right-3 z-[1000]">
           <button
+            type="button"
             onClick={() => setQatlamOchiq(o => !o)}
             title="Xarita ko'rinishi"
+            aria-haspopup="menu"
+            aria-expanded={qatlamOchiq}
             className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 shadow-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-primary/50 transition"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -368,10 +391,13 @@ export default function Xarita({ nuqtalar, fokus, onBosildi, className, boshlang
           </button>
 
           {qatlamOchiq && (
-            <div className="mt-2 w-56 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-xl overflow-hidden">
+            <div role="menu" className="mt-2 w-56 max-w-[calc(100vw-3rem)] rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-xl overflow-hidden">
               {QATLAM_TARTIBI.map(k => (
                 <button
                   key={k}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={qatlam === k}
                   onClick={() => { setQatlam(k); qatlamniSaqla(k); setQatlamOchiq(false) }}
                   className={`w-full text-left px-3 py-2.5 transition ${
                     qatlam === k
