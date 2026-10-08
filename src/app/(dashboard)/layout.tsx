@@ -5,10 +5,14 @@ import MainContent from '@/components/layout/MainContent'
 import { SidebarProvider } from '@/components/SidebarContext'
 import DashboardContent from '@/components/layout/DashboardContent'
 import LokatsiyaKuzatuv from '@/components/LokatsiyaKuzatuv'
+import SmenaProvider from '@/components/smena/SmenaProvider'
+import { SmenaIndikator } from '@/components/smena/SmenaPaneli'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
+      {/* Kuryer smenasi va ovoz yozuvi — sahifalar orasida o'tganda uzilmasin */}
+      <SmenaProvider>
       {/* `h-dvh`, `h-screen` emas: mobil brauzerda 100vh manzil satri
           yashiringandagi balandlik — sahifa pasti uning ostida qolardi. */}
       <div className="h-dvh overflow-hidden bg-gray-50 dark:bg-neutral-950">
@@ -21,12 +25,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar />
         <DashboardContent>
           <Header />
+          <SmenaIndikator />
           <MainContent>
             {children}
           </MainContent>
           <MobileNav />
         </DashboardContent>
       </div>
+      </SmenaProvider>
     </SidebarProvider>
   )
 }

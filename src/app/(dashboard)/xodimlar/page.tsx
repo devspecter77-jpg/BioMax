@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   UsersRound, Plus, Loader2, X, Search, Wallet, Gift, Check,
-  Phone, Building, ShieldCheck, Banknote, Trash2, Pencil, History, Package, ShoppingBag, LayoutDashboard,
+  Phone, Building, ShieldCheck, Banknote, Trash2, Pencil, History, Package, ShoppingBag, LayoutDashboard, Mic,
 } from 'lucide-react'
 import { formatSum, formatPhone, formatSanaVaVaqt, uzSearch } from '@/lib/utils'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -14,6 +14,9 @@ import { XaritadaKorish } from '@/components/LokatsiyaModal'
 import XodimMulkPanel from '@/components/xodim/XodimMulkPanel'
 import XodimSotuvlarPanel from '@/components/xodim/XodimSotuvlarPanel'
 import XodimUmumiyPanel, { type XodimTafsiloti } from '@/components/xodim/XodimUmumiyPanel'
+import XodimSmenaPanel from '@/components/xodim/XodimSmenaPanel'
+import SmenaBelgisi, { type SmenaHolatQisqa } from '@/components/smena/SmenaBelgisi'
+import { smenaRolimi } from '@/lib/smena'
 import {
   TOLOV_TURLARI, TOLOV_MALUMOTI, tolovMalumoti, davrKaliti,
   type DavrYigindisi, type TolovTuri,
@@ -40,6 +43,8 @@ interface Xodim {
   mulk: { soni: number; qiymati: number }
   /** Tanlangan davrdagi sotuvlari — ko'rish ruxsati bo'lmasa `null` */
   davrSotuv: { soni: number; summa: number } | null
+  /** Kuryerning bugungi smenasi (ishda / tugatgan) — ko'rish ruxsati bo'lmasa yo'q */
+  smena?: SmenaHolatQisqa | null
   /** Shu hisobni tahrirlash / o'chirish mumkinmi (server hal qiladi) */
   amallar?: { tahrir: boolean; ochirish: boolean }
 }
@@ -132,10 +137,11 @@ export default function XodimlarPage() {
   const [tolovIzoh, setTolovIzoh] = useState('')
   const [amalda, setAmalda] = useState(false)
   // Xodim oynasidagi varaq
-  const [varaq, setVaraq] = useState<'umumiy' | 'oylik' | 'mulk' | 'sotuvlar'>('umumiy')
+  const [varaq, setVaraq] = useState<'umumiy' | 'oylik' | 'mulk' | 'sotuvlar' | 'smena'>('umumiy')
   // Oynadagi "Umumiy" varaq ma'lumoti: joylashuv, sotuvlar xulosasi, qo'lidagi mulk
   const [tafsilot, setTafsilot] = useState<XodimTafsiloti | null>(null)
   const [sotuvlarKoraOladi, setSotuvlarKoraOladi] = useState(false)
+  const [smenaKoraOladi, setSmenaKoraOladi] = useState(false)
 
   // Tahrirlash va o'chirish
   const [tahrirXodim, setTahrirXodim] = useState<Xodim | null>(null)
@@ -156,6 +162,7 @@ export default function XodimlarPage() {
       setBoshqaraOladi(!!j.boshqaraOladi)
       setOylikBeraOladi(!!j.oylikBeraOladi)
       setSotuvlarKoraOladi(!!j.sotuvlarKoraOladi)
+      setSmenaKoraOladi(!!j.smenaKoraOladi)
       setMeId(j.meId ?? null)
       setAdminmi(!!j.adminmi)
     } catch {
@@ -187,7 +194,7 @@ export default function XodimlarPage() {
     return y
   }, [xodimlar])
 
-  async function xodimOch(x: Xodim, boshVaraq: 'umumiy' | 'oylik' | 'mulk' | 'sotuvlar' = 'umumiy') {
+  async function xodimOch(x: Xodim, boshVaraq: 'umumiy' | 'oylik' | 'mulk' | 'sotuvlar' | 'smena' = 'umumiy') {
     setTanlangan(x)
     setVaraq(boshVaraq)
     setTafsilot(null)
@@ -504,6 +511,12 @@ export default function XodimlarPage() {
                               {x.telefon && <span className="flex items-center gap-1"><Phone size={9} />{formatPhone(x.telefon)}</span>}
                               {x.filial && <span className="flex items-center gap-1"><Building size={9} />{x.filial.nomi}</span>}
                               {!x.faol && <span className="text-red-500">nofaol</span>}
+                              {x.smena && (
+                                <button type="button" onClick={e => { e.stopPropagation(); void xodimOch(x, 'smena') }}
+                                  className="inline-flex" title="Ish smenasi va ovoz yozuvlari">
+                                  <SmenaBelgisi smena={x.smena} />
+                                </button>
+                              )}
                               {x.mulk?.soni > 0 && (
                                 <button type="button" onClick={e => { e.stopPropagation(); void xodimOch(x, 'mulk') }}
                                   className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-400 hover:underline"
@@ -774,6 +787,7 @@ export default function XodimlarPage() {
                   ['oylik', 'Oylik', 'Oylik', Wallet, null],
                   ['mulk', 'Biriktirilgan mulk', 'Mulk', Package, tanlangan.mulk?.soni || null],
                   ...(sotuvlarKoraOladi ? [['sotuvlar', 'Sotuvlar', 'Sotuvlar', ShoppingBag, null] as const] : []),
+                  ...(smenaKoraOladi && smenaRolimi(tanlangan.rol) ? [['smena', 'Ish va ovozlar', 'Ovozlar', Mic, null] as const] : []),
                 ] as const).map(([k, nomi, qisqa, Belgi, son]) => (
                   <button
                     key={k} type="button" role="tab" aria-selected={varaq === k} onClick={() => setVaraq(k)}
@@ -808,6 +822,9 @@ export default function XodimlarPage() {
                   xodimlar={xodimlar.map(x => ({ id: x.id, ism: x.ism, faol: x.faol }))}
                   onOzgardi={() => { void yukla(); void xodimOch(tanlangan, 'mulk') }}
                 />
+              )}
+              {varaq === 'smena' && smenaKoraOladi && (
+                <XodimSmenaPanel xodimId={tanlangan.id} />
               )}
               {varaq === 'sotuvlar' && sotuvlarKoraOladi && (
                 <XodimSotuvlarPanel xodimId={tanlangan.id} xodimIsmi={tanlangan.ism} davrlar={oxirgiDavrlar()} boshlangichDavr={davr} />

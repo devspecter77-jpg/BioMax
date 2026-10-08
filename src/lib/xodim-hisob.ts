@@ -109,6 +109,8 @@ export async function xodimniOchir(id: string): Promise<OchirishNatija> {
           buyurtmalar: true,
           nasiyaTolovlar: true,
           otkazmalar: true,
+          // Ish smenalari va ovoz yozuvlari — dalil, xodim bilan birga yo'qolmasin
+          smenalari: true,
         },
       },
     },

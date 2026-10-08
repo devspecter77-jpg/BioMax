@@ -59,3 +59,6 @@ __*.mjs
 
 # Claude Code shaxsiy sozlamalari — har bir dasturchida o'ziniki
 .claude/settings.local.json
+
+# Ovoz yozuvlari — lokal sinov ombori (productionda S3/R2)
+.ovoz-yozuvlar/

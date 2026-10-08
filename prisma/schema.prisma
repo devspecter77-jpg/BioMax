@@ -72,6 +72,10 @@ model Foydalanuvchi {
   tovarTahrirlashMumkin Boolean @default(true)
   tovarOchirishMumkin   Boolean @default(true)
 
+  // Ish vaqtida ovoz yozilishiga rozilik bergan vaqt (birinchi smenadan
+  // oldin bir marta so'raladi). null — hali rozilik bermagan.
+  ovozRozilik  DateTime?
+
   filial       Filial?  @relation(fields: [filialId], references: [id])
   ulashganEga  Foydalanuvchi?  @relation("EgaUlashish", fields: [ulashilganEgaId], references: [id])
   ulashilganAdminlar Foydalanuvchi[] @relation("EgaUlashish")
@@ -115,6 +119,7 @@ model Foydalanuvchi {
   olganNamunalari       NamunaBerish[]     @relation("DostavchikNamunalari")
   berganNamunalari      NamunaBerish[]     @relation("NamunaBergan")
   qabulQilganNamunalar  NamunaTarkibi[]    @relation("NamunaQabulQilgan")
+  smenalari             Smena[]            @relation("XodimSmenalari")
 
   @@index([filialId])
   @@index([ulashilganEgaId])
@@ -1589,4 +1594,70 @@ model NamunaTarkibi {
   @@index([holati])
   @@index([yangilangan])
   @@map("namuna_tarkiblari")
+}
+
+// ========================
+// ISH SMENASI VA OVOZ YOZUVLARI (kuryerlar)
+// ========================
+//
+// Kuryer o'z panelida "Ishni boshlash" ni bosadi — smena ochiladi va
+// telefonning mikrofoni orqali ovoz yozila boshlaydi; "Ishni tugallash"
+// gacha davom etadi. Yozuv 3 daqiqalik mustaqil bo'laklarga bo'linadi —
+// har biri alohida faylda (S3/R2 ombori), bu yerda faqat ma'lumoti.
+//
+// Smena xodim o'chirilganda O'CHMAYDI (Restrict): yozuvlar dalil bo'lishi
+// mumkin — xodim hisobi o'chirilsa ham arxivlanadi (lib/xodim-hisob.ts).
+model Smena {
+  id           String    @id @default(cuid())
+  xodimId      String
+  boshlandi    DateTime  @default(now())
+  tugadi       DateTime?
+  /** Kim yakunladi: 'xodim' | 'admin' | 'avtomatik' */
+  tugatuvchi   String?
+  tugatganId   String?
+  /** Kuryer ilovasidan oxirgi "tirikman" belgisi */
+  oxirgiPuls   DateTime?
+  /** Ilova yuborgan yozuv holati: yozilmoqda | uzilgan | ruxsat_yoq | qollanmaydi | ombor_yoq */
+  yozuvHolati  String?
+  boshLat      Float?
+  boshLng      Float?
+  oxirLat      Float?
+  oxirLng      Float?
+  /** Brauzer/qurilma — muammoni tahlil qilish uchun (qisqartirilgan) */
+  qurilma      String?
+  filialId     String?
+  egaId        String?
+  yaratilgan   DateTime  @default(now())
+
+  xodim        Foydalanuvchi @relation("XodimSmenalari", fields: [xodimId], references: [id], onDelete: Restrict)
+  yozuvlar     OvozYozuv[]
+
+  @@index([xodimId, boshlandi])
+  @@index([tugadi])
+  @@map("smenalar")
+}
+
+model OvozYozuv {
+  id            String   @id @default(cuid())
+  smenaId       String
+  xodimId       String
+  boshlandi     DateTime
+  tugadi        DateTime
+  davomiylikMs  Int
+  /** Fayl hajmi, bayt */
+  hajm          Int
+  mimeType      String
+  /** Ombordagi obyekt kaliti — brauzerga hech qachon berilmaydi */
+  kalit         String
+  /** O'rtacha ovoz balandligi 0..1 — jim bo'laklarni ajratib ko'rsatish uchun */
+  daraja        Float?
+  yaratilgan    DateTime @default(now())
+
+  smena         Smena    @relation(fields: [smenaId], references: [id], onDelete: Cascade)
+
+  // Ilova bo'lakni qayta yuborsa (tarmoq uzilib qolgan) takror yozilmaydi
+  @@unique([smenaId, boshlandi])
+  @@index([xodimId, boshlandi])
+  @@index([yaratilgan])
+  @@map("ovoz_yozuvlari")
 }

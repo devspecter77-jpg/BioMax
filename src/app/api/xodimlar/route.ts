@@ -7,6 +7,7 @@ import { amalRuxsatiBormi, bolimRuxsatiBormi } from '@/lib/ruxsat-server'
 import { davrKaliti, tolovlarniYigindi } from '@/lib/xodim-oylik'
 import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
 import { xodimlarDoirasi, xodimAmallari, ARXIV_PREFIKS } from '@/lib/xodim-hisob'
+import { smenaHolatlari } from '@/lib/smena-server'
 
 // Xodimlar bo'limi — oylik, bonus va yangi xodim yaratish.
 //
@@ -56,12 +57,15 @@ export async function GET(req: NextRequest) {
       orderBy: { yaratilgan: 'asc' },
     })
 
-    const [boshqaraOladi, oylikBeraOladi, mulkBoshqaraOladi, sotuvlarKoraOladi] = await Promise.all([
+    const [boshqaraOladi, oylikBeraOladi, mulkBoshqaraOladi, sotuvlarKoraOladi, smenaKoraOladi] = await Promise.all([
       amalRuxsatiBormi(session, 'xodimlar.qoshish'),
       amalRuxsatiBormi(session, 'xodimlar.oylik'),
       amalRuxsatiBormi(session, 'xodimlar.mulk'),
       amalRuxsatiBormi(session, 'xodimlar.sotuvlar'),
+      amalRuxsatiBormi(session, 'xodimlar.smena'),
     ])
+    // Kuryerlarning bugungi smenasi — ro'yxatda "Ishda · 09:12 dan" ko'rinishi uchun
+    const smenalar = smenaKoraOladi ? await smenaHolatlari(xodimlar.map(x => x.id)) : new Map()
 
     // Qo'lidagi mulk va shu davrdagi sotuvlar — ro'yxatda bir qarashda ko'rinsin
     const idlar = xodimlar.map(x => x.id)
@@ -89,6 +93,7 @@ export async function GET(req: NextRequest) {
       oylikBeraOladi,
       mulkBoshqaraOladi,
       sotuvlarKoraOladi,
+      smenaKoraOladi,
       meId: (session.user as { id?: string }).id ?? null,
       adminmi: (session.user as unknown as { rol?: string }).rol === 'ADMIN',
       filiallar,
@@ -102,6 +107,7 @@ export async function GET(req: NextRequest) {
         ),
         mulk: mulkMap.get(x.id) ?? { soni: 0, qiymati: 0 },
         davrSotuv: sotuvlarKoraOladi ? sotuvMap.get(x.id) ?? { soni: 0, summa: 0 } : null,
+        smena: smenalar.get(x.id) ?? null,
       })),
     })
   } catch (e) {

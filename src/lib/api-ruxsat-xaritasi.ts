@@ -145,6 +145,13 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/xodimlar/:id/mulk/*', YOZISH, ['xodimlar.mulk'], 'Biriktirilgan mulkni boshqarish'),
   Q('/api/xodimlar/:id/mulk/*', OQISH, ['xodimlar'], 'Biriktirilgan mulk'),
   Q('/api/xodimlar/:id/sotuvlar', OQISH, ['xodimlar.sotuvlar'], 'Xodim sotuvlari'),
+  // Kuryer smenalari va ovoz yozuvlari — nozik ma'lumot, alohida ruxsat
+  Q('/api/xodimlar/:id/smenalar', '*', ['xodimlar.smena'], 'Kuryer smenalari'),
+  Q('/api/xodimlar/:id/ovozlar/*', OQISH, ['xodimlar.smena'], 'Ovoz yozuvlarini tinglash'),
+  Q('/api/ovoz-sozlama', '*', ['xodimlar.smena'], 'Ovoz yozuvi sozlamalari'),
+  Q('/api/smena/kuryerlar', OQISH, ['xodimlar.smena'], 'Kuryerlar holati'),
+  // Kuryerning o'z smenasi — marshrut rolni o'zi tekshiradi (faqat o'zi uchun)
+  Q('/api/smena/*', '*', [], 'Ish smenasi'),
   Q('/api/xodimlar/*', YOZISH, ['xodimlar.qoshish'], 'Xodimni o‘zgartirish'),
   Q('/api/xodimlar/*', OQISH, ['xodimlar', 'nasiyalar.xarajat'], 'Xodimlarni ko‘rish'),
 

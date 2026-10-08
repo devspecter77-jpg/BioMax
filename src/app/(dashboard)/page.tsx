@@ -6,6 +6,8 @@ import { formatSum } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Receipt, ShoppingBag, Loader2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { visibleNavItems } from '@/components/layout/nav-items'
+import SmenaPaneli from '@/components/smena/SmenaPaneli'
+import KuryerlarHolati from '@/components/smena/KuryerlarHolati'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
@@ -113,20 +115,33 @@ export default function DashboardPage() {
 
   if (yuklanmoqda) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500 dark:text-gray-400 flex items-center gap-3">
-          <Loader2 className="animate-spin w-6 h-6 text-primary" />
-          <span>Yuklanmoqda...</span>
+      <div className="space-y-6">
+        <SmenaPaneli />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500 dark:text-gray-400 flex items-center gap-3">
+            <Loader2 className="animate-spin w-6 h-6 text-primary" />
+            <span>Yuklanmoqda...</span>
+          </div>
         </div>
       </div>
     )
   }
 
-  if (ruxsatYoq) return <TezkorBolimlar />
-  if (!data) return null
+  // Statistika yo'q (ruxsat yo'q yoki internet uzilgan) — sahifa bo'sh
+  // qolmasin: kuryer baribir smena tugmasini va yozuv holatini ko'rishi kerak
+  if (ruxsatYoq || !data) {
+    return (
+      <div className="space-y-6">
+        <SmenaPaneli />
+        <KuryerlarHolati />
+        <TezkorBolimlar />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
+      <SmenaPaneli />
       {/* Stat kartalar */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <StatCard
@@ -160,6 +175,8 @@ export default function DashboardPage() {
           iconBg={data.soFoyda >= 0 ? 'bg-green-500' : 'bg-red-500'}
         />
       </div>
+
+      <KuryerlarHolati />
 
       {/* Grafik */}
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">

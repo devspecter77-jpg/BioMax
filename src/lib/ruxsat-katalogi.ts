@@ -137,6 +137,7 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
       { kalit: 'xodimlar.oylik', label: 'Oylik va bonus to‘lash', xavfli: true },
       { kalit: 'xodimlar.mulk', label: 'Biriktirilgan mulkni boshqarish', izoh: 'Mashina, telefon, kalit berish, qaytarib olish, boshqa xodimga o‘tkazish' },
       { kalit: 'xodimlar.sotuvlar', label: 'Xodim sotuvlarini ko‘rish', izoh: 'Kimga nima sotgani: cheklar, mijozlar va mahsulotlar bo‘yicha' },
+      { kalit: 'xodimlar.smena', label: 'Kuryer smenalari va ovoz yozuvlari', xavfli: true, izoh: 'Kim qachon ish boshlab tugatgani, ish vaqtidagi ovoz yozuvlarini tinglash va yuklab olish' },
     ],
   },
   {
@@ -208,7 +209,7 @@ const STANDART_YOPIQ = new Set([
   'namuna-tovar.dostavchik', 'ilova-qr.manzil',
   'tovarlar.ochirish', 'tovarlar.import', 'mijozlar.ochirish', 'mijozlar.import', 'mijozlar.export',
   'nasiyalar.ochirish', 'nasiyalar.import', 'nasiyalar.xarajat',
-  'taminotchilar.ochirish', 'taminotchilar.qarz', 'ballar.qolda', 'ballar.sozlama', 'xodimlar.qoshish', 'xodimlar.oylik', 'xodimlar.mulk', 'xodimlar.sotuvlar',
+  'taminotchilar.ochirish', 'taminotchilar.qarz', 'ballar.qolda', 'ballar.sozlama', 'xodimlar.qoshish', 'xodimlar.oylik', 'xodimlar.mulk', 'xodimlar.sotuvlar', 'xodimlar.smena',
   'kunlik-hisobot.sozlama', 'ombor.sozlash', 'onlayn-vitrina.tahrirlash',
 ])
 
