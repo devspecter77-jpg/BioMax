@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { sessionFilialId } from '@/lib/filial-scope'
+import { loginTozala, loginXatosi } from '@/lib/login'
 
 export async function GET(req: NextRequest) {
   try {
@@ -38,7 +39,10 @@ export async function POST(req: NextRequest) {
     }
     const ownFilialId = sessionFilialId(session)
 
-    const { ism, login, parol, rol, telefon, filialId: reqFilialId, ulashilganEgaId: reqUlashilganEgaId } = await req.json()
+    const { ism, login: xomLogin, parol, rol, telefon, filialId: reqFilialId, ulashilganEgaId: reqUlashilganEgaId } = await req.json()
+    const login = loginTozala(String(xomLogin ?? ''))
+    const loginXato = loginXatosi(login)
+    if (loginXato) return NextResponse.json({ xato: loginXato }, { status: 400 })
 
     // Filial egasi faqat o'z filialiga xodim qo'sha oladi — boshqa filial yoki
     // global (Ega darajasidagi) hisob yarata olmaydi.
@@ -52,7 +56,7 @@ export async function POST(req: NextRequest) {
     // (boshqa Eganing nomidan ulasha olmaydi).
     const ulashilganEgaId = rol === 'ADMIN' && !filialId && reqUlashilganEgaId ? session.user.id : null
 
-    const mavjud = await prisma.foydalanuvchi.findUnique({ where: { login } })
+    const mavjud = await prisma.foydalanuvchi.findFirst({ where: { login: { equals: login, mode: 'insensitive' } }, select: { id: true } })
     if (mavjud) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
     const parolHash = await bcrypt.hash(parol, 10)
     const user = await prisma.foydalanuvchi.create({

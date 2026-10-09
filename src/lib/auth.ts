@@ -5,6 +5,28 @@ import bcrypt from 'bcryptjs'
 import { prisma } from './prisma'
 import { hisobHolati } from './ruxsat-server'
 import type { HisobMaydonlari } from '@/types/next-auth'
+import { loginTozala, telefonLogin } from './login'
+
+/**
+ * Login bo'yicha hisob: avval aniq mos, keyin registrsiz (faqat bitta mos
+ * kelsa), oxirida eski telefon-login ("+998 90 123-45-67" → 901234567).
+ */
+async function kirishHisobi(login: string) {
+  if (!login) return null
+  const aniq = await prisma.foydalanuvchi.findUnique({ where: { login }, include: { filial: true } })
+  if (aniq) return aniq
+  const registrsiz = await prisma.foydalanuvchi.findMany({
+    where: { login: { equals: login, mode: 'insensitive' } },
+    include: { filial: true },
+    take: 2,
+  })
+  if (registrsiz.length === 1) return registrsiz[0]
+  const tel = telefonLogin(login)
+  if (tel && tel !== login) {
+    return prisma.foydalanuvchi.findUnique({ where: { login: tel }, include: { filial: true } })
+  }
+  return null
+}
 
 /**
  * Token ichidagi hisob maydonlari. `JWT` ni modul kengaytmasi bilan turlab
@@ -47,10 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.login || !credentials?.parol) return null
 
-        const foydalanuvchi = await prisma.foydalanuvchi.findUnique({
-          where: { login: credentials.login as string },
-          include: { filial: true },
-        })
+        const foydalanuvchi = await kirishHisobi(loginTozala(String(credentials.login)))
 
         if (!foydalanuvchi || !foydalanuvchi.faol) return null
 

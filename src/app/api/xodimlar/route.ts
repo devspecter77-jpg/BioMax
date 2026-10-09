@@ -8,6 +8,7 @@ import { davrKaliti, tolovlarniYigindi } from '@/lib/xodim-oylik'
 import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
 import { xodimlarDoirasi, xodimAmallari, ARXIV_PREFIKS } from '@/lib/xodim-hisob'
 import { smenaHolatlari } from '@/lib/smena-server'
+import { loginTozala, loginXatosi } from '@/lib/login'
 
 // Xodimlar bo'limi — oylik, bonus va yangi xodim yaratish.
 //
@@ -130,12 +131,13 @@ export async function POST(req: NextRequest) {
     const data = await req.json()
 
     const ism = String(data.ism ?? '').trim()
-    const login = String(data.login ?? '').trim()
+    const login = loginTozala(String(data.login ?? ''))
     const parol = String(data.parol ?? '')
     const rol = String(data.rol ?? 'KASSIR')
 
     if (!ism) return NextResponse.json({ xato: 'Ism majburiy' }, { status: 400 })
-    if (login.length < 3) return NextResponse.json({ xato: 'Login kamida 3 belgi' }, { status: 400 })
+    const loginXato = loginXatosi(login)
+    if (loginXato) return NextResponse.json({ xato: loginXato }, { status: 400 })
     if (login.startsWith(ARXIV_PREFIKS)) return NextResponse.json({ xato: 'Bu login ishlatib bo‘lmaydi' }, { status: 400 })
     if (parol.length < 6) return NextResponse.json({ xato: 'Parol kamida 6 belgi' }, { status: 400 })
     if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK'].includes(rol)) {
@@ -157,7 +159,8 @@ export async function POST(req: NextRequest) {
     // POS'da bo'sh ro'yxat ko'rardi.
     const ulashilganEgaId = filialId ? null : sessionEgaId(session)
 
-    const mavjud = await prisma.foydalanuvchi.findUnique({ where: { login }, select: { id: true } })
+    // Registrsiz: "ozodbek" bor bo'lsa "Ozodbek" ham band — kirish ikkilanmasin
+    const mavjud = await prisma.foydalanuvchi.findFirst({ where: { login: { equals: login, mode: 'insensitive' } }, select: { id: true } })
     if (mavjud) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
 
     // Oylik belgilash — alohida ruxsat

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (parol.length < 6) return NextResponse.json({ xato: 'Parol kamida 6 belgi' }, { status: 400 })
 
   try {
-    const band = await prisma.foydalanuvchi.findUnique({ where: { login }, select: { id: true } })
+    const band = await prisma.foydalanuvchi.findFirst({ where: { login: { equals: login, mode: 'insensitive' } }, select: { id: true } })
     if (band) return NextResponse.json({ xato: 'Bu login band — boshqasini tanlang' }, { status: 409 })
 
     const yangi = await prisma.foydalanuvchi.create({

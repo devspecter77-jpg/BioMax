@@ -1,21 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { signIn, getSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Eye, EyeOff, Lock, AlertCircle } from 'lucide-react'
-import PhoneInput from '@/components/ui/phone-input'
+import { Loader2, Eye, EyeOff, Lock, AlertCircle, User } from 'lucide-react'
+
+const obunaYoq = () => () => {}
 
 export default function LoginForm() {
   const router = useRouter()
-  const [login, setLogin] = useState('')
-  const [parol, setParol] = useState('')
   const [xato, setXato] = useState('')
   const [yuklanmoqda, setYuklanmoqda] = useState(false)
   const [parolKorinsin, setParolKorinsin] = useState(false)
+  // Sahifa JS'i yuklanguncha tugma o'chiq: aks holda brauzer formani o'zi
+  // yuborib, parolni manzil satriga yozib yuborardi
+  const tayyor = useSyncExternalStore(obunaYoq, () => true, () => false)
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    // Qiymatlar formaning o'zidan: sekin telefonda sahifa to'liq yuklanmasdan
+    // yozilgan login/parol ham yo'qolmaydi
+    const forma = new FormData(e.currentTarget)
+    const login = String(forma.get('username') ?? '').trim()
+    const parol = String(forma.get('password') ?? '')
+    if (!login || !parol) {
+      setXato('Login va parolni kiriting')
+      return
+    }
     setXato('')
     setYuklanmoqda(true)
 
@@ -45,22 +56,35 @@ export default function LoginForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Telefon raqam input */}
+        {/* Login input — xodim yaratilganda berilgan login */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-            Telefon raqam
+          <label htmlFor="login" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            Login
           </label>
-          <PhoneInput
-            value={login}
-            onChange={setLogin}
-            required
-            className="py-3 rounded-xl bg-gray-50 dark:bg-neutral-800 focus-within:ring-primary"
-          />
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <User size={16} className="text-gray-400 dark:text-gray-500" />
+            </div>
+            <input
+              id="login"
+              name="username"
+              suppressHydrationWarning
+              type="text"
+              placeholder="Loginingizni kiriting"
+              required
+              autoFocus
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white dark:focus:bg-neutral-800 transition-all text-sm"
+            />
+          </div>
         </div>
 
         {/* Parol input */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          <label htmlFor="parol" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Parol
           </label>
           <div className="relative">
@@ -71,10 +95,10 @@ export default function LoginForm() {
                 React'dan oldin `fdprocessedid` kabi atribut qo'shadi.
                 Bayroq faqat shu elementdagi farqni e'tiborsiz qoldiradi. */}
             <input
+              id="parol"
+              name="password"
               suppressHydrationWarning
               type={parolKorinsin ? 'text' : 'password'}
-              value={parol}
-              onChange={(e) => setParol(e.target.value)}
               placeholder="Parolni kiriting"
               required
               autoComplete="current-password"
@@ -105,7 +129,7 @@ export default function LoginForm() {
         <button
           suppressHydrationWarning
           type="submit"
-          disabled={yuklanmoqda || !login || !parol}
+          disabled={!tayyor || yuklanmoqda}
           className="w-full py-3 bg-primary hover:bg-primary-hover active:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-150 shadow-md shadow-primary/25 mt-2"
         >
           {yuklanmoqda ? (

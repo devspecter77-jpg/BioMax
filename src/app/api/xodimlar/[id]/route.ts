@@ -7,6 +7,7 @@ import { amalRuxsatiBormi, bolimRuxsatiBormi, ruxsatKeshiniTozala } from '@/lib/
 import { davrKaliti, tolovlarniYigindi } from '@/lib/xodim-oylik'
 import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
 import { xodimlarDoirasi, xodimAmallari, xodimniOchir, ARXIV_PREFIKS } from '@/lib/xodim-hisob'
+import { loginTozala, loginXatosi } from '@/lib/login'
 
 // Bitta xodim: ma'lumoti va to'lovlar tarixi
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -142,10 +143,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const yangi: Record<string, unknown> = {}
 
     if (bor('login')) {
-      const login = String(data.login ?? '').trim()
-      if (login.length < 3) return NextResponse.json({ xato: 'Login kamida 3 belgi' }, { status: 400 })
+      const login = loginTozala(String(data.login ?? ''))
+      const loginXato = loginXatosi(login)
+      if (loginXato) return NextResponse.json({ xato: loginXato }, { status: 400 })
       if (login.startsWith(ARXIV_PREFIKS)) return NextResponse.json({ xato: 'Bu login ishlatib bo‘lmaydi' }, { status: 400 })
-      const band = await prisma.foydalanuvchi.findFirst({ where: { login, NOT: { id } }, select: { id: true } })
+      // Registrsiz: boshqa xodimning loginidan faqat harf kattaligi bilan farq qilsa ham band
+      const band = await prisma.foydalanuvchi.findFirst({ where: { login: { equals: login, mode: 'insensitive' }, NOT: { id } }, select: { id: true } })
       if (band) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
       yangi.login = login
     }

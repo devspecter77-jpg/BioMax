@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { sessionFilialId } from '@/lib/filial-scope'
 import { ruxsatKeshiniTozala } from '@/lib/ruxsat-server'
 import { xodimniOchir } from '@/lib/xodim-hisob'
+import { loginTozala, loginXatosi } from '@/lib/login'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -30,9 +31,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     const updateData: Prisma.FoydalanuvchiUncheckedUpdateInput = { ism, rol, faol, telefon: telefon || null, filialId: rol === 'ADMIN' ? (filialId || null) : filialId }
     if (login) {
-      const bandmi = await prisma.foydalanuvchi.findFirst({ where: { login, NOT: { id } } })
+      const yangiLogin = loginTozala(String(login))
+      const loginXato = loginXatosi(yangiLogin)
+      if (loginXato) return NextResponse.json({ xato: loginXato }, { status: 400 })
+      const bandmi = await prisma.foydalanuvchi.findFirst({ where: { login: { equals: yangiLogin, mode: 'insensitive' }, NOT: { id } }, select: { id: true } })
       if (bandmi) return NextResponse.json({ xato: 'Bu login band' }, { status: 400 })
-      updateData.login = login
+      updateData.login = yangiLogin
     }
     if (parol) updateData.parolHash = await bcrypt.hash(parol, 10)
     const user = await prisma.foydalanuvchi.update({
