@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
-import { sessionIsRealEga, egaFilialWhere } from '@/lib/filial-scope'
+import { egaFilialWhere } from '@/lib/filial-scope'
+import { xaritaRuxsati } from '@/lib/xarita-server'
 
 // Xarita bo'limi ma'lumotlari: filiallar, xodimlar, mijozlar va
 // TA'MINOTCHILARNING joylashuvi. Sahifa ularni alohida ko'rinishlarga
 // ajratadi, shuning uchun hammasi bitta so'rovda qaytariladi.
 // Faqat bosh Ega ko'radi — /api/filiallar dagi bilan bir xil tekshiruv.
-function faqatEga(session: unknown): boolean {
-  const s = session as { user?: { rol?: string } } | null
-  return !!s && s.user?.rol === 'ADMIN' && sessionIsRealEga(s as never)
-}
+// Yo'ldagi kuryerlar alohida va tezroq: /api/xarita/yetkazishlar.
 
 export async function GET() {
   try {
-    const session = await auth()
-    if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    if (!faqatEga(session)) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 403 })
+    const r = await xaritaRuxsati()
+    if (!r.ok) return r.javob
+    const session = r.session
 
     const [filiallar, xodimlar, mijozlar, taminotchilar] = await Promise.all([
       prisma.filial.findMany({

@@ -6,7 +6,7 @@ import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { sessionFilialId } from '@/lib/filial-scope'
 import {
   FAOL_YETKAZISH, joriyYetkazish, masofaM,
-  type DostavchikQisqa, type DostavchikTafsilot, type Lokatsiya, type NamunaBerishQator, type YetkazishHolati, type YetkazishQator,
+  type DostavchikQisqa, type DostavchikTafsilot, type KuryerYetkazish, type Lokatsiya, type NamunaBerishQator, type YetkazishHolati, type YetkazishQator,
 } from '@/lib/dostavchik'
 import type { BuyurtmaDostavchigi, OnlaynHolat, OnlaynRoyxat } from '@/lib/onlayn-buyurtma'
 import { mpSorov } from '@/lib/marketplace-mijoz'
@@ -169,6 +169,61 @@ function asosiy(f: FoydalanuvchiXom, lok: Lokatsiya | null) {
     manzilLng: p?.manzilLng ?? null,
     lokatsiya: lok,
   }
+}
+
+// ─── Xarita: yo'ldagi kuryerlar ──────────────────────────────────────────────
+
+/**
+ * Tugallanmagan buyurtmasi bor kuryerlar — xaritada chiziq va karta uchun.
+ * Xarita buni har bir necha soniyada so'raydi: bitta indekslangan so'rov,
+ * kuryer ma'lumoti JOIN bilan keladi.
+ */
+export async function yoldagiKuryerlar(): Promise<KuryerYetkazish[]> {
+  const qatorlar = await prisma.onlaynYetkazish.findMany({
+    where: { holati: { in: FAOL_YETKAZISH }, dostavchik: DOSTAVCHIK_DOIRASI },
+    select: {
+      ...YETKAZISH_SELECT,
+      dostavchik: {
+        select: {
+          id: true, ism: true, telefon: true, lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
+          dostavchikProfili: { select: { transportTuri: true, transportNomi: true, davlatRaqami: true } },
+        },
+      },
+    },
+    orderBy: { tayinlangan: 'asc' },
+  })
+
+  const kuryerlar = new Map<string, KuryerYetkazish>()
+  for (const q of qatorlar) {
+    const d = q.dostavchik
+    let k = kuryerlar.get(d.id)
+    if (!k) {
+      k = {
+        id: d.id,
+        ism: d.ism,
+        telefon: d.telefon,
+        transportTuri: d.dostavchikProfili?.transportTuri ?? null,
+        transportNomi: d.dostavchikProfili?.transportNomi ?? null,
+        davlatRaqami: d.dostavchikProfili?.davlatRaqami ?? null,
+        lokatsiya: d.lokatsiyaLat != null && d.lokatsiyaLng != null && d.lokatsiyaYangilangan
+          ? { lat: d.lokatsiyaLat, lng: d.lokatsiyaLng, yangilangan: d.lokatsiyaYangilangan.toISOString() }
+          : null,
+        joriy: null,
+        yetkazishlar: [],
+      }
+      kuryerlar.set(d.id, k)
+    }
+    k.yetkazishlar.push(yetkazishQator(q, k.lokatsiya))
+  }
+
+  const royxat = [...kuryerlar.values()].map(k => {
+    const joriy = joriyYetkazish(k.yetkazishlar)
+    return { ...k, joriy, yetkazishlar: joriy ? [joriy, ...k.yetkazishlar.filter(y => y !== joriy)] : k.yetkazishlar }
+  })
+  // Yo'ldagilar tepada, keyin manzildagilar, keyin navbatdagilar
+  const tartib = { YOLDA: 0, YETIB_KELDI: 1, TAYINLANGAN: 2, TOPSHIRILDI: 3, BEKOR: 3 } as const
+  return royxat.sort((a, b) =>
+    tartib[a.joriy?.holati ?? 'BEKOR'] - tartib[b.joriy?.holati ?? 'BEKOR'] || a.ism.localeCompare(b.ism))
 }
 
 // ─── Tafsilot ────────────────────────────────────────────────────────────────

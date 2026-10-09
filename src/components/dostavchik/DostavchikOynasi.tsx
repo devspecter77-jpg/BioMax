@@ -17,7 +17,9 @@ import {
   YETKAZISH_NOMI, masofaMatni, miqdorMatni, transportNomi,
   type DostavchikTafsilot, type NamunaQator, type YetkazishHolati, type YetkazishQator,
 } from '@/lib/dostavchik'
-import type { XaritaNuqta } from '@/components/Xarita'
+import type { XaritaChiziq, XaritaNuqta } from '@/components/Xarita'
+import { YETKAZISH_XARITA_RANGI, qolganYol, transportProfili, type Nuqta } from '@/lib/yonalish'
+import { useYonalishlar, type YonalishSorovi } from '@/hooks/useYonalishlar'
 import DostavchikForma from './DostavchikForma'
 import NamunaBerishForma from './NamunaBerishForma'
 
@@ -96,13 +98,33 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
     return () => window.removeEventListener('keydown', k)
   }, [onYopish, tahrirOchiq, band])
 
+  // Yo'ldagi buyurtma — kuryerdan manzilgacha ko'chalar bo'ylab (xarita bo'limidagi bilan bir xil)
+  const sorovlar = useMemo<YonalishSorovi[]>(() => {
+    const j = t?.joriy
+    if (!t?.lokatsiya || j?.holati !== 'YOLDA' || j.lat == null || j.lng == null) return []
+    return [{ kalit: j.raqam, dan: [t.lokatsiya.lat, t.lokatsiya.lng], ga: [j.lat, j.lng], profil: transportProfili(t.transportTuri) }]
+  }, [t])
+  const marshrutlar = useYonalishlar(sorovlar)
+  const chiziqlar = useMemo<XaritaChiziq[]>(() => {
+    const j = t?.joriy
+    if (!t?.lokatsiya || !j || j.lat == null || j.lng == null || j.holati === 'YETIB_KELDI') return []
+    const dan: Nuqta = [t.lokatsiya.lat, t.lokatsiya.lng]
+    const m = j.holati === 'YOLDA' ? marshrutlar.get(j.raqam) : undefined
+    const q = m ? qolganYol(m.nuqtalar, dan) : null
+    return [{
+      id: 'yol', nuqtalar: q?.nuqtalar ?? [dan, [j.lat, j.lng]],
+      rang: YETKAZISH_XARITA_RANGI[j.holati], uzuq: !q, tanlangan: true,
+    }]
+  }, [t, marshrutlar])
+
   const nuqtalar = useMemo<XaritaNuqta[]>(() => {
     if (!t) return []
     const n: XaritaNuqta[] = []
     if (t.lokatsiya) {
       n.push({
-        id: t.id, lat: t.lokatsiya.lat, lng: t.lokatsiya.lng, turi: 'xodim', nomi: t.ism,
+        id: t.id, lat: t.lokatsiya.lat, lng: t.lokatsiya.lng, turi: t.joriy ? 'kuryer' : 'xodim', nomi: t.ism,
         tavsif: t.joriy ? `${YETKAZISH_NOMI[t.joriy.holati]}: ${t.joriy.raqam}` : 'Bo‘sh',
+        rang: YETKAZISH_XARITA_RANGI[t.joriy?.holati ?? 'TAYINLANGAN'],
         yangilik: yangilikAniqla(t.lokatsiya.yangilangan), vaqtMatni: vaqtMatni(t.lokatsiya.yangilangan),
       })
     }
@@ -114,7 +136,8 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
     }
     if (t.joriy?.lat != null && t.joriy.lng != null) {
       n.push({
-        id: `manzil-${t.joriy.raqam}`, lat: t.joriy.lat, lng: t.joriy.lng, turi: 'mijoz',
+        id: `manzil-${t.joriy.raqam}`, lat: t.joriy.lat, lng: t.joriy.lng, turi: 'manzil',
+        rang: YETKAZISH_XARITA_RANGI[t.joriy.holati],
         nomi: `${t.joriy.raqam} · ${t.joriy.aloqaIsm ?? 'Mijoz'}`, yorliq: t.joriy.raqam, tavsif: t.joriy.manzilMatni,
       })
     }
@@ -225,7 +248,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
               <div className="rounded-2xl overflow-hidden border border-gray-200 dark:border-neutral-800">
                 {nuqtalar.length > 0 ? (
                   <div className="h-64 sm:h-72">
-                    <Xarita nuqtalar={nuqtalar} fokus={t.lokatsiya ? t.id : null} className="h-full w-full" />
+                    <Xarita nuqtalar={nuqtalar} chiziqlar={chiziqlar} fokus={t.lokatsiya ? t.id : null} className="h-full w-full" />
                   </div>
                 ) : (
                   <div className="h-40 flex flex-col items-center justify-center gap-2 px-6 text-center bg-gray-50 dark:bg-neutral-800/30">

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { xodimlarDoirasi } from '@/lib/xodim-hisob'
-import { omborTuri } from '@/lib/ovoz-ombor'
+import { omborTuri, omborYetishmaydi } from '@/lib/ovoz-ombor'
 import { saqlashKuni, smenalarXulosasi, smenaniOchir, smenaniTugat } from '@/lib/smena-server'
 import { kunBoshi, toshkentKuni } from '@/lib/smena'
 
@@ -45,6 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       kunlar,
       saqlashKun: kun,
       omborTuri: omborTuri(),
+      omborYetishmaydi: omborTuri() ? [] : omborYetishmaydi(),
       adminmi: (session!.user as { rol?: string }).rol === 'ADMIN',
     })
   } catch (e) {

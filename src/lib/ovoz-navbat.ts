@@ -163,6 +163,26 @@ export async function urinishniBelgila(segId: string, keyingiUrinish: number, xa
   await tugashi(t)
 }
 
+/**
+ * Navbat chegaradan oshsa ENG ESKI tayyor bo'laklarni o'chiradi (halqa bufer).
+ * Ombor uzoq vaqt sozlanmasa yoki internet kunlab bo'lmasa ham yozuv
+ * to'xtamaydi va telefon xotirasi to'lmaydi — eng yangi yozuvlar saqlanadi.
+ * Hozir yozilayotgan bo'lakka tegilmaydi. Qaytaradi: o'chirilganlar soni.
+ */
+export async function navbatniQisqart(maxBayt: number): Promise<number> {
+  const hammasi = await barchaSegmentlar() // eskisi birinchi
+  let hajm = hammasi.reduce((a, s) => a + s.hajm, 0)
+  let ochirildi = 0
+  for (const s of hammasi) {
+    if (hajm <= maxBayt) break
+    if (s.holat !== 'tayyor') continue
+    await segmentniOchir(s.segId)
+    hajm -= s.hajm
+    ochirildi += 1
+  }
+  return ochirildi
+}
+
 /** Yuborilmagan bo'laklar soni va hajmi. */
 export async function navbatHolati(): Promise<{ soni: number; hajm: number }> {
   const hammasi = await barchaSegmentlar()

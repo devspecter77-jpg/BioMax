@@ -85,6 +85,21 @@ export interface DostavchikQisqa {
   qolganNamuna: number
 }
 
+/** Xarita: hozir buyurtma bilan band kuryer (har bir necha soniyada yangilanadi). */
+export interface KuryerYetkazish {
+  id: string
+  ism: string
+  telefon: string | null
+  transportTuri: TransportTuri | null
+  transportNomi: string | null
+  davlatRaqami: string | null
+  lokatsiya: Lokatsiya | null
+  /** Hozir shug'ullanayotgani: manzilda > yo'lda > navbatdagi birinchisi */
+  joriy: YetkazishQator | null
+  /** Barcha tugallanmagan buyurtmalari, joriysi birinchi */
+  yetkazishlar: YetkazishQator[]
+}
+
 export interface NamunaQator {
   id: string
   tovarId: string | null

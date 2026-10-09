@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { OvozYozgich, mikrofonXatosi, mikrofonniOch, yozishQollanadimi } from '@/lib/ovoz-yozgich'
 import {
-  barchaSegmentlar, navbatHolati, segmentFayli, segmentniOchir, urinishniBelgila, yetimlarniYop,
+  barchaSegmentlar, navbatHolati, navbatniQisqart, segmentFayli, segmentniOchir, urinishniBelgila, yetimlarniYop,
 } from '@/lib/ovoz-navbat'
 import {
   BITREYT, BOLAK_MAX_BAYT, BOLAK_MS, NAVBAT_MAX_BAYT, PULS_MS, QISM_MS, kengaytma, smenaRolimi,
@@ -97,6 +97,8 @@ function sinovOraligi(kalit: string, standart: number): number {
   }
 }
 const bolakUzunligi = () => sinovOraligi('ovoz-bolak-ms', BOLAK_MS)
+/** Telefon navbatining chegarasi (bayt) — sinovda kichraytiriladi: `ovoz-navbat-max`. */
+const navbatChegarasi = () => sinovOraligi('ovoz-navbat-max', NAVBAT_MAX_BAYT)
 
 export default function SmenaProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession()
@@ -149,12 +151,9 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
 
   const yozishniBoshla = useCallback(async (smenaId: string, oqim?: MediaStream) => {
     if (yozgichRef.current) { oqim?.getTracks().forEach(t => t.stop()); return }
-    const navbatHajmi = (await navbatHolati().catch(() => ({ hajm: 0 }))).hajm
-    if (navbatHajmi > NAVBAT_MAX_BAYT) {
-      oqim?.getTracks().forEach(t => t.stop())
-      holatniOrnat('joy_yoq', 'Telefonda yuborilmagan yozuvlar juda ko‘p — internetga ulaning')
-      return
-    }
+    // Navbat to'lgan bo'lsa (ombor uzoq sozlanmagan yoki kunlab internet yo'q)
+    // eng eski bo'laklar bo'shatiladi — yozuv hech qachon shu sababli to'xtamaydi
+    await navbatniQisqart(navbatChegarasi()).catch(() => 0)
     const y = new OvozYozgich(smenaId, {
       bolakMs: bolakUzunligi(), qismMs: QISM_MS, maxBayt: BOLAK_MAX_BAYT, bitreyt: BITREYT, vaqt,
     }, {
@@ -219,6 +218,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
       console.warn('[ovoz] navbat yuborilmadi', e)
     } finally {
       yuborishRef.current = false
+      await navbatniQisqart(navbatChegarasi()).catch(() => 0)
       await navbatniYangila()
     }
   }, [navbatniYangila, vaqt])

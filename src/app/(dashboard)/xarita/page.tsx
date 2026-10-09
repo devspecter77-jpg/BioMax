@@ -8,9 +8,15 @@ import {
   Truck, ExternalLink, Search,
 } from 'lucide-react'
 import { formatPhone } from '@/lib/utils'
-import type { XaritaNuqta, Yangilik } from '@/components/Xarita'
+import type { XaritaChiziq, XaritaNuqta, Yangilik } from '@/components/Xarita'
 import { googleSputnik, koordinataTogrimi } from '@/lib/xarita-havola'
 import { vaqtMatni, yangilikAniqla } from '@/lib/lokatsiya-vaqt'
+import { YETKAZISH_NOMI, masofaMatni, type KuryerYetkazish } from '@/lib/dostavchik'
+import {
+  YETKAZISH_XARITA_RANGI, masofa, qolganVaqtS, qolganYol, transportProfili, vaqtYorligi, type Nuqta,
+} from '@/lib/yonalish'
+import { useYonalishlar, type YonalishSorovi } from '@/hooks/useYonalishlar'
+import KuryerKartasi, { type YolHolati } from '@/components/xarita/KuryerKartasi'
 
 // Leaflet `window` ga tayanadi — serverda render qilib bo'lmaydi.
 const Xarita = dynamic(() => import('@/components/Xarita'), {
@@ -49,6 +55,13 @@ interface XaritaTaminotchi {
 
 /** Xarita shu oraliqda o'zi yangilanadi. */
 const YANGILANISH_MS = 15_000
+/** Yo'ldagi kuryerlar tezroq: kuryer ilovasi siljiganda har ~3 s da joy yuboradi. */
+const YETKAZISH_MS = 4_000
+
+/** Kuryer va u boradigan joy — xaritada chiziladigan yo'l. */
+interface KuryerYoli extends YolHolati {
+  nuqtalar: Nuqta[]
+}
 
 // Xarita komponentidagi ranglar bilan MOS bo'lishi shart —
 // legendada bir rang, xaritada boshqa rang chalkashtirib yuboradi.
@@ -67,10 +80,11 @@ const YANGILIK_LABEL: Record<Yangilik, string> = {
 // Har bir guruh uchun ALOHIDA xarita: "faqat mijozlar", "faqat xodimlar",
 // "faqat ta'minotchilar". Bitta ekranda hammasi aralashib ketganda kerakli
 // nuqtani topish qiyin edi.
-type Korinish = 'hammasi' | 'xodim' | 'mijoz' | 'taminotchi' | 'filial'
+type Korinish = 'hammasi' | 'yetkazish' | 'xodim' | 'mijoz' | 'taminotchi' | 'filial'
 
 const KORINISHLAR: { kalit: Korinish; label: string; rang: string }[] = [
   { kalit: 'hammasi', label: 'Hammasi', rang: 'bg-gray-400' },
+  { kalit: 'yetkazish', label: 'Yetkazishlar', rang: 'bg-blue-600' },
   { kalit: 'xodim', label: 'Xodimlar', rang: 'bg-green-600' },
   { kalit: 'mijoz', label: 'Mijozlar', rang: 'bg-red-600' },
   { kalit: 'taminotchi', label: "Ta'minotchilar", rang: 'bg-amber-600' },
@@ -147,12 +161,171 @@ export default function XaritaPage() {
     return () => clearInterval(t)
   }, [yukla])
 
+  // ── Yo'ldagi kuryerlar — alohida va tez yangilanadi ──
+  const [kuryerlar, setKuryerlar] = useState<KuryerYetkazish[]>([])
+  const [kuryerHozir, setKuryerHozir] = useState(() => Date.now())
+  const [tanlangan, setTanlangan] = useState<string | null>(null)
+  const [korsatish, setKorsatish] = useState<
+    { kalit: string; nuqtalar: [number, number][]; pastdan?: number; chapdan?: number } | null
+  >(null)
+
+  useEffect(() => {
+    let toxtadi = false
+    let taymer: ReturnType<typeof setTimeout> | undefined
+    let kutish = YETKAZISH_MS
+    let boshqaruv: AbortController | null = null
+
+    async function ol() {
+      if (toxtadi) return
+      // Sahifa yashirin bo'lsa so'ramaymiz — qaytib ochilganda darhol
+      if (document.visibilityState === 'visible') {
+        boshqaruv?.abort()
+        boshqaruv = new AbortController()
+        try {
+          const r = await fetch('/api/xarita/yetkazishlar', { cache: 'no-store', signal: boshqaruv.signal })
+          if (!r.ok) throw new Error(String(r.status))
+          const d = await r.json()
+          if (!toxtadi && Array.isArray(d.kuryerlar)) {
+            const royxat = d.kuryerlar as KuryerYetkazish[]
+            setKuryerlar(royxat)
+            setKuryerHozir(d.hozir ? new Date(d.hozir).getTime() : Date.now())
+            // Kuryer barcha buyurtmasini topshirsa karta o'zi yopiladi
+            setTanlangan(t => (t && royxat.some(k => k.id === t) ? t : null))
+          }
+          kutish = YETKAZISH_MS
+        } catch (e) {
+          if ((e as Error)?.name === 'AbortError') return
+          kutish = Math.min(kutish * 2, 30_000)
+        }
+      }
+      if (!toxtadi) taymer = setTimeout(ol, kutish)
+    }
+
+    const qaytdi = () => {
+      if (document.visibilityState !== 'visible') return
+      clearTimeout(taymer)
+      void ol()
+    }
+    document.addEventListener('visibilitychange', qaytdi)
+    void ol()
+    return () => {
+      toxtadi = true
+      clearTimeout(taymer)
+      boshqaruv?.abort()
+      document.removeEventListener('visibilitychange', qaytdi)
+    }
+  }, [])
+
   const q = qidiruv.trim().toLowerCase()
   const mos = useCallback(
     (...maydonlar: (string | null | undefined)[]) =>
       !q || maydonlar.some(m => (m ?? '').toLowerCase().includes(q)),
     [q],
   )
+
+  const kuryerXaritasi = useMemo(() => new Map(kuryerlar.map(k => [k.id, k])), [kuryerlar])
+  const korKuryerlar = useMemo(
+    () => kuryerlar.filter(k => mos(k.ism, k.telefon, ...k.yetkazishlar.flatMap(y => [y.raqam, y.aloqaIsm, y.manzilMatni]))),
+    [kuryerlar, mos])
+  const kuryerKorinadi = korinish === 'hammasi' || korinish === 'yetkazish' || korinish === 'xodim'
+
+  // Ko'chalar bo'ylab marshrut — yo'ldagi joriy buyurtmalar uchun
+  const sorovlar = useMemo<YonalishSorovi[]>(() => {
+    const s: YonalishSorovi[] = []
+    for (const k of kuryerlar) {
+      const j = k.joriy
+      if (!k.lokatsiya || j?.holati !== 'YOLDA' || j.lat == null || j.lng == null) continue
+      s.push({ kalit: j.raqam, dan: [k.lokatsiya.lat, k.lokatsiya.lng], ga: [j.lat, j.lng], profil: transportProfili(k.transportTuri) })
+    }
+    return s
+  }, [kuryerlar])
+  const marshrutlar = useYonalishlar(sorovlar)
+
+  // Har kuryer uchun joriy buyurtmagacha qolgan yo'l: marshrut bo'lsa uning
+  // QOLGAN qismi (kuryer turgan joydan), bo'lmasa to'g'ri chiziq
+  const yollar = useMemo(() => {
+    const m = new Map<string, KuryerYoli>()
+    for (const k of kuryerlar) {
+      const j = k.joriy
+      if (!k.lokatsiya || !j || j.lat == null || j.lng == null) continue
+      const dan: Nuqta = [k.lokatsiya.lat, k.lokatsiya.lng]
+      const ga: Nuqta = [j.lat, j.lng]
+      const marshrut = j.holati === 'YOLDA' ? marshrutlar.get(j.raqam) : undefined
+      const qolgan = marshrut ? qolganYol(marshrut.nuqtalar, dan) : null
+      m.set(k.id, marshrut && qolgan
+        ? {
+            nuqtalar: qolgan.nuqtalar,
+            masofaM: qolgan.masofaM,
+            vaqtS: qolganVaqtS(marshrut.masofaM, marshrut.vaqtS, qolgan.masofaM),
+            yolBoylab: true,
+          }
+        : { nuqtalar: [dan, ga], masofaM: masofa(dan, ga), vaqtS: null, yolBoylab: false })
+    }
+    return m
+  }, [kuryerlar, marshrutlar])
+
+  const kuryerniTanla = useCallback((kuryerId: string) => {
+    const k = kuryerXaritasi.get(kuryerId)
+    if (!k) return
+    setTanlangan(kuryerId)
+    const nuqtalar: [number, number][] = []
+    if (k.lokatsiya) nuqtalar.push([k.lokatsiya.lat, k.lokatsiya.lng])
+    if (k.joriy?.lat != null && k.joriy.lng != null) nuqtalar.push([k.joriy.lat, k.joriy.lng])
+    // Karta telefonda pastda, kompyuterda chapda turadi — yo'l uning ostida qolmasin
+    const telefon = window.innerWidth < 640
+    setKorsatish({ kalit: `${kuryerId}:${Date.now()}`, nuqtalar, pastdan: telefon ? 280 : 0, chapdan: telefon ? 0 : 370 })
+    const el = xaritaIdishRef.current
+    if (el) {
+      const r = el.getBoundingClientRect()
+      if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [kuryerXaritasi])
+
+  const onTanlash = useCallback((id: string) => {
+    if (id.startsWith('k:')) kuryerniTanla(id.slice(2))
+    else if (id.startsWith('y:')) {
+      const raqam = id.slice(2)
+      const k = kuryerlar.find(x => x.yetkazishlar.some(y => y.raqam === raqam))
+      if (k) kuryerniTanla(k.id)
+    }
+  }, [kuryerlar, kuryerniTanla])
+
+  const tanlanganKuryer = tanlangan ? kuryerXaritasi.get(tanlangan) ?? null : null
+
+  const chiziqlar = useMemo<XaritaChiziq[]>(() => {
+    if (!kuryerKorinadi) return []
+    const c: XaritaChiziq[] = []
+    for (const k of korKuryerlar) {
+      if (!k.lokatsiya) continue
+      const dan: Nuqta = [k.lokatsiya.lat, k.lokatsiya.lng]
+      const tanlanganmi = tanlangan === k.id
+      for (const y of k.yetkazishlar) {
+        if (y.lat == null || y.lng == null) continue
+        if (y.holati === 'YOLDA') {
+          // Joriy buyurtma — ko'chalar bo'ylab; bir vaqtda olib ketayotgan boshqalari — to'g'ri chiziq
+          const yol = y.raqam === k.joriy?.raqam ? yollar.get(k.id) : undefined
+          c.push({
+            id: 'c:' + y.raqam,
+            nuqtalar: yol?.nuqtalar ?? [dan, [y.lat, y.lng]],
+            rang: YETKAZISH_XARITA_RANGI.YOLDA,
+            uzuq: !yol?.yolBoylab,
+            tanlangan: tanlanganmi,
+            tanlashId: 'k:' + k.id,
+          })
+        } else if (y.holati === 'TAYINLANGAN' && tanlanganmi) {
+          // Hali yo'lga chiqmagan — faqat tanlanganda, qayerga borishi nuqtali chiziqda
+          c.push({
+            id: 'c:' + y.raqam,
+            nuqtalar: [dan, [y.lat, y.lng]],
+            rang: YETKAZISH_XARITA_RANGI.TAYINLANGAN,
+            uzuq: true,
+            tanlashId: 'k:' + k.id,
+          })
+        }
+      }
+    }
+    return c
+  }, [kuryerKorinadi, korKuryerlar, yollar, tanlangan])
 
   const korXodimlar = useMemo(
     () => xodimlar.filter(x => mos(x.ism, x.filial?.nomi, x.telefon)),
@@ -190,6 +363,8 @@ export default function XaritaPage() {
     if (korsatilsin('xodim')) {
       for (const x of korXodimlar) {
         if (!koordinataTogrimi(x.lokatsiyaLat, x.lokatsiyaLng)) continue
+        // Buyurtma olib ketayotgan kuryer pastda alohida (yuk mashinasi belgisi)
+        if (kuryerXaritasi.get(x.id)?.lokatsiya) continue
         natija.push({
           id: 'x:' + x.id,
           lat: x.lokatsiyaLat!, lng: x.lokatsiyaLng!,
@@ -229,8 +404,43 @@ export default function XaritaPage() {
       }
     }
 
+    // Yo'ldagi kuryerlar va ular boradigan manzillar — bosilganda karta ochiladi
+    if (kuryerKorinadi) {
+      for (const k of korKuryerlar) {
+        const tanlanganmi = tanlangan === k.id
+        if (k.lokatsiya && koordinataTogrimi(k.lokatsiya.lat, k.lokatsiya.lng)) {
+          natija.push({
+            id: 'k:' + k.id,
+            lat: k.lokatsiya.lat, lng: k.lokatsiya.lng,
+            nomi: k.ism,
+            turi: 'kuryer',
+            rang: YETKAZISH_XARITA_RANGI[k.joriy?.holati ?? 'TAYINLANGAN'],
+            yangilik: yangilikAniqla(k.lokatsiya.yangilangan, kuryerHozir),
+            tanlanadi: true,
+            tanlangan: tanlanganmi,
+          })
+        }
+        for (const y of k.yetkazishlar) {
+          if (!koordinataTogrimi(y.lat, y.lng)) continue
+          // Hali yo'lga chiqilmagan buyurtma manzili — faqat kuryer tanlanganda
+          if (y.holati === 'TAYINLANGAN' && !tanlanganmi) continue
+          natija.push({
+            id: 'y:' + y.raqam,
+            lat: y.lat!, lng: y.lng!,
+            nomi: `${y.raqam} · ${y.aloqaIsm ?? 'Mijoz'}`,
+            yorliq: y.raqam,
+            turi: 'manzil',
+            rang: YETKAZISH_XARITA_RANGI[y.holati],
+            tanlanadi: true,
+            tanlangan: tanlanganmi && y.raqam === k.joriy?.raqam,
+          })
+        }
+      }
+    }
+
     return natija
-  }, [korFiliallar, korXodimlar, korMijozlar, korTaminotchilar, hozir, korsatilsin])
+  }, [korFiliallar, korXodimlar, korMijozlar, korTaminotchilar, hozir, korsatilsin,
+    kuryerKorinadi, korKuryerlar, kuryerXaritasi, kuryerHozir, tanlangan])
 
   const joylashuvsizFilial = filiallar.filter(f => !koordinataTogrimi(f.lokatsiyaLat, f.lokatsiyaLng))
 
@@ -261,6 +471,7 @@ export default function XaritaPage() {
 
   const sonlar: Record<Korinish, number> = {
     hammasi: nuqtalar.length,
+    yetkazish: korKuryerlar.length,
     xodim: korXodimlar.length,
     mijoz: korMijozlar.length,
     taminotchi: korTaminotchilar.length,
@@ -276,7 +487,7 @@ export default function XaritaPage() {
             Xarita
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">
-            Xodim, mijoz, ta&apos;minotchi va filiallar — har {YANGILANISH_MS / 1000} soniyada yangilanadi
+            Yo&apos;ldagi kuryerlar har {YETKAZISH_MS / 1000} soniyada, qolganlari har {YANGILANISH_MS / 1000} soniyada yangilanadi
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -347,21 +558,47 @@ export default function XaritaPage() {
           ) : (
             <Xarita
               nuqtalar={nuqtalar}
+              chiziqlar={chiziqlar}
               fokus={fokus}
+              onTanlash={onTanlash}
+              korsatish={korsatish}
               className="h-full w-full"
               onBosildi={belgilash
                 ? (lat, lng) => { void filialJoylashuviniSaqla(belgilash, lat, lng) }
-                : undefined}
+                // Bo'sh joyga bosilsa kuryer kartasi yopiladi
+                : tanlangan ? () => setTanlangan(null) : undefined}
             />
+          )}
+          {!yuklanmoqda && kuryerKorinadi && tanlanganKuryer && (
+            <div className="absolute z-[1000] inset-x-2 bottom-2 sm:inset-x-auto sm:left-3 sm:bottom-3 sm:w-[360px]">
+              <KuryerKartasi
+                kuryer={tanlanganKuryer}
+                yol={yollar.get(tanlanganKuryer.id) ?? null}
+                hozir={kuryerHozir}
+                onYopish={() => setTanlangan(null)}
+              />
+            </div>
           )}
           {!yuklanmoqda && nuqtalar.length === 0 && !belgilash && (
             <div className="absolute inset-x-3 bottom-3 z-[500] pointer-events-none flex justify-center">
               <div className="pointer-events-auto max-w-sm rounded-xl bg-white/95 dark:bg-neutral-900/95 border border-gray-200 dark:border-neutral-800 shadow-lg px-4 py-3 text-sm">
-                <p className="font-medium text-gray-900 dark:text-gray-100">Xaritada hali belgi yo&apos;q</p>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  Mijoz yoki ta&apos;minotchi kartasida «GPS joylashuv»ni belgilang — shu yerda paydo bo&apos;ladi.
-                  Xodimlar ilovani ochganda o&apos;zi chiqadi.
-                </p>
+                {korinish === 'yetkazish' ? (
+                  <>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">Hozir yo&apos;lda kuryer yo&apos;q</p>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      Buyurtma kuryerga biriktirilib, u «Yo&apos;lga chiqdim»ni bosganda shu yerda manzilgacha
+                      chiziq bilan ko&apos;rinadi.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">Xaritada hali belgi yo&apos;q</p>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      Mijoz yoki ta&apos;minotchi kartasida «GPS joylashuv»ni belgilang — shu yerda paydo bo&apos;ladi.
+                      Xodimlar ilovani ochganda o&apos;zi chiqadi.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -373,7 +610,8 @@ export default function XaritaPage() {
         </div>
 
         {/* Yon ro'yxat */}
-        <div className="lg:w-80 shrink-0 flex flex-col gap-3 lg:overflow-y-auto">
+        {/* `[&>*]:shrink-0` — kartochkalar (overflow-hidden) siqilib ichi kesilmasin, ustun o'zi aylansin */}
+        <div className="lg:w-80 shrink-0 flex flex-col gap-3 lg:overflow-y-auto [&>*]:shrink-0">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
@@ -385,6 +623,68 @@ export default function XaritaPage() {
               className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
+
+          {/* ── Yo'ldagi kuryerlar ── */}
+          {kuryerKorinadi && (korinish === 'yetkazish' || korKuryerlar.length > 0) && (
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-gray-100 dark:border-neutral-800 flex items-center gap-2">
+                <Truck size={15} className="text-blue-600" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Yetkazishda ({korKuryerlar.length})
+                </span>
+              </div>
+              {korKuryerlar.length === 0 ? (
+                <p className="px-4 py-5 text-sm text-gray-500 dark:text-gray-400 text-center">
+                  {q ? 'Qidiruvga mos kuryer yo`q' : "Hozir buyurtma olib ketayotgan kuryer yo'q"}
+                </p>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-neutral-800">
+                  {korKuryerlar.map(k => {
+                    const j = k.joriy
+                    const yol = yollar.get(k.id)
+                    const rang = YETKAZISH_XARITA_RANGI[j?.holati ?? 'TAYINLANGAN']
+                    const qolgani = j?.holati === 'YOLDA' && yol?.masofaM != null
+                      ? [masofaMatni(yol.masofaM), vaqtYorligi(yol.vaqtS)].filter(Boolean).join(' · ')
+                      : null
+                    return (
+                      <button
+                        key={k.id}
+                        type="button"
+                        onClick={() => kuryerniTanla(k.id)}
+                        aria-pressed={tanlangan === k.id}
+                        className={`w-full px-4 py-2.5 flex items-center gap-2.5 text-left transition ${
+                          tanlangan === k.id ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-gray-50 dark:hover:bg-neutral-800/40'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: rang }} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-gray-900 dark:text-gray-100 truncate">{k.ism}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {j ? `${j.raqam} · ${YETKAZISH_NOMI[j.holati]}` : ''}
+                            {qolgani ? ` · ${qolgani}` : ''}
+                            {!k.lokatsiya ? ' · joylashuv yo‘q' : ''}
+                          </p>
+                        </div>
+                        {k.yetkazishlar.length > 1 && (
+                          <span className="shrink-0 rounded-full bg-gray-100 dark:bg-neutral-800 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:text-gray-400" title="Tugallanmagan buyurtmalar">
+                            {k.yetkazishlar.length}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              <div className="px-4 py-2 border-t border-gray-100 dark:border-neutral-800 flex items-center gap-3 flex-wrap">
+                {(['YOLDA', 'YETIB_KELDI', 'TAYINLANGAN'] as const).map(h => (
+                  <span key={h} className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                    <span className="w-2 h-2 rounded-full" style={{ background: YETKAZISH_XARITA_RANGI[h] }} />
+                    {YETKAZISH_NOMI[h]}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Xodimlar ── */}
           {korsatilsin('xodim') && (
@@ -407,7 +707,11 @@ export default function XaritaPage() {
                     return (
                       <div key={x.id} className="flex items-center hover:bg-gray-50 dark:hover:bg-neutral-800/40 transition">
                         <button
-                          onClick={() => bor && nuqtagaBor('x:' + x.id)}
+                          onClick={() => {
+                            // Yetkazayotgan kuryer — xaritada yuk mashinasi belgisi, kartasi ochiladi
+                            if (kuryerXaritasi.get(x.id)?.lokatsiya) kuryerniTanla(x.id)
+                            else if (bor) nuqtagaBor('x:' + x.id)
+                          }}
                           className="flex-1 min-w-0 px-4 py-2.5 flex items-center gap-2.5 text-left"
                         >
                           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${YANGILIK_RANG[y]}`} />

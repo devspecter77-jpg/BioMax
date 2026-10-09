@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { ChevronRight, Truck } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Truck } from 'lucide-react'
 import SmenaBelgisi, { type SmenaHolatQisqa } from './SmenaBelgisi'
 
 interface Kuryer { id: string; ism: string; smena: SmenaHolatQisqa | null }
+/** Faqat administratorga keladi */
+interface OmborHolati { tayyor: boolean; yetishmaydi: string[] }
 
 // Bosh sahifa (administrator): kuryerlar hozir ishdami, qachondan, ovoz
 // yozilyaptimi. Ruxsati yo'q foydalanuvchiga va kuryer yo'q do'konga
@@ -17,6 +19,7 @@ export default function KuryerlarHolati() {
   // So'rov faqat ruxsati borga — kuryer va kassirda behuda 403 bo'lmasin
   const mumkin = u?.rol === 'ADMIN' || !!u?.ruxsatlar?.includes('xodimlar.smena')
   const [kuryerlar, setKuryerlar] = useState<Kuryer[] | null>(null)
+  const [ombor, setOmbor] = useState<OmborHolati | null>(null)
   const [yopiq, setYopiq] = useState(false)
 
   useEffect(() => {
@@ -29,6 +32,7 @@ export default function KuryerlarHolati() {
       if (!r.ok) return
       const j = await r.json().catch(() => null)
       if (!bekor && Array.isArray(j?.kuryerlar)) setKuryerlar(j.kuryerlar)
+      if (!bekor) setOmbor(j?.ombor ?? null)
     }
     void yukla()
     const i = setInterval(() => { if (document.visibilityState === 'visible') void yukla() }, 60_000)
@@ -52,6 +56,33 @@ export default function KuryerlarHolati() {
           Batafsil <ChevronRight size={14} aria-hidden />
         </Link>
       </div>
+      {ombor && !ombor.tayyor && (
+        <div className="flex items-start gap-2.5 border-b border-amber-200/70 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-4 sm:px-5 py-3 text-amber-900 dark:text-amber-200">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
+          <div className="min-w-0 text-xs leading-relaxed">
+            <p className="text-sm font-semibold">Ovoz yozuvlari serverga tushmayapti</p>
+            <p className="mt-0.5">
+              Bulut ombori ulanmagan. Yozuvlar kuryer telefonida xavfsiz kutib turibdi va ombor ulangach o‘zi
+              yuboriladi — kuryerga bu haqda hech narsa ko‘rsatilmaydi.
+            </p>
+            <details className="mt-1.5">
+              <summary className="cursor-pointer font-medium underline-offset-2 hover:underline">Qanday ulash (~10 daqiqa)</summary>
+              <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+                <li>dash.cloudflare.com → R2 → Create bucket → nomi <code className="font-mono">biomax-ovozlar</code> (ochiq qilinmaydi).</li>
+                <li>R2 → Manage API tokens → Create API token → «Object Read &amp; Write», faqat shu bucket.</li>
+                <li>
+                  Vercel → loyiha → Settings → Environment Variables:{' '}
+                  {ombor.yetishmaydi.map((n, i) => (
+                    <span key={n}>{i > 0 && ', '}<code className="font-mono">{n}</code></span>
+                  ))}
+                  {' '}→ Redeploy.
+                </li>
+                <li>Xodimlar → kuryer → «Ish va ovozlar» → «Tekshirish».</li>
+              </ol>
+            </details>
+          </div>
+        </div>
+      )}
       <ul className="divide-y divide-gray-100 dark:divide-neutral-800">
         {tartib.map(k => (
           <li key={k.id} className="flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5">

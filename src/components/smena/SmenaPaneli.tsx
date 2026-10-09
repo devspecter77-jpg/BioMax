@@ -120,7 +120,10 @@ export default function SmenaPaneli() {
               {s.yuborildi > 0 && (
                 <span className="inline-flex items-center gap-1"><CloudUpload size={13} aria-hidden /> {s.yuborildi} ta bo‘lak yuborildi</span>
               )}
-              {navbat.soni > 0 && (
+              {/* Navbat faqat haqiqatan yuborilayotganda ko'rinadi. Server ombori
+                  sozlanmagan bo'lsa bu administratorning ishi — kuryerga texnik
+                  ogohlantirish ko'rsatilmaydi, yozuv telefonda xavfsiz turadi. */}
+              {navbat.soni > 0 && server.omborTayyor && s.onlayn && (
                 <span className="inline-flex items-center gap-1">
                   <Loader2 size={13} className="animate-spin" aria-hidden /> {navbat.soni} ta navbatda ({hajmMatni(navbat.hajm)})
                 </span>
@@ -131,11 +134,6 @@ export default function SmenaPaneli() {
                 </span>
               )}
             </div>
-            {!server.omborTayyor && (
-              <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                Server ombori hali sozlanmagan — yozuvlar telefonda saqlanib turibdi, sozlangach o‘zi yuboriladi.
-              </p>
-            )}
           </>
         ) : (
           <>
@@ -149,7 +147,7 @@ export default function SmenaPaneli() {
               </p>
             )}
             {(yozuv.holat === 'ruxsat_yoq' || yozuv.holat === 'qollanmaydi') && <YozuvHolatiQatori />}
-            {navbat.soni > 0 && (
+            {navbat.soni > 0 && server.omborTayyor && s.onlayn && (
               <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                 <Loader2 size={13} className="animate-spin" aria-hidden />
                 Oxirgi yozuvlar yuborilmoqda ({navbat.soni} ta) — ilovani yopmang

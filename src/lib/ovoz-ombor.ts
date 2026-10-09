@@ -10,6 +10,8 @@
 //   S3_ACCESS_KEY_ID      ...
 //   S3_SECRET_ACCESS_KEY  ...
 //   S3_REGION             auto   (R2 uchun; AWS'da masalan eu-central-1)
+// Cloudflare nomlari ham bo'ladi: R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID,
+// R2_SECRET_ACCESS_KEY.
 //
 // Ular bo'lmasa: lokal rivojlanishda `.ovoz-yozuvlar/` papkasi ishlatiladi,
 // productionda esa ombor "sozlanmagan" deb hisoblanadi (yozuv qabul
@@ -32,19 +34,53 @@ interface S3Sozlama {
   region: string
 }
 
+const env = (k: string) => process.env[k]?.trim() || undefined
+
+// Cloudflare hujjatlaridagi nomlar ham qabul qilinadi (R2_ACCOUNT_ID va h.k.)
+// — sozlovchi qaysi nom bilan kiritsa ham ombor ishlasin.
+const sozEndpoint = () => {
+  const hisob = env('R2_ACCOUNT_ID')
+  return env('S3_ENDPOINT') ?? (hisob ? `https://${hisob}.r2.cloudflarestorage.com` : undefined)
+}
+const sozBucket = () => env('S3_BUCKET') ?? env('R2_BUCKET') ?? env('R2_BUCKET_NAME')
+const sozKeyId = () => env('S3_ACCESS_KEY_ID') ?? env('R2_ACCESS_KEY_ID')
+const sozSecret = () => env('S3_SECRET_ACCESS_KEY') ?? env('R2_SECRET_ACCESS_KEY')
+
+/**
+ * Endpoint'ni tozalaydi. Cloudflare chelak sozlamalarida "S3 API" manzilini
+ * chelak nomi BILAN ko'rsatadi (…r2.cloudflarestorage.com/biomax-ovozlar) —
+ * shu nusxalansa nom ikki marta tushib, hamma so'rov 404 bo'lardi.
+ */
+function endpointTozala(xom: string, bucket: string): string {
+  let e = /^https?:\/\//i.test(xom) ? xom : `https://${xom}`
+  e = e.replace(/\/+$/, '')
+  if (e.toLowerCase().endsWith(`/${bucket.toLowerCase()}`)) e = e.slice(0, -(bucket.length + 1))
+  return e
+}
+
 function s3Sozlama(): S3Sozlama | null {
-  const endpoint = process.env.S3_ENDPOINT?.trim()
-  const bucket = process.env.S3_BUCKET?.trim()
-  const keyId = process.env.S3_ACCESS_KEY_ID?.trim()
-  const secret = process.env.S3_SECRET_ACCESS_KEY?.trim()
+  const endpoint = sozEndpoint()
+  const bucket = sozBucket()
+  const keyId = sozKeyId()
+  const secret = sozSecret()
   if (!endpoint || !bucket || !keyId || !secret) return null
   return {
-    endpoint: endpoint.replace(/\/+$/, ''),
+    endpoint: endpointTozala(endpoint, bucket),
     bucket,
     keyId,
     secret,
-    region: process.env.S3_REGION?.trim() || 'auto',
+    region: env('S3_REGION') ?? env('R2_REGION') ?? 'auto',
   }
+}
+
+/** Ombor sozlanmagan bo'lsa — qaysi o'zgaruvchilar yetishmaydi (faqat nomlar, qiymat emas). */
+export function omborYetishmaydi(): string[] {
+  const y: string[] = []
+  if (!sozEndpoint()) y.push('S3_ENDPOINT')
+  if (!sozBucket()) y.push('S3_BUCKET')
+  if (!sozKeyId()) y.push('S3_ACCESS_KEY_ID')
+  if (!sozSecret()) y.push('S3_SECRET_ACCESS_KEY')
+  return y
 }
 
 /** Qaysi ombor ishlaydi; `null` — productionda sozlanmagan. */
@@ -176,7 +212,7 @@ export async function ochir(kalit: string): Promise<void> {
 export async function tekshir(): Promise<{ ok: true; turi: OmborTuri } | { ok: false; xato: string }> {
   const turi = omborTuri()
   if (!turi) {
-    return { ok: false, xato: 'Ombor sozlanmagan: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY kiritilmagan' }
+    return { ok: false, xato: `Ombor sozlanmagan: Vercel’da ${omborYetishmaydi().join(', ')} kiritilmagan (kiritgach Redeploy)` }
   }
   const kalit = `ovozlar/_tekshiruv/${Date.now()}.txt`
   const matn = `biomax-ombor-tekshiruv-${Date.now()}`

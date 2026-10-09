@@ -22,6 +22,8 @@ interface Javob {
   kunlar: number
   saqlashKun: number
   omborTuri: 's3' | 'lokal' | null
+  /** Ombor sozlanmagan bo'lsa — Vercel'da yetishmayotgan o'zgaruvchilar */
+  omborYetishmaydi?: string[]
   adminmi: boolean
 }
 
@@ -235,8 +237,13 @@ function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => P
         <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
           Kuryer ilovasi yozuvlarni telefonda saqlab turibdi. Ular serverga tushishi uchun Vercel’da
           S3 ombori (tavsiya: Cloudflare R2) o‘zgaruvchilarini kiriting:{' '}
-          <code className="font-mono">S3_ENDPOINT</code>, <code className="font-mono">S3_BUCKET</code>,{' '}
-          <code className="font-mono">S3_ACCESS_KEY_ID</code>, <code className="font-mono">S3_SECRET_ACCESS_KEY</code> — so‘ng «Tekshirish».
+          {(javob.omborYetishmaydi?.length
+            ? javob.omborYetishmaydi
+            : ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY']
+          ).map((n, i) => (
+            <span key={n}>{i > 0 && ', '}<code className="font-mono">{n}</code></span>
+          ))}
+          {' '}— Redeploy, so‘ng «Tekshirish».
         </p>
       )}
     </div>

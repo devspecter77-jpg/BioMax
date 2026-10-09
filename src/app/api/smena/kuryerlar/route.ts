@@ -5,6 +5,7 @@ import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { xodimlarDoirasi } from '@/lib/xodim-hisob'
 import { smenaHolatlari } from '@/lib/smena-server'
 import { SMENA_ROLLARI } from '@/lib/smena'
+import { omborTuri, omborYetishmaydi } from '@/lib/ovoz-ombor'
 
 // Bosh sahifadagi "Kuryerlar" bloki: kim hozir ishda, qachondan, ovoz
 // yozilyaptimi. Faqat smenalarni ko'rish ruxsati borlarga.
@@ -24,8 +25,12 @@ export async function GET() {
       orderBy: { ism: 'asc' },
     })
     const holatlar = await smenaHolatlari(kuryerlar.map(k => k.id))
+    // Ombor holati — sozlash administratorning ishi, faqat unga
+    const admin = (session.user as { rol?: string } | undefined)?.rol === 'ADMIN'
+    const tayyor = omborTuri() !== null
     return NextResponse.json({
       kuryerlar: kuryerlar.map(k => ({ ...k, smena: holatlar.get(k.id) ?? null })),
+      ...(admin ? { ombor: { tayyor, yetishmaydi: tayyor ? [] : omborYetishmaydi() } } : {}),
     })
   } catch (e) {
     console.error('[smena kuryerlar]', e)
