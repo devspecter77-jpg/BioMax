@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatSum, formatNarx } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, LayoutGrid, Search, Lock, Unlock, QrCode, Printer, Check } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Upload, Download, Loader2, Package, ImagePlus, ChevronLeft, ChevronRight, DollarSign, Eye, EyeOff, LayoutGrid, Search, Lock, Unlock, QrCode, Printer, Check, BookOpen } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
@@ -16,6 +16,9 @@ import SearchBar from '@/components/ui/search-bar'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import TovarTafsilot from '@/components/TovarTafsilot'
 import { yorliqlarHtml, STANDART_YORLIQ, type QrYorliq } from '@/lib/qr-kod'
+import { katalogHtml, katalogSanasi, STANDART_KATALOG, ustunChegarasi, type KatalogKorinishi, type KatalogTovar } from '@/lib/katalog'
+import { bosmaRasmlari } from '@/lib/rasm-bosma'
+import { bosmaOynasiniOch } from '@/lib/bosma-oyna'
 import { chekChopEtish } from '@/lib/chek-print'
 import { useConfirm } from '@/components/ConfirmProvider'
 import TovarNarxPaneli from '@/components/TovarNarxPaneli'
@@ -39,6 +42,15 @@ interface Tovar {
 }
 
 interface Taminotchi { id: string; nomi: string }
+
+/** Katalogda ko'rsatish mumkin bo'lgan narxlar. Kelish narxi ATAYIN yo'q —
+ *  katalog mijozga beriladigan hujjat, tannarx unga tushmasligi kerak. */
+type NarxTuri = 'chakana' | 'optom' | 'bolish'
+const NARX_YORLIQLARI: { turi: NarxTuri; yorliq: string; maydon: 'sotishNarxi' | 'optomNarxi' | 'bolishNarxi' }[] = [
+  { turi: 'chakana', yorliq: 'Chakana', maydon: 'sotishNarxi' },
+  { turi: 'optom', yorliq: 'Optom', maydon: 'optomNarxi' },
+  { turi: 'bolish', yorliq: 'Bo‘lib to‘lash', maydon: 'bolishNarxi' },
+]
 
 // Server bilan bir xil (lib/rasm.ts): onlayn vitrina galereyasi 10 tagacha rasm saqlaydi —
 // tovar formasi ularni qirqib tashlamasligi kerak.
@@ -129,6 +141,18 @@ export default function TovarlarPage() {
   // QR yorliq chop etish — tanlangan mahsulotlar
   const [tanlangan, setTanlangan] = useState<Set<string>>(new Set())
   const [qrModal, setQrModal] = useState(false)
+  // Katalog (narxnoma) chop etish
+  const [katalogModal, setKatalogModal] = useState(false)
+  const [katalogHammasi, setKatalogHammasi] = useState(false)
+  const [katalogOqim, setKatalogOqim] = useState<number | null>(null)
+  const [katKorinish, setKatKorinish] = useState<KatalogKorinishi>(STANDART_KATALOG.korinish)
+  const [katUstun, setKatUstun] = useState(STANDART_KATALOG.ustunlar)
+  const [katNarxlar, setKatNarxlar] = useState<Set<NarxTuri>>(new Set<NarxTuri>(['chakana']))
+  const [katKategoriya, setKatKategoriya] = useState(STANDART_KATALOG.kategoriyaBoyicha)
+  const [katQoldiq, setKatQoldiq] = useState(false)
+  const [katShtrix, setKatShtrix] = useState(false)
+  const [katIzoh, setKatIzoh] = useState(STANDART_KATALOG.izoh ?? '')
+  const [dokonInfo, setDokonInfo] = useState<Record<string, string>>({})
   const [qrUstun, setQrUstun] = useState(STANDART_YORLIQ.ustunlar)
   const [qrNusxa, setQrNusxa] = useState(STANDART_YORLIQ.nusxa)
   const [qrTayyorlanmoqda, setQrTayyorlanmoqda] = useState(false)
@@ -142,7 +166,7 @@ export default function TovarlarPage() {
   const [rasmModal, setRasmModal] = useState<{ rasmlar: string[]; nomi: string; index: number } | null>(null)
   const [detailTovar, setDetailTovar] = useState<Tovar | null>(null)
   // detailTovar uchun scroll lock TovarTafsilot komponentining o'zida
-  useBodyScrollLock(modal || katModal || korinishModal || !!rasmModal || kategoriyaVarag || qrModal)
+  useBodyScrollLock(modal || katModal || korinishModal || !!rasmModal || kategoriyaVarag || qrModal || katalogModal)
   const [kursi, setKursi] = useState<number | null>(null)
   const [kursSana, setKursSana] = useState<string | null>(null)
   const [kursYangilanmoqda, setKursYangilanmoqda] = useState(false)
@@ -207,6 +231,11 @@ export default function TovarlarPage() {
   }, [qidiruv, aktifKategoriya, tanlanganFilial])
 
   useEffect(() => { yuklash() }, [yuklash])
+
+  // Katalog sarlavhasi uchun do'kon nomi/aloqasi — chekdagi bilan bir xil sozlamalar
+  useEffect(() => {
+    fetch('/api/sozlamalar').then(r => r.json()).then(d => setDokonInfo(d && typeof d === 'object' ? d : {})).catch(() => {})
+  }, [])
 
   // IntersectionObserver — scroll hodisasidan farqli o'laroq tartib
   // (layout) o'zgarsa ham to'g'ri ishlaydi va desktopda ham, mobilda ham
@@ -460,6 +489,80 @@ export default function TovarlarPage() {
     }
   }
 
+  /** Katalogga tushadigan mahsulotlar: tanlanganlar yoki ko'rinib turgan hammasi. */
+  function katalogRoyxati(): Tovar[] {
+    return katalogHammasi ? korinadiganTovarlar : tovarlar.filter(t => tanlangan.has(t.id))
+  }
+
+  /**
+   * Narxnoma (katalog) chop etish.
+   *
+   * Rasmlar bazada 1080px — bosma uchun kichraytiriladi, aks holda 200 ta
+   * mahsulotli hujjat o'nlab MB bo'lib, bosma oynasi qotib qolardi.
+   */
+  async function katalogChopEt() {
+    const royxat = katalogRoyxati()
+    if (royxat.length === 0) { toast.error('Avval mahsulot tanlang'); return }
+    const turlar = NARX_YORLIQLARI.filter(n => katNarxlar.has(n.turi))
+    if (turlar.length === 0) { toast.error('Kamida bitta narx turini tanlang'); return }
+
+    // Oyna BOSILGAN ZAHOTI ochiladi — rasm tayyorlashdan keyin ochilsa brauzer to'sadi
+    const oyna = bosmaOynasiniOch('Katalog tayyorlanmoqda…')
+    if (!oyna) {
+      toast.error('Brauzer yangi oynani to‘sdi — manzil satrida qalqib chiquvchi oynalarga ruxsat bering')
+      return
+    }
+
+    setKatalogOqim(0)
+    try {
+      const kichik = await bosmaRasmlari(
+        royxat.map(t => t.rasmlar?.[0] ?? null),
+        { oqim: n => setKatalogOqim(n) },
+      )
+      const tovarlarKatalog: KatalogTovar[] = royxat.map((t, i) => ({
+        id: t.id,
+        nomi: t.nomi,
+        kategoriya: t.kategoriya?.nomi ?? null,
+        rasm: kichik[i],
+        shtrixKod: katShtrix ? (t.shtrixKod || null) : null,
+        qoldiq: katQoldiq && t.qoldiq !== null ? `${t.qoldiq} ${t.birlik}` : null,
+        // Yashirilgan yoki kiritilmagan narx chiqmaydi — "—" o'rniga shunchaki yo'q
+        narxlar: turlar
+          .filter(n => t[n.maydon] !== null && t[n.maydon] !== undefined)
+          .map(n => ({ yorliq: n.yorliq, qiymat: formatNarx(t[n.maydon] as number, t.valyuta) })),
+      }))
+
+      await oyna.chopEt(katalogHtml(tovarlarKatalog, {
+        korinish: katKorinish,
+        ustunlar: katUstun,
+        // Sozlamada nom bo'lmasa — kirish sahifasidagi kabi brend nomi
+        dokonNomi: dokonInfo.dokon_nomi?.trim() || 'BioMax',
+        telefon: dokonInfo.telefon || null,
+        manzil: dokonInfo.manzil || null,
+        sarlavha: STANDART_KATALOG.sarlavha,
+        izoh: katIzoh.trim() || null,
+        kategoriyaBoyicha: katKategoriya,
+        narxYorliqlari: turlar.length > 1,
+        sana: katalogSanasi(new Date()),
+      }))
+      setKatalogModal(false)
+    } catch {
+      oyna.yop()
+      toast.error('Katalog tayyorlanmadi')
+    } finally {
+      setKatalogOqim(null)
+    }
+  }
+
+  /** Katalog oynasini ochadi; `hammasi` — tanlovga qaramay barcha ko'rinayotgan mahsulotlar. */
+  function katalogniOch(hammasi: boolean) {
+    setKatalogHammasi(hammasi)
+    // Ko'rinishga mos bo'lmagan ustun soni qolib ketmasin
+    const mumkin = ustunChegarasi(katKorinish)
+    if (!mumkin.includes(katUstun)) setKatUstun(mumkin[Math.floor(mumkin.length / 2)])
+    setKatalogModal(true)
+  }
+
   async function saqlash(e: React.FormEvent) {
     e.preventDefault()
     if (!form.kategoriyaId) { toast.error('Avval kategoriya tanlang yoki yarating'); return }
@@ -656,6 +759,24 @@ export default function TovarlarPage() {
   // yuklangan, shuning uchun serverga qayta murojaat qilish shart emas.
   const korinadiganTovarlar = faqatQulflangan ? tovarlar.filter(t => t.qulflangan) : tovarlar
 
+  // Katalog oynasi uchun — faqat ochiq bo'lganda hisoblanadi
+  const katalogTovarlari = katalogModal ? katalogRoyxati() : []
+  const katalogRasmsiz = katalogTovarlari.filter(t => !t.rasmlar?.[0]).length
+  // Taxminiy sahifa soni: A4 ga sig'adigan katak (sarlavha joyi hisobga olingan)
+  const katalogSahifa = Math.max(1, Math.ceil(katalogTovarlari.length
+    / (katKorinish === 'karta' ? ({ 2: 6, 3: 9, 4: 16 } as Record<number, number>)[katUstun] ?? 9 : katUstun * 18)))
+  // Ro'yxat filtrlangan bo'lsa "Hammasi" — shu filtr ichidagi hammasi
+  const katalogFiltri = [
+    aktifKategoriya ? `«${kategoriyalar.find(k => k.id === aktifKategoriya)?.nomi ?? 'kategoriya'}» kategoriyasi` : null,
+    qidiruv.trim() ? `«${qidiruv.trim()}» qidiruvi` : null,
+    faqatQulflangan ? 'faqat qulflanganlar' : null,
+  ].filter(Boolean).join(', ')
+  const tanlovCls = (faol: boolean) => `flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
+    faol
+      ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary'
+      : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800'
+  }`
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -702,6 +823,18 @@ export default function TovarlarPage() {
           <div className="hidden sm:block">
             <ViewToggle view={view} onChange={changeView} />
           </div>
+          {ruxsat.bor('tovarlar.export') && (
+            <button
+              type="button"
+              onClick={() => katalogniOch(tanlangan.size === 0)}
+              disabled={korinadiganTovarlar.length === 0}
+              title="Rasmli katalog / narxnoma — A4 chop etish"
+              className="flex items-center gap-2 p-2.5 sm:px-4 rounded-xl font-medium transition whitespace-nowrap border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+            >
+              <BookOpen size={16} />
+              <span className="hidden sm:inline">Katalog</span>
+            </button>
+          )}
           {ruxsat.bor('tovarlar.export') && (
             <a
               href={`/api/tovarlar/export${tanlanganFilial ? `?filialId=${tanlanganFilial}` : ''}`}
@@ -753,6 +886,14 @@ export default function TovarlarPage() {
             <button onClick={() => setTanlangan(new Set())} className="text-xs text-gray-500 hover:underline">
               Bekor
             </button>
+            {ruxsat.bor('tovarlar.export') && (
+              <button
+                onClick={() => katalogniOch(false)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-primary/40 text-primary text-sm font-medium hover:bg-primary/10 transition"
+              >
+                <BookOpen size={15} /> Katalog
+              </button>
+            )}
             <button
               onClick={() => setQrModal(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:opacity-90 transition"
@@ -1673,6 +1814,183 @@ export default function TovarlarPage() {
                 Jami {tanlangan.size * qrNusxa} ta yorliq chiqadi. QR skanerlanganda
                 mahsulot nomi va narxi ko&apos;rinadi.
               </p>
+          </div>
+        </Modal>
+      )}
+
+      {katalogModal && (
+        <Modal
+          belgi={<BookOpen size={18} className="text-primary" />}
+          sarlavha={<>Katalog — A4 chop etish</>}
+          tavsif="Mahsulotlar rasmi va narxi bilan, kitobcha ko‘rinishida"
+          onYopish={() => setKatalogModal(false)}
+          yopishMumkin={katalogOqim === null}
+          tashqaridanYopish={true}
+          olcham="lg"
+          footer={<>
+            <button onClick={() => void katalogChopEt()}
+              disabled={katalogOqim !== null || katalogTovarlari.length === 0 || katNarxlar.size === 0}
+              className="flex-1 py-2.5 bg-primary text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+              {katalogOqim !== null
+                ? <><Loader2 size={15} className="animate-spin" /> Rasmlar tayyorlanmoqda {katalogOqim}/{katalogTovarlari.length}</>
+                : <><Printer size={15} /> Chop etish</>}
+            </button>
+            <button onClick={() => setKatalogModal(false)} disabled={katalogOqim !== null}
+              className="px-5 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl font-medium disabled:opacity-50">
+              Yopish
+            </button>
+          </>}
+        >
+          <div className="space-y-5">
+            {/* Qaysi mahsulotlar */}
+            <fieldset>
+              <legend className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Qaysi mahsulotlar</legend>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setKatalogHammasi(false)} disabled={tanlangan.size === 0}
+                  aria-pressed={!katalogHammasi} className={tanlovCls(!katalogHammasi)}>
+                  Tanlanganlar <span className="tabular-nums opacity-80">({tanlangan.size})</span>
+                </button>
+                <button type="button" onClick={() => setKatalogHammasi(true)}
+                  aria-pressed={katalogHammasi} className={tanlovCls(katalogHammasi)}>
+                  Hammasi <span className="tabular-nums opacity-80">({korinadiganTovarlar.length})</span>
+                </button>
+              </div>
+              {katalogHammasi && katalogFiltri && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1.5">
+                  Ro‘yxat filtrlangan: {katalogFiltri}. Butun katalog kerak bo‘lsa, avval filtrni olib tashlang.
+                </p>
+              )}
+              {tanlangan.size === 0 && (
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">
+                  Faqat ba’zilarini chiqarish uchun ro‘yxatda belgilang.
+                </p>
+              )}
+            </fieldset>
+
+            {/* Ko'rinish */}
+            <fieldset>
+              <legend className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Ko‘rinish</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['karta', 'Rasmli katalog', 'Katta rasm, kitobcha'],
+                  ['ixcham', 'Ixcham narxnoma', 'Kichik rasm, zich ro‘yxat'],
+                ] as const).map(([k, nomi, izoh]) => (
+                  <button key={k} type="button" aria-pressed={katKorinish === k}
+                    onClick={() => {
+                      setKatKorinish(k)
+                      const mumkin = ustunChegarasi(k)
+                      if (!mumkin.includes(katUstun)) setKatUstun(mumkin[Math.floor(mumkin.length / 2)])
+                    }}
+                    className={`${tanlovCls(katKorinish === k)} flex-col !items-start text-left !py-3`}>
+                    {/* Kichik namuna — qaysi ko'rinish ekanini bir qarashda */}
+                    <span aria-hidden className="w-full h-10 mb-1.5 rounded-md bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 p-1 flex gap-1">
+                      {k === 'karta'
+                        ? [0, 1, 2].map(i => (
+                            <span key={i} className="flex-1 flex flex-col gap-0.5">
+                              <span className="flex-1 rounded-sm bg-gray-200 dark:bg-neutral-700" />
+                              <span className="h-1 rounded-full bg-gray-300 dark:bg-neutral-600" />
+                            </span>
+                          ))
+                        : (
+                            <span className="flex-1 flex flex-col justify-between">
+                              {[0, 1, 2].map(i => (
+                                <span key={i} className="flex items-center gap-1">
+                                  <span className="w-2 h-2 rounded-[2px] bg-gray-200 dark:bg-neutral-700" />
+                                  <span className="flex-1 h-1 rounded-full bg-gray-300 dark:bg-neutral-600" />
+                                  <span className="w-3 h-1 rounded-full bg-gray-400 dark:bg-neutral-500" />
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                    </span>
+                    <span>{nomi}</span>
+                    <span className="text-[11px] font-normal opacity-70">{izoh}</span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Bir qatorda */}
+            <fieldset>
+              <legend className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Bir qatorda</legend>
+              <div className={`grid gap-2 ${katKorinish === 'karta' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {ustunChegarasi(katKorinish).map(n => (
+                  <button key={n} type="button" onClick={() => setKatUstun(n)} aria-pressed={katUstun === n}
+                    className={tanlovCls(katUstun === n)}>
+                    {n} ta
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Narxlar */}
+            <fieldset>
+              <legend className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Qaysi narx chiqsin</legend>
+              <div className="flex flex-wrap gap-2">
+                {NARX_YORLIQLARI.map(n => {
+                  const faol = katNarxlar.has(n.turi)
+                  return (
+                    <button key={n.turi} type="button" aria-pressed={faol}
+                      onClick={() => setKatNarxlar(prev => {
+                        const yangi = new Set(prev)
+                        if (yangi.has(n.turi)) yangi.delete(n.turi)
+                        else yangi.add(n.turi)
+                        return yangi
+                      })}
+                      className={tanlovCls(faol)}>
+                      {faol && <Check size={14} />} {n.yorliq}
+                    </button>
+                  )
+                })}
+              </div>
+              {katNarxlar.size === 0 && (
+                <p className="text-[11px] text-red-600 mt-1.5">Kamida bitta narxni tanlang</p>
+              )}
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">
+                Kelish narxi katalogga hech qachon chiqmaydi. Narxi kiritilmagan tovarda o‘sha narx ko‘rsatilmaydi.
+              </p>
+            </fieldset>
+
+            {/* Qo'shimcha */}
+            <fieldset className="space-y-2">
+              <legend className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Qo‘shimcha</legend>
+              {([
+                [katKategoriya, setKatKategoriya, 'Kategoriyalar bo‘yicha bo‘limlarga ajratish'],
+                [katQoldiq, setKatQoldiq, 'Ombordagi qoldiqni ko‘rsatish'],
+                [katShtrix, setKatShtrix, 'Shtrix-kodni ko‘rsatish'],
+              ] as const).map(([qiymat, ozgartir, matn]) => (
+                <label key={matn} className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input type="checkbox" checked={qiymat} onChange={e => ozgartir(e.target.checked)}
+                    className="w-4 h-4 rounded accent-red-600" />
+                  {/* Matn alohida elementda: aks holda globals.css dagi "faqat katakcha"
+                      qoidasi yorliqni 40px inline tugmaga aylantirib, qatorlar yopishadi */}
+                  <span>{matn}</span>
+                </label>
+              ))}
+            </fieldset>
+
+            <div>
+              <label htmlFor="katalog-izoh" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                Pastki eslatma <span className="font-normal text-gray-400">(ixtiyoriy)</span>
+              </label>
+              <input id="katalog-izoh" value={katIzoh} onChange={e => setKatIzoh(e.target.value)} maxLength={160}
+                placeholder="Masalan: Narxlar 1 haftaga amal qiladi"
+                className="w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500" />
+            </div>
+
+            {/* Yakun */}
+            <div className="rounded-xl bg-gray-50 dark:bg-neutral-800/50 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+              <b className="tabular-nums">{katalogTovarlari.length}</b> ta mahsulot ·
+              taxminan <b className="tabular-nums">{katalogSahifa}</b> sahifa A4
+              {katalogRasmsiz > 0 && (
+                <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  {katalogRasmsiz} tasida rasm yo‘q — o‘rnida bo‘sh joy chiqadi
+                </span>
+              )}
+              <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                Bosma oynasida «PDF sifatida saqlash»ni tanlab, mijozga Telegram orqali ham yuborish mumkin.
+              </span>
+            </div>
           </div>
         </Modal>
       )}
