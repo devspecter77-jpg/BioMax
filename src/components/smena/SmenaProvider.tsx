@@ -3,7 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
-import { OvozYozgich, mikrofonXatosi, mikrofonniOch, yozishQollanadimi } from '@/lib/ovoz-yozgich'
+import {
+  OvozYozgich, mikrofonXatosi, mikrofonlar as mikrofonlarniOl, mikrofonniOch, yozishQollanadimi, type Mikrofon,
+} from '@/lib/ovoz-yozgich'
 import {
   barchaSegmentlar, navbatHolati, navbatniQisqart, segmentFayli, segmentniOchir, urinishniBelgila, yetimlarniYop,
 } from '@/lib/ovoz-navbat'
@@ -48,6 +50,11 @@ interface SmenaKonteksti {
   tugat: () => Promise<void>
   rozilikBer: () => Promise<boolean>
   qaytaUlan: () => Promise<void>
+  /** Qurilmadagi mikrofonlar (kompyuterda bir nechta bo'lishi mumkin) */
+  mikrofonlar: Mikrofon[]
+  /** Tanlangan mikrofon; `null` — tizim standarti */
+  mikrofon: string | null
+  mikrofonniTanla: (id: string | null) => Promise<void>
 }
 
 const Kontekst = createContext<SmenaKonteksti | null>(null)
@@ -97,6 +104,11 @@ function sinovOraligi(kalit: string, standart: number): number {
   }
 }
 const bolakUzunligi = () => sinovOraligi('ovoz-bolak-ms', BOLAK_MS)
+/** Kuryer tanlagan mikrofon shu qurilmada eslab qolinadi */
+const MIKROFON_KALITI = 'ovoz-mikrofon'
+function saqlanganMikrofon(): string | null {
+  try { return localStorage.getItem(MIKROFON_KALITI) || null } catch { return null }
+}
 /** Telefon navbatining chegarasi (bayt) — sinovda kichraytiriladi: `ovoz-navbat-max`. */
 const navbatChegarasi = () => sinovOraligi('ovoz-navbat-max', NAVBAT_MAX_BAYT)
 
@@ -113,19 +125,33 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
   const [band, setBand] = useState(false)
   const [onlayn, setOnlayn] = useState(true)
   const [ekranYoniq, setEkranYoniq] = useState(false)
+  const [mikrofonlar, setMikrofonlar] = useState<Mikrofon[]>([])
+  const [mikrofon, setMikrofon] = useState<string | null>(null)
+  const mikrofonRef = useRef<string | null>(null)
+  useEffect(() => { mikrofonRef.current = saqlanganMikrofon(); setMikrofon(mikrofonRef.current) }, [])
 
   const yozgichRef = useRef<OvozYozgich | null>(null)
   const holatRef = useRef<YozuvKorinishi>('toxtatilgan')
   const offsetRef = useRef(0)
   const yuborishRef = useRef(false)
+  /** Yuborish band paytida yangi bo'lak tayyor bo'ldi — tugagach yana aylanadi */
+  const yanaYuborRef = useRef(false)
+  /** Holat o'zgarishini serverga darhol bildirish (pastda e'lon qilinadi) */
+  const pulsRef = useRef<() => void>(() => {})
   const darajaVaqtRef = useRef(0)
   const smenaIdRef = useRef<string | null>(null)
 
   const vaqt = useCallback(() => Date.now() + offsetRef.current, [])
 
   const holatniOrnat = useCallback((holat: YozuvKorinishi, xato?: string) => {
+    const oldingi = holatRef.current
     holatRef.current = holat
     setYozuv({ holat, xato })
+    // Mikrofon jim qolsa (yoki tiklansa) — administrator bir daqiqa kutmasin
+    if (oldingi !== holat && (holat === 'ovoz_yoq' || oldingi === 'ovoz_yoq')) pulsRef.current()
+    if (holat === 'ovoz_yoq' && oldingi !== 'ovoz_yoq') {
+      toast.error('Mikrofon ovoz bermayapti — yozuvlar jim chiqadi. Bosh sahifadagi ko‘rsatmaga qarang', { duration: 10_000 })
+    }
   }, [])
 
   const serverniOrnat = useCallback((j: SmenaServerHolati) => {
@@ -156,6 +182,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
     await navbatniQisqart(navbatChegarasi()).catch(() => 0)
     const y = new OvozYozgich(smenaId, {
       bolakMs: bolakUzunligi(), qismMs: QISM_MS, maxBayt: BOLAK_MAX_BAYT, bitreyt: BITREYT, vaqt,
+      qurilma: () => mikrofonRef.current,
     }, {
       holat: (h, xato) => holatniOrnat(h, xato),
       daraja: d => {
@@ -171,13 +198,17 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
     holatniOrnat('boshlanmoqda')
     await y.boshla(oqim)
     setEkranYoniq(y.ekranYoniq)
+    // Ruxsatdan keyin mikrofon nomlari ko'rinadi — tanlash ro'yxati uchun
+    void mikrofonlarniOl().then(setMikrofonlar)
   }, [holatniOrnat, vaqt])
 
   // ── Navbatni yuborish ──
 
-  const navbatniYubor = useCallback(async () => {
-    if (yuborishRef.current) return
+  const navbatniYubor = useCallback(async (): Promise<void> => {
+    // Band bo'lsa — joriy aylanish tugagach yana bir marta (oxirgi bo'lak kutib qolmasin)
+    if (yuborishRef.current) { yanaYuborRef.current = true; return }
     yuborishRef.current = true
+    yanaYuborRef.current = false
     try {
       const segmentlar = await barchaSegmentlar()
       for (const s of segmentlar) {
@@ -191,6 +222,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
         fd.append('tugadi', String(s.tugadi))
         fd.append('hozir', String(vaqt()))
         if (s.darajaSoni) fd.append('daraja', String(s.darajaYigindi / s.darajaSoni))
+        if (typeof s.darajaMax === 'number') fd.append('darajaMax', String(s.darajaMax))
         fd.append('audio', fayl, `bolak.${kengaytma(s.mimeType)}`)
         let r: Response
         try {
@@ -221,6 +253,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
       await navbatniQisqart(navbatChegarasi()).catch(() => 0)
       await navbatniYangila()
     }
+    if (yanaYuborRef.current) void navbatniYuborRef.current()
   }, [navbatniYangila, vaqt])
 
   const navbatniYuborRef = useRef(navbatniYubor)
@@ -253,8 +286,8 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
 
   const smenaId = server?.smena?.id ?? null
   useEffect(() => {
-    if (!kuryer || !smenaId) return
-    const puls = setInterval(async () => {
+    if (!kuryer || !smenaId) { pulsRef.current = () => {}; return }
+    const pulsYubor = async () => {
       const r = await fetch('/api/smena', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -268,9 +301,11 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
         await yozishniToxtat()
         toast.info('Smenangiz yakunlandi — ovoz yozish to‘xtadi')
       }
-    }, sinovOraligi('ovoz-puls-ms', PULS_MS))
+    }
+    pulsRef.current = () => { void pulsYubor() }
+    const puls = setInterval(() => { void pulsYubor() }, sinovOraligi('ovoz-puls-ms', PULS_MS))
     const ekran = setInterval(() => setEkranYoniq(!!yozgichRef.current?.ekranYoniq), 5_000)
-    return () => { clearInterval(puls); clearInterval(ekran) }
+    return () => { clearInterval(puls); clearInterval(ekran); pulsRef.current = () => {} }
   }, [kuryer, smenaId, serverniOrnat, yozishniToxtat])
 
   useEffect(() => {
@@ -330,7 +365,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
       // Ruxsat bo'lmasa smena ochilmaydi: ish vaqtida yozuv majburiy.
       let oqim: MediaStream
       try {
-        oqim = await mikrofonniOch()
+        oqim = await mikrofonniOch(mikrofonRef.current)
       } catch (e) {
         const x = mikrofonXatosi(e)
         holatniOrnat(x.holat, x.xato)
@@ -365,16 +400,28 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
     }
   }, [amal, band, yozishniToxtat])
 
+  // Mikrofon har safar YANGIDAN ochiladi: jim qolgan yoki boshqa qurilma
+  // tanlangan bo'lsa ham (joriy bo'lak saqlanib qoladi)
   const qaytaUlan = useCallback(async () => {
     const y = yozgichRef.current
-    if (y) { await y.qaytaUlan(); setEkranYoniq(y.ekranYoniq); return }
+    if (y) { await y.qaytaUlan(true); setEkranYoniq(y.ekranYoniq); return }
     if (smenaIdRef.current) await yozishniBoshla(smenaIdRef.current)
   }, [yozishniBoshla])
+
+  const mikrofonniTanla = useCallback(async (id: string | null) => {
+    mikrofonRef.current = id
+    setMikrofon(id)
+    try {
+      if (id) localStorage.setItem(MIKROFON_KALITI, id)
+      else localStorage.removeItem(MIKROFON_KALITI)
+    } catch { /* maxfiy rejim — faqat shu safar */ }
+    await qaytaUlan()
+  }, [qaytaUlan])
 
   return (
     <Kontekst.Provider value={{
       mavjud: kuryer, server, yozuv, daraja, navbat, yuborildi, rad, band, onlayn, ekranYoniq,
-      vaqt, boshla, tugat, rozilikBer, qaytaUlan,
+      vaqt, boshla, tugat, rozilikBer, qaytaUlan, mikrofonlar, mikrofon, mikrofonniTanla,
     }}>
       {children}
     </Kontekst.Provider>

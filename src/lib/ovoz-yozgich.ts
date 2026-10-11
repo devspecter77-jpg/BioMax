@@ -8,6 +8,11 @@
 // olsa oqim tugaydi — yozgich har 15 soniyada va ilovaga qaytilganda
 // mikrofonni qayta ochadi. Ekran o'chib qolmasligi uchun "wake lock" olinadi:
 // telefon qulflansa ko'p brauzerlar mikrofonni to'xtatadi.
+//
+// Mikrofon "ochiq, lekin jim" bo'lishi ham mumkin: tizimda o'chirilgan,
+// noto'g'ri qurilma tanlangan (quloqchin chiqarilgan), Windows'da mikrofon
+// yopiq. Bunda MediaRecorder baribir yozadi — faqat jimlikni. Shuning uchun
+// signal jonli kuzatiladi va `ovoz_yoq` holati darhol ko'rsatiladi.
 
 import { qismQosh, segmentOch, segmentYop } from './ovoz-navbat'
 import type { YozuvHolati } from './smena'
@@ -19,6 +24,8 @@ export interface YozgichSozlama {
   bitreyt: number
   /** Server vaqtiga moslangan soat */
   vaqt: () => number
+  /** Tanlangan mikrofon (`deviceId`); `null` — tizim standarti */
+  qurilma?: () => string | null
 }
 
 export interface YozgichTinglovchi {
@@ -43,12 +50,43 @@ function mimeTanla(): string {
   return MIME_TARTIBI.find(t => MediaRecorder.isTypeSupported(t)) ?? ''
 }
 
-/** Mikrofon — foydalanuvchi tugmani bosgan lahzada chaqirilsin (iOS talabi). */
-export function mikrofonniOch(): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
-  })
+const MIKROFON_SOZLAMASI = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+
+/**
+ * Mikrofon — foydalanuvchi tugmani bosgan lahzada chaqirilsin (iOS talabi).
+ * `qurilmaId` berilsa — o'sha mikrofon; u uzilgan bo'lsa (quloqchin
+ * chiqarilgan) tizim standartiga qaytiladi.
+ */
+export async function mikrofonniOch(qurilmaId?: string | null): Promise<MediaStream> {
+  if (qurilmaId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: { ...MIKROFON_SOZLAMASI, deviceId: { exact: qurilmaId } } })
+    } catch (e) {
+      const nom = (e as DOMException | undefined)?.name
+      if (nom !== 'OverconstrainedError' && nom !== 'NotFoundError') throw e
+    }
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: MIKROFON_SOZLAMASI })
 }
+
+export interface Mikrofon { id: string; nomi: string }
+
+/** Qurilmadagi mikrofonlar (nomlari faqat ruxsat berilgandan keyin ko'rinadi). */
+export async function mikrofonlar(): Promise<Mikrofon[]> {
+  try {
+    const hammasi = await navigator.mediaDevices.enumerateDevices()
+    return hammasi
+      .filter(q => q.kind === 'audioinput' && q.deviceId && q.deviceId !== 'default' && q.deviceId !== 'communications')
+      .map((q, i) => ({ id: q.deviceId, nomi: q.label || `Mikrofon ${i + 1}` }))
+  } catch {
+    return []
+  }
+}
+
+/** Tirik mikrofon jim xonada ham shovqin beradi — cho'qqi bundan (−100 dBFS) past bo'lmaydi. */
+const SIGNALSIZ = 1e-5
+/** Shuncha uzluksiz signalsizlik — mikrofon ovoz bermayapti. */
+const SIGNALSIZ_MS = 8_000
 
 export function mikrofonXatosi(e: unknown): { holat: YozuvHolati; xato: string } {
   const nom = (e as DOMException | undefined)?.name
@@ -75,6 +113,14 @@ export class OvozYozgich {
   private audioCtx: AudioContext | null = null
   private darajaYigindi = 0
   private darajaSoni = 0
+  /** Joriy qismdagi eng baland lahza */
+  private darajaMax = 0
+  /** Signal qachondan beri yo'q (`null` — signal bor yoki noma'lum) */
+  private jimBoshlandi: number | null = null
+  /** "Mikrofon ovoz bermayapti" holati ko'rsatilgan */
+  private ovozYoq = false
+  /** Mikrofon almashtirilmoqda — to'xtagan yozgich yangi bo'lak ochmasin */
+  private almashmoqda = false
   /** IndexedDB'ga yozishlar ketma-ketligi — qismlar tartibi buzilmasin */
   private zanjir: Promise<void> = Promise.resolve()
   private ekranQulfi: WakeLockSentinel | null = null
@@ -97,10 +143,31 @@ export class OvozYozgich {
     else await this.ulan()
   }
 
-  /** Foydalanuvchi "Qayta ulash"ni bosganda. */
-  async qaytaUlan(): Promise<boolean> {
+  /**
+   * Foydalanuvchi "Qayta ulash"ni bosganda. `majburiy` — mikrofon ochiq
+   * bo'lsa ham yangidan ochiladi (jim mikrofon yoki boshqa qurilma tanlandi);
+   * joriy bo'lak saqlanib qoladi.
+   */
+  async qaytaUlan(majburiy = false): Promise<boolean> {
     if (!this.faol) return false
-    if (this.oqim) return true
+    if (this.oqim && !majburiy) return true
+    if (this.oqim) {
+      this.almashmoqda = true
+      try {
+        if (this.aylanish) { clearTimeout(this.aylanish); this.aylanish = null }
+        const y = this.yozgich
+        if (y && y.state !== 'inactive') {
+          await new Promise<void>(res => {
+            y.addEventListener('stop', () => res(), { once: true })
+            try { y.stop() } catch { res() }
+          })
+        }
+        this.oqimniYop()
+        await this.zanjir
+      } finally {
+        this.almashmoqda = false
+      }
+    }
     return this.ulan()
   }
 
@@ -131,7 +198,7 @@ export class OvozYozgich {
     }
     this.ulanmoqda = true
     try {
-      const oqim = await mikrofonniOch()
+      const oqim = await mikrofonniOch(this.s.qurilma?.() ?? null)
       if (!this.faol) {
         oqim.getTracks().forEach(tr => tr.stop())
         return false
@@ -185,13 +252,16 @@ export class OvozYozgich {
       if (!e.data || e.data.size === 0) return
       const n = qismN++
       bayt += e.data.size
+      // Daraja o'lchanmagan bo'lsa (ovoz konteksti to'xtagan) — noma'lum, "jim" emas
       const daraja = this.darajaSoni ? this.darajaYigindi / this.darajaSoni : null
+      const darajaMax = this.darajaSoni ? this.darajaMax : null
       this.darajaYigindi = 0
       this.darajaSoni = 0
+      this.darajaMax = 0
       const tugadi = this.s.vaqt()
       const blob = e.data
       this.zanjir = this.zanjir
-        .then(async () => qismQosh(segId, n, await blob.arrayBuffer(), tugadi, daraja))
+        .then(async () => qismQosh(segId, n, await blob.arrayBuffer(), tugadi, daraja, darajaMax))
         .catch(err => console.warn('[ovoz] qism saqlanmadi', err))
       // Brauzer past bitreytni qo'llamasa fayl katta bo'ladi — muddatidan oldin yopamiz
       if (bayt >= this.s.maxBayt && yozgich.state === 'recording') this.aylantir()
@@ -203,7 +273,7 @@ export class OvozYozgich {
         .then(() => this.t.bolakTayyor())
         .catch(err => console.warn('[ovoz] bo‘lak yopilmadi', err))
       if (this.yozgich === yozgich) this.yozgich = null
-      if (this.faol && this.oqimTirikmi()) this.yangiBolak()
+      if (this.faol && !this.almashmoqda && this.oqimTirikmi()) this.yangiBolak()
     }
     yozgich.onerror = () => {
       if (yozgich.state !== 'inactive') {
@@ -219,7 +289,9 @@ export class OvozYozgich {
       this.t.holat('uzilgan', (e as Error)?.message || 'Yozuv boshlanmadi')
       return
     }
-    this.t.holat('yozilmoqda')
+    // Yangi bo'lak jim mikrofon holatini o'chirib yubormasin
+    if (this.ovozYoq) this.t.holat('ovoz_yoq', 'Mikrofondan ovoz kelmayapti')
+    else this.t.holat('yozilmoqda')
     if (this.aylanish) clearTimeout(this.aylanish)
     this.aylanish = setTimeout(() => this.aylantir(), this.s.bolakMs)
   }
@@ -276,24 +348,70 @@ export class OvozYozgich {
       ctx.createMediaStreamSource(oqim).connect(analizator)
       const buf = new Float32Array(analizator.fftSize)
       this.audioCtx = ctx
-      if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
+      if (ctx.state === 'suspended') {
+        // Brauzer foydalanuvchi bosmaguncha ovoz kontekstini to'xtatib turishi mumkin
+        // (sahifa qayta yuklanganda) — birinchi bosishda qayta yoqiladi
+        const uygot = () => { void ctx.resume().catch(() => {}) }
+        uygot()
+        document.addEventListener('pointerdown', uygot, { once: true, capture: true })
+        document.addEventListener('keydown', uygot, { once: true, capture: true })
+      }
       this.darajaTaymer = setInterval(() => {
+        // Kontekst ishlamasa analizator nol beradi — bu "jimlik" emas, noma'lum
+        if (ctx.state !== 'running') { this.signalniTekshir(null); return }
         analizator.getFloatTimeDomainData(buf)
         let yig = 0
-        for (let i = 0; i < buf.length; i++) yig += buf[i] * buf[i]
+        let cho = 0
+        for (let i = 0; i < buf.length; i++) {
+          yig += buf[i] * buf[i]
+          const a = Math.abs(buf[i])
+          if (a > cho) cho = a
+        }
         const d = Math.min(1, Math.sqrt(yig / buf.length) * 4)
         this.darajaYigindi += d
         this.darajaSoni += 1
+        if (d > this.darajaMax) this.darajaMax = d
         this.t.daraja(d)
+        this.signalniTekshir(cho)
       }, 250)
     } catch {
       // Ko'rsatkich shart emas — yozuv baribir davom etadi
     }
   }
 
+  /** Brauzer manba ma'lumot bermayotganini aytgan (tizim mikrofonni o'chirgan). */
+  private trekJimmi(): boolean {
+    return !!this.oqim?.getAudioTracks().some(tr => tr.muted)
+  }
+
+  /**
+   * Mikrofon signal beryaptimi. `cho` — so'nggi 250 ms dagi cho'qqi,
+   * `null` — o'lchab bo'lmadi (bunda ogohlantirilmaydi: yolg'on signal
+   * kuryerni chalg'itadi). Signal qaytsa holat o'zi tiklanadi.
+   */
+  private signalniTekshir(cho: number | null): void {
+    const jim = this.trekJimmi() || (cho !== null && cho < SIGNALSIZ)
+    if (!jim) {
+      this.jimBoshlandi = null
+      if (this.ovozYoq && cho !== null) {
+        this.ovozYoq = false
+        if (this.yozyaptimi) this.t.holat('yozilmoqda')
+      }
+      return
+    }
+    const hozir = Date.now()
+    this.jimBoshlandi ??= hozir
+    if (!this.ovozYoq && this.yozyaptimi && hozir - this.jimBoshlandi >= SIGNALSIZ_MS) {
+      this.ovozYoq = true
+      this.t.holat('ovoz_yoq', 'Mikrofondan ovoz kelmayapti')
+    }
+  }
+
   private darajaniYop(): void {
     if (this.darajaTaymer) { clearInterval(this.darajaTaymer); this.darajaTaymer = null }
     if (this.audioCtx) { void this.audioCtx.close().catch(() => {}); this.audioCtx = null }
+    this.jimBoshlandi = null
+    this.ovozYoq = false
     this.t.daraja(0)
   }
 

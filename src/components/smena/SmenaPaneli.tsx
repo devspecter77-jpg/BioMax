@@ -263,6 +263,14 @@ function YozuvHolatiQatori() {
       matn: 'Saytni Google Chrome (Android) yoki Safari’ning yangi versiyasida (iPhone) oching.',
       xavfli: true,
     },
+    ovoz_yoq: {
+      sarlavha: 'Mikrofon ovoz bermayapti',
+      matn: 'Yozuv ketyapti, lekin mikrofondan ovoz kelmayapti — bu yozuvlarda hech narsa eshitilmaydi. '
+        + 'Tekshiring: mikrofon tizimda o‘chirilmaganmi (telefon — ovozsiz rejim, kompyuter — Windows sozlamalari → Maxfiylik → Mikrofon), '
+        + 'quloqchin ulangan bo‘lsa — u ishlayaptimi. Pastda boshqa mikrofonni tanlang yoki «Qayta ulash»ni bosing va gapirib ko‘ring.',
+      tugma: 'Qayta ulash',
+      xavfli: true,
+    },
     joy_yoq: {
       sarlavha: 'Telefonda joy tugayapti',
       matn: 'Yuborilmagan yozuvlar juda ko‘p. Internetga ulaning — yuborilgach yozuv davom etadi.',
@@ -284,10 +292,17 @@ function YozuvHolatiQatori() {
         : 'bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-300'}`}
     >
       <p className="flex items-center gap-2 text-sm font-semibold">
-        {holat === 'ruxsat_yoq' ? <MicOff size={16} aria-hidden /> : <AlertTriangle size={16} aria-hidden />}
+        {holat === 'ruxsat_yoq' || holat === 'ovoz_yoq' ? <MicOff size={16} aria-hidden /> : <AlertTriangle size={16} aria-hidden />}
         {y.sarlavha}
       </p>
       <p className="mt-1 text-xs leading-relaxed">{y.matn}</p>
+      {holat === 'ovoz_yoq' && (
+        <div className="mt-2.5 flex items-center justify-between gap-3 rounded-lg bg-white/70 dark:bg-neutral-900/50 px-2.5 py-2">
+          <span className="text-xs">Mikrofon darajasi — gapirganda to‘lishi kerak:</span>
+          <DarajaKorsatkichi daraja={s.daraja} faol />
+        </div>
+      )}
+      {(holat === 'ovoz_yoq' || holat === 'uzilgan') && <MikrofonTanlash />}
       {y.tugma && s.server?.smena && (
         <button
           type="button"
@@ -298,6 +313,29 @@ function YozuvHolatiQatori() {
         </button>
       )}
     </div>
+  )
+}
+
+/**
+ * Qurilmada bir nechta mikrofon bo'lsa (kompyuter, quloqchin) — tanlash.
+ * Tanlov shu qurilmada eslab qolinadi; tanlanganda mikrofon darhol
+ * almashadi, joriy yozuv yo'qolmaydi.
+ */
+function MikrofonTanlash() {
+  const s = useSmena()
+  if (!s || s.mikrofonlar.length < 2) return null
+  return (
+    <label className="mt-2.5 flex flex-col gap-1 text-xs font-medium">
+      Mikrofon:
+      <select
+        value={s.mikrofon ?? ''}
+        onChange={e => void s.mikrofonniTanla(e.target.value || null)}
+        className="w-full rounded-lg border border-current/25 bg-white dark:bg-neutral-900 px-2.5 py-2 text-xs text-gray-900 dark:text-gray-100"
+      >
+        <option value="">Tizim standarti</option>
+        {s.mikrofonlar.map(m => <option key={m.id} value={m.id}>{m.nomi}</option>)}
+      </select>
+    </label>
   )
 }
 
@@ -330,7 +368,9 @@ export function SmenaIndikator() {
           </span>
         )}
         <span className="truncate">
-          {muammo ? 'Ovoz yozuvi to‘xtagan — tuzatish uchun bosing' : 'Ovoz yozilmoqda'}
+          {!muammo ? 'Ovoz yozilmoqda'
+            : s.yozuv.holat === 'ovoz_yoq' ? 'Mikrofon ovoz bermayapti — tuzatish uchun bosing'
+            : 'Ovoz yozuvi to‘xtagan — tuzatish uchun bosing'}
         </span>
       </span>
       <span className="shrink-0 font-mono tabular-nums">

@@ -8,7 +8,8 @@ import {
 import { useConfirm } from '@/components/ConfirmProvider'
 import SmenaBelgisi from '@/components/smena/SmenaBelgisi'
 import {
-  SAQLASH_VARIANTLARI, YOZUV_HOLATI_MATNI, davomiylikMatni, hajmMatni, soatMatni, toshkentKuni,
+  SAQLASH_VARIANTLARI, YOZUV_HOLATI_MATNI, bolakOvozi, davomiylikMatni, hajmMatni, soatMatni, toshkentKuni,
+  type BolakOvozi,
 } from '@/lib/smena'
 import type { SmenaXulosasi, YozuvMalumoti } from '@/lib/smena-server'
 
@@ -30,8 +31,15 @@ interface Javob {
   adminmi: boolean
 }
 
-/** Shundan past o'rtacha balandlik — bo'lakda deyarli ovoz yo'q. */
-const JIM_CHEGARA = 0.03
+const ovozi = (y: YozuvMalumoti): BolakOvozi => bolakOvozi(y.daraja, y.darajaMax)
+
+/** Vaqt chizig'idagi rang: ovozli — to'q, jim — och, mikrofon o'lik — sariq. */
+const CHIZIQ_RANGI: Record<BolakOvozi, string> = {
+  ovozli: 'bg-emerald-500',
+  nomalum: 'bg-emerald-500',
+  jim: 'bg-emerald-300/70 dark:bg-emerald-800',
+  ovozsiz: 'bg-amber-400',
+}
 
 const OYLAR = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr']
 const HAFTA = ['yakshanba', 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba']
@@ -167,7 +175,11 @@ export default function XodimSmenaPanel({ xodimId }: { xodimId: string }) {
   )
 }
 
+/** Neon bepul tarifi ~0,5 GB — bundan katta chegara bazani to'ldirib, ERP'ni to'xtatishi mumkin. */
+const XAVFSIZ_CHEGARA_MB = 250
+
 function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => Promise<void> }) {
+  const confirm = useConfirm()
   const [tekshirilmoqda, setTekshirilmoqda] = useState(false)
   const [kun, setKun] = useState(javob.saqlashKun)
   useEffect(() => { setKun(javob.saqlashKun) }, [javob.saqlashKun])
@@ -176,6 +188,16 @@ function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => P
 
   async function chegaraniSaqla(yangi: number) {
     const eski = chegara
+    if (yangi > XAVFSIZ_CHEGARA_MB && yangi > eski) {
+      const ok = await confirm({
+        title: `Chegara ${yangi >= 1000 ? `${yangi / 1000} GB` : `${yangi} MB`}?`,
+        message: 'Ovozlar shu ma’lumotlar bazasida saqlanadi. Neon bepul tarifida baza ~0,5 GB — chegara undan katta bo‘lsa, '
+          + 'baza to‘lib qolib, kassa va butun ERP yozishdan to‘xtaydi. Faqat Neon’da pullik tarif (yetarli joy) bo‘lsa oshiring.',
+        confirmText: 'Pullik tarif — oshirish',
+        danger: true,
+      })
+      if (!ok) return
+    }
     setChegara(yangi)
     const r = await fetch('/api/ovoz-sozlama', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bazaChegaraMb: yangi }),
@@ -400,7 +422,7 @@ function VaqtChizigi({ smena: s }: { smena: SmenaXulosasi }) {
       <div className="relative h-3 rounded-full bg-gray-100 dark:bg-neutral-800 overflow-hidden" role="img"
         aria-label={`Smenaning ${s.foiz}% qismi yozilgan, ${s.boshliqlar.length} ta uzilish`}>
         {(s.yozuvlar ?? []).map(y => (
-          <span key={y.id} className={`absolute inset-y-0 ${(y.daraja ?? 1) < JIM_CHEGARA ? 'bg-emerald-300/70 dark:bg-emerald-800' : 'bg-emerald-500'}`} style={joy(y.boshlandi, y.tugadi)} />
+          <span key={y.id} className={`absolute inset-y-0 ${CHIZIQ_RANGI[ovozi(y)]}`} style={joy(y.boshlandi, y.tugadi)} />
         ))}
         {s.boshliqlar.map(b => (
           <span key={b.dan} className="absolute inset-y-0 bg-red-400/80" style={joy(b.dan, b.gacha)} />
@@ -416,6 +438,7 @@ function VaqtChizigi({ smena: s }: { smena: SmenaXulosasi }) {
           {s.boshliqlar.length > 4 && ` va yana ${s.boshliqlar.length - 4} ta`}
         </p>
       )}
+      <OvozsizOgohlantirish yozuvlar={s.yozuvlar ?? []} />
     </div>
   )
 }
@@ -426,29 +449,60 @@ function Pleer({ xodimId, yozuvlar }: { xodimId: string; yozuvlar: YozuvMalumoti
   const [joriy, setJoriy] = useState<number | null>(null)
   const [ketma, setKetma] = useState(true)
   const [jimniOtkaz, setJimniOtkaz] = useState(true)
+  const [xato, setXato] = useState<string | null>(null)
   const manzil = (y: YozuvMalumoti) => `/api/xodimlar/${xodimId}/ovozlar/${y.id}`
-  const jimmi = (y: YozuvMalumoti) => y.daraja !== null && y.daraja < JIM_CHEGARA
+  // Faqat butun bo'lak davomida eshitiladigan hech narsa bo'lmasa o'tkaziladi
+  const otkazilsinmi = (y: YozuvMalumoti) => { const o = ovozi(y); return o === 'jim' || o === 'ovozsiz' }
 
   useEffect(() => {
     const a = audioRef.current
     if (joriy === null || !a) return
+    setXato(null)
     a.src = manzil(yozuvlar[joriy])
-    void a.play().catch(() => {})
+    a.play().catch((e: DOMException) => {
+      // Avtoijro taqiqi — foydalanuvchi pleerdagi tugmani o'zi bosadi; boshqasi haqiqiy xato
+      if (e?.name !== 'NotAllowedError' && e?.name !== 'AbortError') {
+        setXato('Bu bo‘lakni o‘ynatib bo‘lmadi — yuklab olib tinglang yoki sahifani Chrome’da oching')
+      }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joriy])
 
   function keyingisi() {
     if (!ketma || joriy === null) return
     let i = joriy + 1
-    while (i < yozuvlar.length && jimniOtkaz && jimmi(yozuvlar[i])) i++
+    while (i < yozuvlar.length && jimniOtkaz && otkazilsinmi(yozuvlar[i])) i++
     if (i < yozuvlar.length) setJoriy(i)
+    else if (i > joriy + 1) toast.info('Qolgan bo‘laklarda ovoz yo‘q — ular o‘tkazib yuborildi')
+  }
+
+  /** Pleer xatosi: tarmoq, format yoki o'chirilgan yozuv */
+  function pleerXatosi() {
+    const kod = audioRef.current?.error?.code
+    setXato(kod === 4
+      ? 'Brauzer bu formatni o‘ynata olmaydi — yuklab olib tinglang yoki Chrome’da oching'
+      : kod === 2
+        ? 'Internet uzildi — qayta bosing'
+        : 'Bo‘lak yuklanmadi (saqlash muddati o‘tgan bo‘lishi mumkin)')
   }
 
   const y = joriy !== null ? yozuvlar[joriy] : null
+  const yOvozi = y ? ovozi(y) : null
   return (
     <div className="space-y-2">
       <div className="rounded-xl bg-gray-50 dark:bg-neutral-800/50 p-2.5 space-y-2">
-        <audio ref={audioRef} controls preload="none" className="w-full h-10" onEnded={keyingisi} />
+        <audio ref={audioRef} controls preload="none" className="w-full h-10" onEnded={keyingisi} onError={pleerXatosi} />
+        {xato && (
+          <p role="alert" className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-400">
+            <AlertTriangle size={13} className="shrink-0" aria-hidden /> {xato}
+          </p>
+        )}
+        {!xato && yOvozi === 'ovozsiz' && (
+          <p className="flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+            <AlertTriangle size={13} className="shrink-0" aria-hidden />
+            Bu bo‘lakda ovoz yo‘q — yozilgan paytda kuryer mikrofoni signal bermagan (o‘chirilgan yoki boshqa qurilma tanlangan).
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-400">
           <span className="inline-flex items-center gap-1.5">
             <Volume2 size={13} aria-hidden />
@@ -468,7 +522,8 @@ function Pleer({ xodimId, yozuvlar }: { xodimId: string; yozuvlar: YozuvMalumoti
       </div>
       <ul className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-neutral-800 divide-y divide-gray-100 dark:divide-neutral-800">
         {yozuvlar.map((b, i) => {
-          const jim = jimmi(b)
+          const ov = ovozi(b)
+          const jim = ov === 'jim' || ov === 'ovozsiz'
           const tanlangan = i === joriy
           return (
             <li key={b.id} className={`flex items-center gap-2 px-2.5 py-1.5 ${tanlangan ? 'bg-red-50 dark:bg-red-950/30' : ''}`}>
@@ -480,10 +535,14 @@ function Pleer({ xodimId, yozuvlar }: { xodimId: string; yozuvlar: YozuvMalumoti
               <span className={`flex-1 min-w-0 text-xs tabular-nums ${jim ? 'text-gray-400 dark:text-gray-600' : 'text-gray-800 dark:text-gray-200'}`}>
                 {soatMatni(b.boshlandi)}–{soatMatni(b.tugadi)}
                 <span className="text-gray-400"> · {davomiylikMatni(b.davomiylikMs, true)}</span>
-                {jim && <span className="ml-1.5 rounded bg-gray-100 dark:bg-neutral-800 px-1 text-[10px]">jim</span>}
+                {ov === 'jim' && <span className="ml-1.5 rounded bg-gray-100 dark:bg-neutral-800 px-1 text-[10px]">jim</span>}
+                {ov === 'ovozsiz' && (
+                  <span className="ml-1.5 rounded bg-amber-100 dark:bg-amber-950/50 px-1 text-[10px] font-medium text-amber-800 dark:text-amber-300"
+                    title="Mikrofon signal bermagan — bo‘lakda hech narsa eshitilmaydi">ovoz yo‘q</span>
+                )}
               </span>
               <span className="hidden sm:block w-16 h-1.5 rounded-full bg-gray-100 dark:bg-neutral-800 overflow-hidden" aria-hidden>
-                <span className="block h-full bg-emerald-500" style={{ width: `${Math.min(100, Math.round((b.daraja ?? 0) * 250))}%` }} />
+                <span className="block h-full bg-emerald-500" style={{ width: `${Math.min(100, Math.round((b.darajaMax ?? b.daraja ?? 0) * (b.darajaMax !== null ? 120 : 250)))}%` }} />
               </span>
               <a href={`${manzil(b)}?yuklab=1`} aria-label={`${soatMatni(b.boshlandi)} dagi bo‘lakni yuklab olish`}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
@@ -494,5 +553,26 @@ function Pleer({ xodimId, yozuvlar }: { xodimId: string; yozuvlar: YozuvMalumoti
         })}
       </ul>
     </div>
+  )
+}
+
+/**
+ * Mikrofon signal bermagan oraliqlar — ular yozilgan, lekin jim: tinglaganda
+ * "ovoz chiqmayapti" deb o'ylanmasin, sababi aniq ko'rinsin.
+ */
+function OvozsizOgohlantirish({ yozuvlar }: { yozuvlar: YozuvMalumoti[] }) {
+  const ovozsiz = yozuvlar.filter(y => ovozi(y) === 'ovozsiz')
+  if (ovozsiz.length === 0) return null
+  const hammasi = ovozsiz.length === yozuvlar.length
+  const ms = ovozsiz.reduce((a, y) => a + y.davomiylikMs, 0)
+  return (
+    <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+      <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
+      <span>
+        {hammasi ? 'Bu smenada kuryer mikrofoni umuman signal bermagan' : `Mikrofon signal bermagan: ${davomiylikMatni(ms)}`}
+        {' '}— yozuvlar jim. Sabab: kuryer qurilmasida mikrofon o‘chirilgan yoki noto‘g‘ri tanlangan.
+        Kuryer panelida bu endi darhol ogohlantiriladi.
+      </span>
+    </p>
   )
 }

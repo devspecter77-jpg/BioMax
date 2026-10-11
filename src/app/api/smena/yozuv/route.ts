@@ -64,8 +64,14 @@ export async function POST(req: NextRequest) {
     const farq = Number.isFinite(mijozVaqti) && Math.abs(hozir - mijozVaqti) > 5_000 ? hozir - mijozVaqti : 0
     const boshlandi = Number(fd.get('boshlandi')) + farq
     const tugadi = Number(fd.get('tugadi')) + farq
-    const darajaXom = Number(fd.get('daraja'))
-    const daraja = Number.isFinite(darajaXom) && darajaXom >= 0 ? Math.min(1, darajaXom) : null
+    // Bo'sh maydon `Number(null)` = 0 bo'lib "jim" deb yozilmasin — yo'q bo'lsa null
+    const darajaOqi = (k: string) => {
+      const x = fd.get(k)
+      const n = typeof x === 'string' && x.trim() !== '' ? Number(x) : NaN
+      return Number.isFinite(n) && n >= 0 ? Math.min(1, n) : null
+    }
+    const daraja = darajaOqi('daraja')
+    const darajaMax = darajaOqi('darajaMax')
 
     if (!smenaId || !Number.isFinite(boshlandi) || !Number.isFinite(tugadi) || tugadi <= boshlandi) {
       return NextResponse.json({ xato: 'Bo‘lak vaqti noto‘g‘ri', kod: 'notogri' }, { status: 400 })
@@ -107,7 +113,7 @@ export async function POST(req: NextRequest) {
       const yozuv = await prisma.ovozYozuv.create({
         data: {
           smenaId, xodimId: xodim.id, boshlandi: boshlandiSana, tugadi: new Date(tugadi),
-          davomiylikMs, hajm: baytlar.byteLength, mimeType, kalit, daraja, ombor: turi,
+          davomiylikMs, hajm: baytlar.byteLength, mimeType, kalit, daraja, darajaMax, ombor: turi,
           ...(turi === 'baza' ? { fayl: { create: { data: baytlar } } } : {}),
         },
         select: { id: true },

@@ -59,9 +59,10 @@ export type YozuvHolati =
   | 'qollanmaydi'  // brauzer ovoz yozishni bilmaydi
   | 'joy_yoq'      // qurilmada yuborilmagan yozuvlar juda ko'p
   | 'ombor_yoq'    // serverda ovoz ombori sozlanmagan
+  | 'ovoz_yoq'     // yozuv ketyapti, lekin mikrofondan ovoz kelmayapti (o'chirilgan/noto'g'ri qurilma)
 
 export const YOZUV_HOLATLARI: readonly YozuvHolati[] = [
-  'yozilmoqda', 'uzilgan', 'ruxsat_yoq', 'qollanmaydi', 'joy_yoq', 'ombor_yoq',
+  'yozilmoqda', 'uzilgan', 'ruxsat_yoq', 'qollanmaydi', 'joy_yoq', 'ombor_yoq', 'ovoz_yoq',
 ]
 
 export function yozuvHolatimi(q: unknown): q is YozuvHolati {
@@ -75,6 +76,33 @@ export const YOZUV_HOLATI_MATNI: Record<YozuvHolati, string> = {
   qollanmaydi: 'Brauzer ovoz yozolmaydi',
   joy_yoq: 'Telefonda joy tugadi',
   ombor_yoq: 'Ovoz ombori sozlanmagan',
+  ovoz_yoq: 'Mikrofon ovoz bermayapti',
+}
+
+/**
+ * Bo'lakdagi eng baland lahza (`darajaMax`, 0..1) shundan past bo'lsa —
+ * butun bo'lakda eshitiladigan hech narsa yo'q. O'rtacha daraja bunga
+ * yaramaydi: 3 daqiqalik jimlik ichidagi 10 soniyalik suhbat o'rtachani
+ * pastga tortadi va bo'lak "jim" deb o'tkazib yuborilardi.
+ */
+export const JIM_MAX_CHEGARA = 0.06
+/** Shundan past — mikrofon umuman signal bermagan (o'chirilgan, noto'g'ri qurilma). */
+export const OVOZSIZ_CHEGARA = 0.002
+
+export type BolakOvozi = 'ovozli' | 'jim' | 'ovozsiz' | 'nomalum'
+
+/**
+ * Bo'lakda ovoz bormi. Yangi bo'laklar `darajaMax` bo'yicha, eskilari
+ * (faqat o'rtacha saqlangan) — o'rtacha bo'yicha, ehtiyotkor chegarada.
+ */
+export function bolakOvozi(daraja: number | null, darajaMax: number | null): BolakOvozi {
+  if (darajaMax !== null) {
+    if (darajaMax < OVOZSIZ_CHEGARA) return 'ovozsiz'
+    return darajaMax < JIM_MAX_CHEGARA ? 'jim' : 'ovozli'
+  }
+  if (daraja === null) return 'nomalum'
+  if (daraja < OVOZSIZ_CHEGARA) return 'ovozsiz'
+  return daraja < 0.03 ? 'jim' : 'ovozli'
 }
 
 // ─── Vaqt (Toshkent, UTC+5, yozgi vaqt yo'q) ─────────────────────────────────

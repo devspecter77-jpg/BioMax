@@ -26,6 +26,8 @@ export interface NavbatSegment {
   bolakSoni: number
   darajaYigindi: number
   darajaSoni: number
+  /** Bo'lakdagi eng baland lahza 0..1 (eski ilova versiyasi bo'laklarida yo'q) */
+  darajaMax?: number
   urinish: number
   keyingiUrinish: number
   xato?: string
@@ -82,7 +84,9 @@ export async function segmentOch(s: Pick<NavbatSegment, 'segId' | 'smenaId' | 'b
 }
 
 /** Bo'lakka yangi qism qo'shadi (MediaRecorder har 10 soniyada beradi). */
-export async function qismQosh(segId: string, n: number, data: ArrayBuffer, tugadi: number, daraja: number | null): Promise<void> {
+export async function qismQosh(
+  segId: string, n: number, data: ArrayBuffer, tugadi: number, daraja: number | null, darajaMax: number | null,
+): Promise<void> {
   const t = (await db()).transaction([SEG, BOL], 'readwrite')
   t.objectStore(BOL).put({ segId, n, data })
   const ss = t.objectStore(SEG)
@@ -94,6 +98,7 @@ export async function qismQosh(segId: string, n: number, data: ArrayBuffer, tuga
     s.bolakSoni = Math.max(s.bolakSoni, n + 1)
     s.tugadi = Math.max(s.tugadi, tugadi)
     if (daraja !== null) { s.darajaYigindi += daraja; s.darajaSoni += 1 }
+    if (darajaMax !== null) s.darajaMax = Math.max(s.darajaMax ?? 0, darajaMax)
     ss.put(s)
   }
   await tugashi(t)

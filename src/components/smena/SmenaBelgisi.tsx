@@ -39,6 +39,14 @@ export default function SmenaBelgisi({ smena, bosh }: { smena: SmenaHolatQisqa |
       </span>
     )
   }
+  if (smena.yozuvHolati === 'ovoz_yoq') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400"
+        title="Yozuv ketyapti, lekin kuryer mikrofonidan ovoz kelmayapti — yozuvlar jim chiqadi">
+        <MicOff size={11} aria-hidden /> Ishda · mikrofon jim
+      </span>
+    )
+  }
   if (smena.yozuvHolati && smena.yozuvHolati !== 'yozilmoqda') {
     return (
       <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-400"

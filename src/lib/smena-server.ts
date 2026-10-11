@@ -114,6 +114,8 @@ export interface YozuvMalumoti {
   davomiylikMs: number
   hajm: number
   daraja: number | null
+  /** Bo'lakdagi eng baland lahza — "jim"ni shu bilan aniqlaymiz (eski yozuvlarda null) */
+  darajaMax: number | null
   mimeType: string
 }
 
@@ -136,7 +138,7 @@ export interface SmenaXulosasi {
 }
 
 const YOZUV_SELECT = {
-  id: true, boshlandi: true, tugadi: true, davomiylikMs: true, hajm: true, daraja: true, mimeType: true,
+  id: true, boshlandi: true, tugadi: true, davomiylikMs: true, hajm: true, daraja: true, darajaMax: true, mimeType: true,
 } as const
 
 /** Xodimning `dan` dan keyin boshlangan (va hali ochiq) smenalari — eng yangisi birinchi. */
@@ -182,6 +184,7 @@ export async function smenalarXulosasi(
               davomiylikMs: y.davomiylikMs,
               hajm: y.hajm,
               daraja: y.daraja,
+              darajaMax: y.darajaMax,
               mimeType: y.mimeType,
             })),
           }

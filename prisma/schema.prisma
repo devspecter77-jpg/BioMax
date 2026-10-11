@@ -1657,6 +1657,11 @@ model OvozYozuv {
   ombor         String   @default("baza")
   /** O'rtacha ovoz balandligi 0..1 — jim bo'laklarni ajratib ko'rsatish uchun */
   daraja        Float?
+  /**
+   * Bo'lakdagi eng baland lahza 0..1. "Jim"ni shu bilan aniqlaymiz: o'rtacha
+   * daraja qisqa suhbatni jimlik ichida yo'qotib qo'yadi. Eski yozuvlarda bo'sh.
+   */
+  darajaMax     Float?
   yaratilgan    DateTime @default(now())
 
   smena         Smena    @relation(fields: [smenaId], references: [id], onDelete: Cascade)
