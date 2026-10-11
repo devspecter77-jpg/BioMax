@@ -10,8 +10,8 @@ import {
   barchaSegmentlar, navbatHolati, navbatniQisqart, segmentFayli, segmentniOchir, urinishniBelgila, yetimlarniYop,
 } from '@/lib/ovoz-navbat'
 import {
-  BITREYT, BOLAK_MAX_BAYT, BOLAK_MS, NAVBAT_MAX_BAYT, PULS_MS, QISM_MS, kengaytma, smenaRolimi,
-  type YozuvHolati,
+  BITREYT, BOLAK_MAX_BAYT, BOLAK_MS, JONLI_BOLAK_MS, JONLI_TEKSHIR_MS, NAVBAT_MAX_BAYT, PULS_MS, QISM_MS,
+  kengaytma, smenaRolimi, type YozuvHolati,
 } from '@/lib/smena'
 
 // Kuryerning ish smenasi va ovoz yozuvi — butun panel darajasida.
@@ -24,6 +24,8 @@ export interface SmenaServerHolati {
   mavjud: true
   rozilik: boolean
   omborTayyor: boolean
+  /** Administrator hozir smenani jonli tinglayapti */
+  jonliKuzatuv?: boolean
   saqlashKun: number
   serverVaqti: number
   smena: { id: string; boshlandi: string } | null
@@ -50,6 +52,8 @@ interface SmenaKonteksti {
   tugat: () => Promise<void>
   rozilikBer: () => Promise<boolean>
   qaytaUlan: () => Promise<void>
+  /** Administrator hozir jonli tinglayapti (kuryerga ochiq ko'rsatiladi) */
+  jonliKuzatuv: boolean
   /** Qurilmadagi mikrofonlar (kompyuterda bir nechta bo'lishi mumkin) */
   mikrofonlar: Mikrofon[]
   /** Tanlangan mikrofon; `null` — tizim standarti */
@@ -131,6 +135,8 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
   useEffect(() => { mikrofonRef.current = saqlanganMikrofon(); setMikrofon(mikrofonRef.current) }, [])
 
   const yozgichRef = useRef<OvozYozgich | null>(null)
+  /** Jonli tinglash — yozgich bo'lak uzunligini shundan o'qiydi */
+  const jonliRef = useRef(false)
   const holatRef = useRef<YozuvKorinishi>('toxtatilgan')
   const offsetRef = useRef(0)
   const yuborishRef = useRef(false)
@@ -157,7 +163,10 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
   const serverniOrnat = useCallback((j: SmenaServerHolati) => {
     offsetRef.current = j.serverVaqti - Date.now()
     smenaIdRef.current = j.smena?.id ?? null
-    setServer(j)
+    // Jonli holatni FAQAT yengil tekshiruv halqasi boshqaradi: puls javobi
+    // sekinroq keladi va eskirgan bo'lishi mumkin — ikki manba bo'lsa yozgich
+    // qisqa/uzun rejim orasida tebranib, bo'lak o'rtasida uzilish paydo bo'ladi
+    setServer(oldin => ({ ...j, jonliKuzatuv: oldin?.jonliKuzatuv ?? j.jonliKuzatuv }))
   }, [])
 
   const navbatniYangila = useCallback(async () => {
@@ -181,7 +190,9 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
     // eng eski bo'laklar bo'shatiladi — yozuv hech qachon shu sababli to'xtamaydi
     await navbatniQisqart(navbatChegarasi()).catch(() => 0)
     const y = new OvozYozgich(smenaId, {
-      bolakMs: bolakUzunligi(), qismMs: QISM_MS, maxBayt: BOLAK_MAX_BAYT, bitreyt: BITREYT, vaqt,
+      // Jonli tinglanayotganda qisqa bo'lak: ovoz ~15 soniyada adminga yetadi
+      bolakMs: () => (jonliRef.current ? JONLI_BOLAK_MS : bolakUzunligi()),
+      qismMs: QISM_MS, maxBayt: BOLAK_MAX_BAYT, bitreyt: BITREYT, vaqt,
       qurilma: () => mikrofonRef.current,
     }, {
       holat: (h, xato) => holatniOrnat(h, xato),
@@ -195,6 +206,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
       bolakTayyor: () => { void navbatniYuborRef.current() },
     })
     yozgichRef.current = y
+    y.jonliRejim(jonliRef.current)
     holatniOrnat('boshlanmoqda')
     await y.boshla(oqim)
     setEkranYoniq(y.ekranYoniq)
@@ -285,6 +297,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
   // ── Davriy: puls, navbat, ekran holati ──
 
   const smenaId = server?.smena?.id ?? null
+  const jonliKuzatuv = !!server?.jonliKuzatuv && !!smenaId
   useEffect(() => {
     if (!kuryer || !smenaId) { pulsRef.current = () => {}; return }
     const pulsYubor = async () => {
@@ -307,6 +320,29 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
     const ekran = setInterval(() => setEkranYoniq(!!yozgichRef.current?.ekranYoniq), 5_000)
     return () => { clearInterval(puls); clearInterval(ekran); pulsRef.current = () => {} }
   }, [kuryer, smenaId, serverniOrnat, yozishniToxtat])
+
+  // "Meni hozir tinglashyaptimi?" — yengil va tez-tez: admin tugmani
+  // bosgach ovoz bir daqiqa emas, ~15 soniyada boshlanadi
+  useEffect(() => {
+    if (!kuryer || !smenaId) return
+    let toxtadi = false
+    const tekshir = async () => {
+      if (toxtadi || document.visibilityState !== 'visible') return
+      const r = await fetch('/api/smena', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amal: 'jonli' }),
+      }).catch(() => null)
+      const j = r?.ok ? await r.json().catch(() => null) as { jonli?: boolean } | null : null
+      if (toxtadi || !j) return
+      const yangi = !!j.jonli
+      if (yangi === jonliRef.current) return
+      jonliRef.current = yangi
+      yozgichRef.current?.jonliRejim(yangi)
+      setServer(oldin => (oldin ? { ...oldin, jonliKuzatuv: yangi } : oldin))
+    }
+    const i = setInterval(() => { void tekshir() }, sinovOraligi('ovoz-jonli-ms', JONLI_TEKSHIR_MS))
+    void tekshir()
+    return () => { toxtadi = true; clearInterval(i) }
+  }, [kuryer, smenaId])
 
   useEffect(() => {
     if (!kuryer) return
@@ -421,7 +457,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
   return (
     <Kontekst.Provider value={{
       mavjud: kuryer, server, yozuv, daraja, navbat, yuborildi, rad, band, onlayn, ekranYoniq,
-      vaqt, boshla, tugat, rozilikBer, qaytaUlan, mikrofonlar, mikrofon, mikrofonniTanla,
+      vaqt, boshla, tugat, rozilikBer, qaytaUlan, jonliKuzatuv, mikrofonlar, mikrofon, mikrofonniTanla,
     }}>
       {children}
     </Kontekst.Provider>

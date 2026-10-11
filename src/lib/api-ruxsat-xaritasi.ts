@@ -146,7 +146,9 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/xodimlar/:id/mulk/*', OQISH, ['xodimlar'], 'Biriktirilgan mulk'),
   Q('/api/xodimlar/:id/sotuvlar', OQISH, ['xodimlar.sotuvlar'], 'Xodim sotuvlari'),
   // Kuryer smenalari va ovoz yozuvlari — nozik ma'lumot, alohida ruxsat
-  Q('/api/xodimlar/:id/smenalar', '*', ['xodimlar.smena'], 'Kuryer smenalari'),
+  // `/*` — ichki marshrutlar ham (masalan `/smenalar/jonli`) shu ruxsatda qolsin,
+  // aks holda ular pastdagi umumiy `/api/xodimlar/*` qoidasiga tushib ketardi
+  Q('/api/xodimlar/:id/smenalar/*', '*', ['xodimlar.smena'], 'Kuryer smenalari'),
   Q('/api/xodimlar/:id/ovozlar/*', OQISH, ['xodimlar.smena'], 'Ovoz yozuvlarini tinglash'),
   Q('/api/ovoz-sozlama', '*', ['xodimlar.smena'], 'Ovoz yozuvi sozlamalari'),
   Q('/api/smena/kuryerlar', OQISH, ['xodimlar.smena'], 'Kuryerlar holati'),

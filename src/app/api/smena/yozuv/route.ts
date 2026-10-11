@@ -57,11 +57,21 @@ export async function POST(req: NextRequest) {
 
     const smenaId = String(fd.get('smenaId') ?? '')
     const hozir = Date.now()
-    // Telefon soati noto'g'ri bo'lsa (bir necha daqiqa oldinda/orqada) —
+    // Telefon soati noto'g'ri bo'lsa (daqiqalar yoki soatlar oldinda/orqada) —
     // bo'lak vaqtlari server vaqtiga keltiriladi, aks holda smenadan
-    // tashqarida qolib, rad etilardi
+    // tashqarida qolib, rad etilardi.
+    //
+    // Chegara ataylab katta: `hozir - mijozVaqti` ga yuborish vaqti ham
+    // kiradi. Avval 5 soniya edi va sekin internetda (yoki katta bo'lakda)
+    // yuklash shundan uzoq cho'zilsa, FAQAT o'sha bo'lak bir necha soniyaga
+    // surilib, ketma-ket bo'laklar orasida yo'q uzilish ko'rinardi. Ilova
+    // soatini serverga o'zi moslab turadi, shuning uchun haqiqiy farq
+    // bunchalik katta bo'lmaydi.
+    const SOAT_FARQI_CHEGARA_MS = 2 * 60_000
     const mijozVaqti = Number(fd.get('hozir'))
-    const farq = Number.isFinite(mijozVaqti) && Math.abs(hozir - mijozVaqti) > 5_000 ? hozir - mijozVaqti : 0
+    const farq = Number.isFinite(mijozVaqti) && Math.abs(hozir - mijozVaqti) > SOAT_FARQI_CHEGARA_MS
+      ? hozir - mijozVaqti
+      : 0
     const boshlandi = Number(fd.get('boshlandi')) + farq
     const tugadi = Number(fd.get('tugadi')) + farq
     // Bo'sh maydon `Number(null)` = 0 bo'lib "jim" deb yozilmasin — yo'q bo'lsa null

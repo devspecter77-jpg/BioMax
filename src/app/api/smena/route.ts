@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import {
-  faolSmena, kuryerHolati, pulsYoz, smenaXodimi, smenaniBoshla, smenaniTugat, texnikXizmat,
+  faolSmena, jonliKuzatuvdami, kuryerHolati, pulsYoz, smenaXodimi, smenaniBoshla, smenaniTugat, texnikXizmat,
 } from '@/lib/smena-server'
 
 // Kuryerning o'z ish smenasi: holat, rozilik, ishni boshlash/tugallash va
@@ -63,6 +63,16 @@ export async function POST(req: NextRequest) {
       if (s) await smenaniTugat(s.id, { tugatuvchi: 'xodim', tugatganId: xodim.id, lat: data.lat, lng: data.lng })
       texnikni()
       return NextResponse.json(await kuryerHolati(xodim.id))
+    }
+
+    // Yengil tekshiruv: "meni hozir jonli tinglashyaptimi?". Ilova buni
+    // tez-tez so'raydi, shuning uchun to'liq holat emas — bitta ustun.
+    if (amal === 'jonli') {
+      const s = await prisma.smena.findFirst({
+        where: { xodimId: xodim.id, tugadi: null },
+        select: { jonliKuzatilgan: true },
+      })
+      return NextResponse.json({ jonli: jonliKuzatuvdami(s?.jonliKuzatilgan) })
     }
 
     if (amal === 'puls') {

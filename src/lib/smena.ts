@@ -31,6 +31,39 @@ export const YUKLASH_MAX_BAYT = 4_400_000
 export const BITREYT = 12_000
 /** Ilova serverga "tirikman" belgisini shu oraliqda yuboradi. */
 export const PULS_MS = 60_000
+
+// ─── Deyarli jonli eshitish ─────────────────────────────────────────────────
+//
+// Haqiqiy jonli (WebRTC) uchun doimiy ulanish kerak — Vercel serverless uni
+// ushlab turmaydi. Shuning uchun boshqa yo'l: administrator tinglayotganda
+// kuryer ilovasi ovozni UZUN (3 daqiqa) emas, QISQA bo'laklarga bo'lib
+// darhol yuboradi; admin sahifasi yangi bo'lakni kelishi bilan o'ynatadi.
+// Natijada ovoz ~15-20 soniya kechikish bilan eshitiladi va o'sha bo'laklar
+// odatdagidek bazada saqlanib qoladi — alohida nusxa yaratilmaydi.
+
+/** Jonli tinglash paytidagi bo'lak uzunligi. */
+export const JONLI_BOLAK_MS = 12_000
+/**
+ * Admin shu vaqt ichida qayta bildirmasa — tinglash tugadi deb hisoblanadi.
+ * So'rov oralig'idan (4 s) ancha katta: sekin internetda bir-ikki so'rov
+ * kechiksa belgi eskirib, kuryer ilovasi qisqa/uzun rejim orasida tebranib
+ * ketardi (bo'lak o'rtasida uzilish).
+ */
+export const JONLI_KUZATUV_MS = 45_000
+/** Admin sahifasi yangi bo'laklarni shu oraliqda so'raydi. */
+export const JONLI_SOROV_MS = 4_000
+/**
+ * Kuryer ilovasi "meni tinglashyaptimi?" deb shu oraliqda so'raydi — smena
+ * ochiq bo'lsa. So'rov juda yengil (bitta ustun), lekin admin tugmani
+ * bosgandan keyin ovoz tez boshlanishi uchun shart: odatdagi puls (60 s)
+ * bilan birinchi ovozni bir daqiqagacha kutishga to'g'ri kelardi.
+ */
+export const JONLI_TEKSHIR_MS = 15_000
+/**
+ * Jonli pleer shundan ko'p orqada qolsa oxirgi bo'lakka o'tadi: eshituvchi
+ * "hozir"dan uzoqlashib ketmasin (masalan ilova fonda turib qolgan bo'lsa).
+ */
+export const JONLI_ORQADA_MS = 90_000
 /** Shundan uzoq puls kelmasa — "aloqa yo'q" (ilova yopilgan yoki internet yo'q). */
 export const ALOQA_YOQ_MS = 3 * 60_000
 /** Smena shuncha vaqt puls bermasa avtomatik yopiladi (unutib qo'yilgan). */

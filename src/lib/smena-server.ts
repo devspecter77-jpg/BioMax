@@ -6,7 +6,7 @@ import { sessionEgaId, sessionFilialId } from './filial-scope'
 import { omborTuri, ochir } from './ovoz-ombor'
 import { chegaradanOshsaQisqart } from './ovoz-baza'
 import {
-  ALOQA_YOQ_MS, SAQLASH_STANDART, SAQLASH_VARIANTLARI, UNUTILGAN_SMENA_MS,
+  ALOQA_YOQ_MS, JONLI_KUZATUV_MS, SAQLASH_STANDART, SAQLASH_VARIANTLARI, UNUTILGAN_SMENA_MS,
   kunBoshi, qamrovniHisobla, smenaRolimi, toshkentKuni, yozuvHolatimi, type YozuvHolati,
 } from './smena'
 
@@ -105,6 +105,36 @@ export async function pulsYoz(smenaId: string, holat: unknown): Promise<void> {
   })
 }
 
+// ─── Jonli tinglash ──────────────────────────────────────────────────────────
+
+/**
+ * Administrator shu smenani hozir tinglayotganini bildiradi. Kuryer ilovasi
+ * buni keyingi pulsda ko'radi va qisqa bo'laklarga o'tadi. Tinglash
+ * to'xtasa belgi eskiradi va ilova o'zi uzun bo'laklarga qaytadi —
+ * "tinglashni tugatish" so'rovi yo'qolsa ham kuryer qisqa rejimda qolmaydi.
+ */
+export async function jonliKuzatuvniBelgila(smenaId: string): Promise<void> {
+  await prisma.smena.updateMany({
+    where: { id: smenaId, tugadi: null },
+    data: { jonliKuzatilgan: new Date() },
+  })
+}
+
+export function jonliKuzatuvdami(belgi: Date | null | undefined, hozir = Date.now()): boolean {
+  return !!belgi && hozir - belgi.getTime() < JONLI_KUZATUV_MS
+}
+
+/** Jonli pleer uchun: shu vaqtdan keyin kelgan bo'laklar (eng eskisi birinchi). */
+export async function jonliBolaklar(smenaId: string, dan: Date): Promise<YozuvMalumoti[]> {
+  const yozuvlar = await prisma.ovozYozuv.findMany({
+    where: { smenaId, boshlandi: { gt: dan } },
+    select: YOZUV_SELECT,
+    orderBy: { boshlandi: 'asc' },
+    take: 50,
+  })
+  return yozuvlar.map(yozuvMalumoti)
+}
+
 // ─── Xulosalar ───────────────────────────────────────────────────────────────
 
 export interface YozuvMalumoti {
@@ -141,6 +171,24 @@ const YOZUV_SELECT = {
   id: true, boshlandi: true, tugadi: true, davomiylikMs: true, hajm: true, daraja: true, darajaMax: true, mimeType: true,
 } as const
 
+type YozuvXom = {
+  id: string; boshlandi: Date; tugadi: Date; davomiylikMs: number; hajm: number
+  daraja: number | null; darajaMax: number | null; mimeType: string
+}
+
+function yozuvMalumoti(y: YozuvXom): YozuvMalumoti {
+  return {
+    id: y.id,
+    boshlandi: y.boshlandi.toISOString(),
+    tugadi: y.tugadi.toISOString(),
+    davomiylikMs: y.davomiylikMs,
+    hajm: y.hajm,
+    daraja: y.daraja,
+    darajaMax: y.darajaMax,
+    mimeType: y.mimeType,
+  }
+}
+
 /** Xodimning `dan` dan keyin boshlangan (va hali ochiq) smenalari — eng yangisi birinchi. */
 export async function smenalarXulosasi(
   xodimId: string,
@@ -175,20 +223,7 @@ export async function smenalarXulosasi(
       smenaMs: q.smenaMs,
       foiz: q.foiz,
       boshliqlar: q.boshliqlar.map(b => ({ dan: new Date(b.dan).toISOString(), gacha: new Date(b.gacha).toISOString() })),
-      ...(opts.yozuvlarBilan
-        ? {
-            yozuvlar: s.yozuvlar.map(y => ({
-              id: y.id,
-              boshlandi: y.boshlandi.toISOString(),
-              tugadi: y.tugadi.toISOString(),
-              davomiylikMs: y.davomiylikMs,
-              hajm: y.hajm,
-              daraja: y.daraja,
-              darajaMax: y.darajaMax,
-              mimeType: y.mimeType,
-            })),
-          }
-        : {}),
+      ...(opts.yozuvlarBilan ? { yozuvlar: s.yozuvlar.map(yozuvMalumoti) } : {}),
     }
   })
 }
@@ -196,10 +231,11 @@ export async function smenalarXulosasi(
 /** Kuryer paneli uchun to'liq holat (GET va har bir amaldan keyin bir xil shakl). */
 export async function kuryerHolati(xodimId: string) {
   const bugun = kunBoshi(toshkentKuni(new Date()))
-  const [u, smenalar, kun] = await Promise.all([
+  const [u, smenalar, kun, ochiq] = await Promise.all([
     prisma.foydalanuvchi.findUnique({ where: { id: xodimId }, select: { ovozRozilik: true } }),
     smenalarXulosasi(xodimId, bugun),
     saqlashKuni(),
+    prisma.smena.findFirst({ where: { xodimId, tugadi: null }, select: { jonliKuzatilgan: true } }),
   ])
   const faol = smenalar.find(s => !s.tugadi) ?? null
   return {
@@ -208,6 +244,8 @@ export async function kuryerHolati(xodimId: string) {
     omborTayyor: omborTuri() !== null,
     saqlashKun: kun,
     serverVaqti: Date.now(),
+    // Ilova shunga qarab qisqa bo'laklarga o'tadi va kuryerga ham ko'rsatadi
+    jonliKuzatuv: jonliKuzatuvdami(ochiq?.jonliKuzatilgan),
     smena: faol ? { id: faol.id, boshlandi: faol.boshlandi } : null,
     bugun: smenalar.map(s => ({
       id: s.id, boshlandi: s.boshlandi, tugadi: s.tugadi, yozilganMs: s.yozilganMs, smenaMs: s.smenaMs,

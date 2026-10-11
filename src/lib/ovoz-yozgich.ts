@@ -18,7 +18,12 @@ import { qismQosh, segmentOch, segmentYop } from './ovoz-navbat'
 import type { YozuvHolati } from './smena'
 
 export interface YozgichSozlama {
-  bolakMs: number
+  /**
+   * Bo'lak uzunligi — har bo'lak boshida qayta o'qiladi. Administrator
+   * jonli tinglayotganda qisqa qiymat qaytaradi, shunda ovoz tezroq
+   * serverga tushadi (`jonliRejim` bilan darhol qo'llanadi).
+   */
+  bolakMs: () => number
   qismMs: number
   maxBayt: number
   bitreyt: number
@@ -121,6 +126,8 @@ export class OvozYozgich {
   private ovozYoq = false
   /** Mikrofon almashtirilmoqda — to'xtagan yozgich yangi bo'lak ochmasin */
   private almashmoqda = false
+  /** Administrator hozir jonli tinglayapti */
+  private jonli = false
   /** IndexedDB'ga yozishlar ketma-ketligi — qismlar tartibi buzilmasin */
   private zanjir: Promise<void> = Promise.resolve()
   private ekranQulfi: WakeLockSentinel | null = null
@@ -293,7 +300,18 @@ export class OvozYozgich {
     if (this.ovozYoq) this.t.holat('ovoz_yoq', 'Mikrofondan ovoz kelmayapti')
     else this.t.holat('yozilmoqda')
     if (this.aylanish) clearTimeout(this.aylanish)
-    this.aylanish = setTimeout(() => this.aylantir(), this.s.bolakMs)
+    this.aylanish = setTimeout(() => this.aylantir(), this.s.bolakMs())
+  }
+
+  /**
+   * Jonli tinglash yoqildi/o'chdi. Yoqilganda joriy (uzun) bo'lak darhol
+   * yopiladi — yangisi qisqa uzunlik bilan ochiladi, admin 3 daqiqa
+   * kutmaydi. Bo'lak yopilgani uchun ovoz yo'qolmaydi.
+   */
+  jonliRejim(yoqilgan: boolean): void {
+    if (this.jonli === yoqilgan) return
+    this.jonli = yoqilgan
+    if (yoqilgan && this.faol && this.yozyaptimi) this.aylantir()
   }
 
   /** Joriy bo'lakni yopadi — `onstop` yangisini ochadi. */

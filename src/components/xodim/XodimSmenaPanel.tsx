@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useConfirm } from '@/components/ConfirmProvider'
 import SmenaBelgisi from '@/components/smena/SmenaBelgisi'
+import JonliPleer from '@/components/xodim/JonliPleer'
 import {
   SAQLASH_VARIANTLARI, YOZUV_HOLATI_MATNI, bolakOvozi, davomiylikMatni, hajmMatni, soatMatni, toshkentKuni,
   type BolakOvozi,
@@ -384,9 +385,11 @@ function SmenaKartasi({ xodimId, smena: s, ochiq, onBos, adminmi, amalda, onYop,
           {faol && s.yozuvHolati && s.yozuvHolati !== 'yozilmoqda' && (
             <p className="text-xs text-amber-800 dark:text-amber-400">Kuryer ilovasi: {YOZUV_HOLATI_MATNI[s.yozuvHolati]}</p>
           )}
+          {/* Smena ochiq — hozir gapirilayotgan ovozni eshitish */}
+          {faol && <JonliPleer xodimId={xodimId} smenaId={s.id} />}
           {(s.yozuvlar?.length ?? 0) > 0
             ? <Pleer xodimId={xodimId} yozuvlar={s.yozuvlar!} />
-            : <p className="text-xs text-gray-500 dark:text-gray-400">Bu smenada hali yozuv yo‘q{faol ? ' — birinchi bo‘lak 3 daqiqada keladi' : ''}.</p>}
+            : <p className="text-xs text-gray-500 dark:text-gray-400">Bu smenada hali yozuv yo‘q{faol ? ' — birinchi bo‘lak 3 daqiqada keladi (jonli tinglansa ~15 soniyada)' : ''}.</p>}
           <div className="flex flex-wrap gap-2 pt-1">
             {faol && (
               <button type="button" onClick={onYop} disabled={amalda}

@@ -1625,6 +1625,12 @@ model Smena {
   oxirLng      Float?
   /** Brauzer/qurilma — muammoni tahlil qilish uchun (qisqartirilgan) */
   qurilma      String?
+  /**
+   * Administrator shu smenani jonli tinglayotganini oxirgi marta bildirgan
+   * vaqt. Yaqin bo'lsa kuryer ilovasi ovozni qisqa bo'laklarga bo'lib,
+   * darhol yuboradi (odatda 3 daqiqalik bo'lak — jonli eshitish uchun uzun).
+   */
+  jonliKuzatilgan DateTime?
   filialId     String?
   egaId        String?
   yaratilgan   DateTime  @default(now())

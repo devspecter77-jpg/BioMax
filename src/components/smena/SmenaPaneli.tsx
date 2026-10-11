@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  AlertTriangle, CloudUpload, Loader2, Mic, MicOff, Play, RefreshCw, ShieldCheck, Smartphone, Square, WifiOff,
+  AlertTriangle, CloudUpload, Headphones, Loader2, Mic, MicOff, Play, RefreshCw, ShieldCheck, Smartphone, Square, WifiOff,
 } from 'lucide-react'
 import { useSmena } from './SmenaProvider'
 import Modal, { ModalAsosiy, ModalBekor } from '@/components/ui/modal'
@@ -112,6 +112,7 @@ export default function SmenaPaneli() {
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{soatMatni(smena.boshlandi)} dan beri ishlayapsiz</p>
 
             <YozuvHolatiQatori />
+            <JonliBelgisi />
 
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
               {s.ekranYoniq && (
@@ -222,6 +223,22 @@ export default function SmenaPaneli() {
         </Modal>
       )}
     </section>
+  )
+}
+
+/**
+ * Rahbariyat hozir jonli tinglayotganini kuryerga OCHIQ ko'rsatadi.
+ * Yashirin tinglash bo'lmasin: xodim ishga kirishda ovoz yozilishiga rozilik
+ * bergan, lekin aynan hozir eshitilayotganini ham bilib turishi to'g'ri.
+ */
+function JonliBelgisi() {
+  const s = useSmena()
+  if (!s?.jonliKuzatuv) return null
+  return (
+    <p role="status" className="mt-2 flex items-center gap-2 rounded-xl bg-sky-50 dark:bg-sky-950/40 px-3.5 py-2.5 text-xs font-medium text-sky-800 dark:text-sky-300">
+      <Headphones size={14} className="shrink-0" aria-hidden />
+      Rahbariyat hozir ovozni jonli tinglamoqda
+    </p>
   )
 }
 
