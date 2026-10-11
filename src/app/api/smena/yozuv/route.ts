@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { randomBytes } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { omborTuri, ochir, saqla } from '@/lib/ovoz-ombor'
+import { chegaradanOshsaQisqart } from '@/lib/ovoz-baza'
 import { smenaXodimi } from '@/lib/smena-server'
 import { YUKLASH_MAX_BAYT, kengaytma, toshkentKuni } from '@/lib/smena'
 
@@ -12,6 +13,9 @@ import { YUKLASH_MAX_BAYT, kengaytma, toshkentKuni } from '@/lib/smena'
 // shuning uchun bo'lak smena tugagandan keyin, hatto ertasi kuni ham kelishi
 // mumkin. Bir bo'lak qayta yuborilsa (javob yo'lda yo'qolgan) takror
 // yozilmaydi: (smena, boshlangan vaqt) bo'yicha yagona.
+//
+// Bazaga saqlanganda yozuv va fayl BITTA tranzaksiyada yaratiladi: yarim
+// yozilgan (faylsiz yozuv yoki egasiz fayl) holat bo'lmaydi.
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -27,7 +31,8 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
     const xodim = smenaXodimi(session)
     if (!xodim) return NextResponse.json({ xato: 'Ovoz yozuvi faqat kuryerlar uchun' }, { status: 403 })
-    if (!omborTuri()) {
+    const turi = omborTuri()
+    if (!turi) {
       // Ilova bo'lakni o'chirmaydi — ombor sozlangach o'zi yuboradi
       return NextResponse.json({ xato: 'Ovoz ombori sozlanmagan', kod: 'ombor_yoq' }, { status: 503 })
     }
@@ -94,13 +99,16 @@ export async function POST(req: NextRequest) {
       'ovozlar', xodim.id, toshkentKuni(boshlandi), smenaId,
       `${boshlandi}-${randomBytes(6).toString('hex')}.${kengaytma(mimeType)}`,
     ].join('/')
-    await saqla(kalit, new Uint8Array(await fayl.arrayBuffer()), mimeType)
+    const baytlar = new Uint8Array(await fayl.arrayBuffer())
+    // Bulut/lokal: avval fayl, keyin yozuv. Baza: ikkalasi birga (pastda)
+    if (turi !== 'baza') await saqla(kalit, baytlar, mimeType, turi)
 
     try {
       const yozuv = await prisma.ovozYozuv.create({
         data: {
           smenaId, xodimId: xodim.id, boshlandi: boshlandiSana, tugadi: new Date(tugadi),
-          davomiylikMs, hajm: fayl.size, mimeType, kalit, daraja,
+          davomiylikMs, hajm: baytlar.byteLength, mimeType, kalit, daraja, ombor: turi,
+          ...(turi === 'baza' ? { fayl: { create: { data: baytlar } } } : {}),
         },
         select: { id: true },
       })
@@ -108,14 +116,16 @@ export async function POST(req: NextRequest) {
       if (!smena.tugadi) {
         await prisma.smena.updateMany({ where: { id: smenaId, tugadi: null }, data: { oxirgiPuls: new Date() } })
       }
+      // Hajm chegarasi — javobdan KEYIN: kuryer telefoni kutib turmasin
+      if (turi === 'baza') {
+        after(() => chegaradanOshsaQisqart().catch(e => console.error('[ovoz baza] chegara', e)))
+      }
       return NextResponse.json({ ok: true, id: yozuv.id }, { status: 201 })
     } catch (e) {
-      // Bir vaqtda ikki marta yuborilgan — ikkinchisining fayli kerak emas
-      if ((e as { code?: string })?.code === 'P2002') {
-        await ochir(kalit).catch(() => {})
-        return NextResponse.json({ ok: true, takror: true })
-      }
-      await ochir(kalit).catch(() => {})
+      // Bulutdagi fayl endi kerak emas (bazada tranzaksiya o'zi bekor bo'ladi)
+      if (turi !== 'baza') await ochir(kalit, turi).catch(() => {})
+      // Bir vaqtda ikki marta yuborilgan — birinchisi saqlangan
+      if ((e as { code?: string })?.code === 'P2002') return NextResponse.json({ ok: true, takror: true })
       throw e
     }
   } catch (e) {

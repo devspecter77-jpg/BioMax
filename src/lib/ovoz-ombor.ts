@@ -1,10 +1,17 @@
 // Ovoz yozuvlari ombori (faqat server).
 //
-// Bir kuryerning 8 soatlik yozuvi ~50–60 MB — bu bazaga emas, obyekt
-// omboriga sig'adi. S3 bilan mos har qanday xizmat ishlaydi: Cloudflare R2
-// (tavsiya: 10 GB bepul, yuklab olish bepul), AWS S3, Backblaze B2, MinIO.
+// Uch xil joy (`OvozYozuv.ombor` — har yozuvda alohida yoziladi):
+//   · `baza`  — STANDART. Shu Neon bazasining `ovoz_fayllar` jadvali
+//               (`ovoz-baza.ts`). Hech narsa sozlash shart emas; hajm
+//               chegarasi bazani to'lib qolishdan saqlaydi.
+//   · `s3`    — S3 bilan mos bulut ombori (Cloudflare R2 tavsiya: 10 GB
+//               bepul). Sozlansa YANGI yozuvlar shu yerga ketadi, bazadagi
+//               eskilari o'z joyidan tinglanaveradi.
+//   · `lokal` — faqat rivojlanishda, `OVOZ_OMBORI=lokal` bilan.
 //
-// Sozlash (Vercel → Settings → Environment Variables):
+// Majburan tanlash: `OVOZ_OMBORI=baza|s3|lokal`.
+//
+// S3 sozlamalari (Vercel → Settings → Environment Variables):
 //   S3_ENDPOINT           https://<account-id>.r2.cloudflarestorage.com
 //   S3_BUCKET             biomax-ovozlar
 //   S3_ACCESS_KEY_ID      ...
@@ -13,18 +20,16 @@
 // Cloudflare nomlari ham bo'ladi: R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID,
 // R2_SECRET_ACCESS_KEY.
 //
-// Ular bo'lmasa: lokal rivojlanishda `.ovoz-yozuvlar/` papkasi ishlatiladi,
-// productionda esa ombor "sozlanmagan" deb hisoblanadi (yozuv qabul
-// qilinmaydi, kuryer ilovasi bo'laklarni telefonda saqlab, keyin yuboradi).
-//
-// Ombordagi fayl hech qachon ochiq havola bilan berilmaydi: tinglash
-// so'rovi ruxsatdan o'tgach, 10 daqiqalik imzolangan havola yaratiladi.
+// Fayl hech qachon ochiq havola bilan berilmaydi: tinglash so'rovi
+// ruxsatdan o'tgach S3 uchun 10 daqiqalik imzolangan havola yaratiladi,
+// bazadagi fayl esa server orqali uzatiladi.
 
 import { promises as fs, createReadStream } from 'node:fs'
 import path from 'node:path'
 import { AwsClient } from 'aws4fetch'
+import { bazaniTekshir } from '@/lib/ovoz-baza'
 
-export type OmborTuri = 's3' | 'lokal'
+export type OmborTuri = 's3' | 'baza' | 'lokal'
 
 interface S3Sozlama {
   endpoint: string
@@ -83,11 +88,23 @@ export function omborYetishmaydi(): string[] {
   return y
 }
 
-/** Qaysi ombor ishlaydi; `null` — productionda sozlanmagan. */
+/**
+ * YANGI yozuvlar qayerga saqlanadi. Bulut sozlangan bo'lsa — bulutga,
+ * aks holda bazaga. `null` faqat `OVOZ_OMBORI=s3` majburan tanlangan-u,
+ * sozlanmagan holda (bo'laklar telefonda kutadi).
+ */
 export function omborTuri(): OmborTuri | null {
-  if (s3Sozlama()) return 's3'
-  if (process.env.NODE_ENV !== 'production') return 'lokal'
-  return null
+  const tanlov = env('OVOZ_OMBORI')?.toLowerCase()
+  if (tanlov === 'baza') return 'baza'
+  if (tanlov === 's3') return s3Sozlama() ? 's3' : null
+  // Lokal papka — faqat rivojlanishda; productionda (Vercel) disk vaqtinchalik
+  if (tanlov === 'lokal' && process.env.NODE_ENV !== 'production') return 'lokal'
+  return s3Sozlama() ? 's3' : 'baza'
+}
+
+/** Bulut ombori sozlanganmi (bazadagi eski yozuvlardan qat'i nazar). */
+export function s3Bormi(): boolean {
+  return s3Sozlama() !== null
 }
 
 export class OmborXatosi extends Error {}
@@ -148,9 +165,14 @@ export function lokalYol(kalit: string): string {
   return yol
 }
 
-export async function saqla(kalit: string, data: Uint8Array<ArrayBuffer>, mimeType: string): Promise<void> {
-  const s = s3Sozlama()
-  if (s) {
+/**
+ * Faylni bulutga yoki lokal papkaga yozadi. Bazaga EMAS: bazada fayl
+ * yozuv bilan birga, bitta tranzaksiyada yaratiladi (yuklash marshrutida).
+ */
+export async function saqla(kalit: string, data: Uint8Array<ArrayBuffer>, mimeType: string, turi: 's3' | 'lokal'): Promise<void> {
+  if (turi === 's3') {
+    const s = s3Sozlama()
+    if (!s) throw new OmborXatosi('S3 ombori sozlanmagan')
     const r = await s3Fetch(s3Mijoz(s), s3Url(s, kalit), {
       method: 'PUT',
       body: data,
@@ -159,7 +181,6 @@ export async function saqla(kalit: string, data: Uint8Array<ArrayBuffer>, mimeTy
     if (!r.ok) throw await s3Xatosi('Ombor faylni qabul qilmadi', r)
     return
   }
-  if (omborTuri() !== 'lokal') throw new OmborXatosi('Ovoz ombori sozlanmagan')
   const yol = lokalYol(kalit)
   await fs.mkdir(path.dirname(yol), { recursive: true })
   await fs.writeFile(yol, data)
@@ -192,14 +213,20 @@ export async function lokalFayl(kalit: string): Promise<{ hajm: number; oqim: (d
   }
 }
 
-export async function ochir(kalit: string): Promise<void> {
-  const s = s3Sozlama()
-  if (s) {
+/**
+ * Yozuv faylini o'z omboridan o'chiradi. Bazadagi fayl uchun hech narsa
+ * qilinmaydi — u yozuv o'chganda CASCADE bilan o'zi o'chadi.
+ */
+export async function ochir(kalit: string, turi: OmborTuri | string): Promise<void> {
+  if (turi === 'baza') return
+  if (turi === 's3') {
+    const s = s3Sozlama()
+    // Bulut keyinroq o'chirib qo'yilgan — faylga yetib bo'lmaydi, yozuv baribir o'chadi
+    if (!s) return
     const r = await s3Fetch(s3Mijoz(s), s3Url(s, kalit), { method: 'DELETE' })
     if (!r.ok && r.status !== 404) throw await s3Xatosi('Ombordan o‘chmadi', r)
     return
   }
-  if (omborTuri() !== 'lokal') return
   await fs.unlink(lokalYol(kalit)).catch((e: NodeJS.ErrnoException) => {
     if (e.code !== 'ENOENT') throw e
   })
@@ -214,10 +241,14 @@ export async function tekshir(): Promise<{ ok: true; turi: OmborTuri } | { ok: f
   if (!turi) {
     return { ok: false, xato: `Ombor sozlanmagan: Vercel’da ${omborYetishmaydi().join(', ')} kiritilmagan (kiritgach Redeploy)` }
   }
+  if (turi === 'baza') {
+    const r = await bazaniTekshir()
+    return r.ok ? { ok: true, turi } : r
+  }
   const kalit = `ovozlar/_tekshiruv/${Date.now()}.txt`
   const matn = `biomax-ombor-tekshiruv-${Date.now()}`
   try {
-    await saqla(kalit, new TextEncoder().encode(matn), 'text/plain')
+    await saqla(kalit, new TextEncoder().encode(matn), 'text/plain', turi)
     let oqildi: string
     if (turi === 's3') {
       const r = await fetch(await imzolanganHavola(kalit, { sekund: 60 }))
@@ -226,7 +257,7 @@ export async function tekshir(): Promise<{ ok: true; turi: OmborTuri } | { ok: f
     } else {
       oqildi = await fs.readFile(lokalYol(kalit), 'utf8')
     }
-    await ochir(kalit)
+    await ochir(kalit, turi)
     if (oqildi !== matn) return { ok: false, xato: 'O‘qilgan ma’lumot yozilganiga mos emas' }
     return { ok: true, turi }
   } catch (e) {

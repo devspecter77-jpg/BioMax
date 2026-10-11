@@ -6,6 +6,8 @@ import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { xodimlarDoirasi } from '@/lib/xodim-hisob'
 import { omborTuri, omborYetishmaydi } from '@/lib/ovoz-ombor'
 import { saqlashKuni, smenalarXulosasi, smenaniOchir, smenaniTugat } from '@/lib/smena-server'
+import { bazaChegarasiMb, bazaHajmi } from '@/lib/ovoz-baza'
+import { BAZA_CHEGARA_VARIANTLARI } from '@/lib/smena'
 import { kunBoshi, toshkentKuni } from '@/lib/smena'
 
 // Xodimning ish smenalari va ovoz yozuvlari (Xodimlar → "Ish va ovozlar").
@@ -35,9 +37,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const kunlar = Math.min(90, Math.max(1, Number(new URL(req.url).searchParams.get('kunlar')) || 14))
     const dan = kunBoshi(toshkentKuni(Date.now() - (kunlar - 1) * 86_400_000))
-    const [smenalar, kun] = await Promise.all([
+    const [smenalar, kun, chegaraMb, hajm] = await Promise.all([
       smenalarXulosasi(id, dan, { yozuvlarBilan: true }),
       saqlashKuni(),
+      bazaChegarasiMb(),
+      bazaHajmi(),
     ])
     return NextResponse.json({
       xodim: k.xodim,
@@ -46,6 +50,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       saqlashKun: kun,
       omborTuri: omborTuri(),
       omborYetishmaydi: omborTuri() ? [] : omborYetishmaydi(),
+      // Bazadagi barcha kuryerlar ovozi — umumiy hajm va chegara
+      baza: { chegaraMb, bayt: hajm.bayt, soni: hajm.soni, engEski: hajm.engEski },
+      bazaVariantlari: BAZA_CHEGARA_VARIANTLARI,
       adminmi: (session!.user as { rol?: string }).rol === 'ADMIN',
     })
   } catch (e) {

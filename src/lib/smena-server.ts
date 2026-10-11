@@ -4,6 +4,7 @@ import type { Session } from 'next-auth'
 import { prisma } from './prisma'
 import { sessionEgaId, sessionFilialId } from './filial-scope'
 import { omborTuri, ochir } from './ovoz-ombor'
+import { chegaradanOshsaQisqart } from './ovoz-baza'
 import {
   ALOQA_YOQ_MS, SAQLASH_STANDART, SAQLASH_VARIANTLARI, UNUTILGAN_SMENA_MS,
   kunBoshi, qamrovniHisobla, smenaRolimi, toshkentKuni, yozuvHolatimi, type YozuvHolati,
@@ -291,13 +292,13 @@ export async function texnikXizmat(majburiy = false): Promise<void> {
   const muddat = new Date(hozir - kun * 86_400_000)
   for (let i = 0; i < 20; i++) {
     const partiya = await prisma.ovozYozuv.findMany({
-      where: { boshlandi: { lt: muddat } }, select: { id: true, kalit: true }, take: 100,
+      where: { boshlandi: { lt: muddat } }, select: { id: true, kalit: true, ombor: true }, take: 100,
     })
     if (partiya.length === 0) break
     const ochirildi: string[] = []
     for (const y of partiya) {
       try {
-        await ochir(y.kalit)
+        await ochir(y.kalit, y.ombor)
         ochirildi.push(y.id)
       } catch (e) {
         console.error('[ovoz texnik] ombordan o‘chmadi', y.kalit, e)
@@ -306,12 +307,18 @@ export async function texnikXizmat(majburiy = false): Promise<void> {
     if (ochirildi.length) await prisma.ovozYozuv.deleteMany({ where: { id: { in: ochirildi } } })
     if (ochirildi.length < partiya.length) break
   }
+
+  // 3) Bazadagi ovozlar hajm chegarasidan oshmasin (har bo'lakda ham
+  //    tekshiriladi; bu — chegara pasaytirilgan yoki bo'lak tekshiruvi
+  //    o'tkazib yuborilgan holat uchun)
+  await chegaradanOshsaQisqart().catch(e => console.error('[ovoz texnik] chegara', e))
 }
 
 /** Smenaning barcha yozuvlarini ombordan va bazadan o'chiradi (smena ham o'chadi). */
 export async function smenaniOchir(smenaId: string): Promise<number> {
-  const yozuvlar = await prisma.ovozYozuv.findMany({ where: { smenaId }, select: { id: true, kalit: true } })
-  for (const y of yozuvlar) await ochir(y.kalit)
+  const yozuvlar = await prisma.ovozYozuv.findMany({ where: { smenaId }, select: { id: true, kalit: true, ombor: true } })
+  // Bazadagi fayllar smena → yozuv → fayl CASCADE bilan o'zi o'chadi
+  for (const y of yozuvlar) await ochir(y.kalit, y.ombor)
   await prisma.smena.delete({ where: { id: smenaId } })
   return yozuvlar.length
 }

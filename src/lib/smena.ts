@@ -22,22 +22,34 @@ export const BOLAK_MAX_BAYT = 3_000_000
 /** Server qabul qiladigan eng katta fayl. */
 export const YUKLASH_MAX_BAYT = 4_400_000
 /**
- * Nutq uchun 16 kbit/s (Opus) yetarli va aniq: soatiga ~7 MB. Brauzer
- * buni qo'llamasa (Safari AAC) o'zining standartini ishlatadi.
+ * Nutq uchun 12 kbit/s (Opus) — aniq eshitiladi va yengil. Chrome'da
+ * o'lchangan (2026-10-11): jimlikda ~7, nutqda ~10 kbit/s, ya'ni 8 soatlik
+ * smena ≈ 24–35 MB (16 kbit/s da 28–56 MB edi). Yozuvlar endi bazada
+ * saqlanadi — har megabayt muhim. Brauzer buni qo'llamasa (Safari AAC)
+ * o'zining standartini ishlatadi.
  */
-export const BITREYT = 16_000
+export const BITREYT = 12_000
 /** Ilova serverga "tirikman" belgisini shu oraliqda yuboradi. */
 export const PULS_MS = 60_000
 /** Shundan uzoq puls kelmasa — "aloqa yo'q" (ilova yopilgan yoki internet yo'q). */
 export const ALOQA_YOQ_MS = 3 * 60_000
 /** Smena shuncha vaqt puls bermasa avtomatik yopiladi (unutib qo'yilgan). */
 export const UNUTILGAN_SMENA_MS = 12 * 3_600_000
-/** Qurilmada yuborilmagan yozuvlar shu hajmdan oshsa yangisi yozilmaydi. */
+/** Qurilmada yuborilmagan yozuvlar shu hajmdan oshsa eng eskilari o'chadi. */
 export const NAVBAT_MAX_BAYT = 400 * 1024 * 1024
 
 /** Yozuvlarni saqlash muddati tanlovlari (kun). */
 export const SAQLASH_VARIANTLARI = [7, 14, 30, 60, 90] as const
 export const SAQLASH_STANDART = 30
+
+/**
+ * Bazadagi ovozlar uchun hajm chegarasi (MB). To'lsa eng eski yozuvlar
+ * o'chadi — ovoz hech qachon bazani to'ldirib, kassani to'xtatib qo'ymasin.
+ * Standart 250 MB: Neon bepul tarifi ~0,5 GB, ERP'ning o'ziga va o'chirilgan
+ * ma'lumotning tarix (tiklash) nusxasiga joy qolsin.
+ */
+export const BAZA_CHEGARA_VARIANTLARI = [100, 250, 500, 1000, 2000, 5000] as const
+export const BAZA_CHEGARA_STANDART = 250
 
 /** Ilova serverga xabar qiladigan yozuv holati. */
 export type YozuvHolati =

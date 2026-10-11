@@ -1649,15 +1649,39 @@ model OvozYozuv {
   mimeType      String
   /** Ombordagi obyekt kaliti — brauzerga hech qachon berilmaydi */
   kalit         String
+  /**
+   * Fayl qayerda: `baza` — shu bazadagi `ovoz_fayllar`, `s3` — bulut ombori,
+   * `lokal` — rivojlanish papkasi. Har yozuvda alohida: ombor keyin
+   * almashtirilsa ham eski yozuvlar o'z joyidan o'qiladi.
+   */
+  ombor         String   @default("baza")
   /** O'rtacha ovoz balandligi 0..1 — jim bo'laklarni ajratib ko'rsatish uchun */
   daraja        Float?
   yaratilgan    DateTime @default(now())
 
   smena         Smena    @relation(fields: [smenaId], references: [id], onDelete: Cascade)
+  fayl          OvozFayl?
 
   // Ilova bo'lakni qayta yuborsa (tarmoq uzilib qolgan) takror yozilmaydi
   @@unique([smenaId, boshlandi])
   @@index([xodimId, boshlandi])
   @@index([yaratilgan])
+  // Hajm chegarasi: bazadagi eng eski yozuvlarni tez topish
+  @@index([ombor, boshlandi])
   @@map("ovoz_yozuvlari")
+}
+
+/// Bazada saqlanadigan ovoz fayli (yozuvga 1:1).
+///
+/// Baytlar alohida jadvalda: yozuvlar ro'yxati, qamrov va sanoqlar so'ralganda
+/// megabaytlab audio o'qilmaydi. Yozuv o'chsa fayl ham o'chadi (cascade) —
+/// egasiz fayl qolishi mumkin emas.
+model OvozFayl {
+  yozuvId String    @id
+  /// Opus/WebM — siqilmaydi, shuning uchun hajm ≈ `OvozYozuv.hajm`
+  data    Bytes
+
+  yozuv   OvozYozuv @relation(fields: [yozuvId], references: [id], onDelete: Cascade)
+
+  @@map("ovoz_fayllar")
 }

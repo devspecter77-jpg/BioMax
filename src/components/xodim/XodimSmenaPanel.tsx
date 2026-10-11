@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, Cloud, Download, HardDrive, Loader2, Play, Square, Trash2, Volume2,
+  AlertTriangle, CheckCircle2, ChevronDown, Cloud, Database, Download, HardDrive, Loader2, Play, Square, Trash2, Volume2,
 } from 'lucide-react'
 import { useConfirm } from '@/components/ConfirmProvider'
 import SmenaBelgisi from '@/components/smena/SmenaBelgisi'
@@ -21,9 +21,12 @@ interface Javob {
   smenalar: SmenaXulosasi[]
   kunlar: number
   saqlashKun: number
-  omborTuri: 's3' | 'lokal' | null
+  omborTuri: 's3' | 'baza' | 'lokal' | null
   /** Ombor sozlanmagan bo'lsa — Vercel'da yetishmayotgan o'zgaruvchilar */
   omborYetishmaydi?: string[]
+  /** Bazadagi barcha kuryerlar ovozi: hajm va chegara */
+  baza?: { chegaraMb: number; bayt: number; soni: number; engEski: string | null }
+  bazaVariantlari?: readonly number[]
   adminmi: boolean
 }
 
@@ -168,6 +171,23 @@ function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => P
   const [tekshirilmoqda, setTekshirilmoqda] = useState(false)
   const [kun, setKun] = useState(javob.saqlashKun)
   useEffect(() => { setKun(javob.saqlashKun) }, [javob.saqlashKun])
+  const [chegara, setChegara] = useState(javob.baza?.chegaraMb ?? 250)
+  useEffect(() => { if (javob.baza) setChegara(javob.baza.chegaraMb) }, [javob.baza])
+
+  async function chegaraniSaqla(yangi: number) {
+    const eski = chegara
+    setChegara(yangi)
+    const r = await fetch('/api/ovoz-sozlama', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bazaChegaraMb: yangi }),
+    }).catch(() => null)
+    const j = r ? await r.json().catch(() => ({})) : {}
+    if (!r?.ok) { setChegara(eski); toast.error(j.xato || 'Saqlanmadi'); return }
+    const bandMb = (javob.baza?.bayt ?? 0) / 1048576
+    toast.success(yangi < bandMb
+      ? `Chegara ${yangi} MB — eng eski yozuvlar o‘chiriladi`
+      : `Chegara ${yangi} MB`)
+    await onOzgardi()
+  }
 
   async function tekshir() {
     setTekshirilmoqda(true)
@@ -176,7 +196,11 @@ function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => P
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amal: 'tekshir' }),
       })
       const j = await r.json().catch(() => ({}))
-      if (j.ok) toast.success('Ombor ishlayapti: yozish, o‘qish va o‘chirish muvaffaqiyatli')
+      if (j.ok) {
+        toast.success(j.turi === 'baza'
+          ? 'Ombor ishlayapti: ovozlar ma’lumotlar bazasida saqlanmoqda'
+          : 'Ombor ishlayapti: yozish, o‘qish va o‘chirish muvaffaqiyatli')
+      }
       else toast.error(j.xato || 'Ombor ishlamayapti', { duration: 10_000 })
     } finally {
       setTekshirilmoqda(false)
@@ -198,14 +222,20 @@ function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => P
   }
 
   const t = javob.omborTuri
+  const b = javob.baza
+  // Bazada yozuv bo'lsa (hatto bulut ulangan bo'lsa ham) hajmini ko'rsatamiz
+  const bazaKorinadi = !!b && (t === 'baza' || b.soni > 0)
+  const ulush = b ? Math.min(1, b.bayt / (chegara * 1048576)) : 0
   return (
     <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50/60 dark:bg-neutral-800/30 px-3.5 py-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-          t === 's3' ? 'text-emerald-700 dark:text-emerald-400' : t === 'lokal' ? 'text-gray-600 dark:text-gray-400' : 'text-amber-700 dark:text-amber-400'
+          t === 's3' || t === 'baza' ? 'text-emerald-700 dark:text-emerald-400' : t === 'lokal' ? 'text-gray-600 dark:text-gray-400' : 'text-amber-700 dark:text-amber-400'
         }`}>
-          {t === 's3' ? <Cloud size={14} aria-hidden /> : t === 'lokal' ? <HardDrive size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}
-          {t === 's3' ? 'Bulut ombori ulangan' : t === 'lokal' ? 'Sinov rejimi: kompyuterdagi papka' : 'Ovoz ombori sozlanmagan'}
+          {t === 's3' ? <Cloud size={14} aria-hidden /> : t === 'baza' ? <Database size={14} aria-hidden /> : t === 'lokal' ? <HardDrive size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}
+          {t === 's3' ? 'Bulut ombori ulangan'
+            : t === 'baza' ? 'Ma’lumotlar bazasida saqlanmoqda'
+            : t === 'lokal' ? 'Sinov rejimi: kompyuterdagi papka' : 'Ovoz ombori sozlanmagan'}
         </span>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
@@ -233,6 +263,40 @@ function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => P
           )}
         </div>
       </div>
+      {bazaKorinadi && b && (
+        <div className="space-y-1.5 pt-0.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <span>
+              Bazadagi ovozlar: <b className="tabular-nums text-gray-800 dark:text-gray-200">{b.bayt > 0 ? hajmMatni(b.bayt) : '0 MB'}</b>
+              {' / '}{chegara} MB · <span className="tabular-nums">{b.soni}</span> ta bo‘lak
+            </span>
+            <label className="flex items-center gap-1.5">
+              Chegara:
+              {javob.adminmi ? (
+                <select
+                  value={chegara}
+                  onChange={e => void chegaraniSaqla(Number(e.target.value))}
+                  className="rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1 text-xs text-gray-900 dark:text-gray-100"
+                >
+                  {(javob.bazaVariantlari ?? [100, 250, 500, 1000, 2000, 5000]).map(v => (
+                    <option key={v} value={v}>{v >= 1000 ? `${v / 1000} GB` : `${v} MB`}</option>
+                  ))}
+                </select>
+              ) : <b className="text-gray-800 dark:text-gray-200">{chegara} MB</b>}
+            </label>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-neutral-700" role="progressbar"
+            aria-label="Bazadagi ovozlar hajmi" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ulush * 100)}>
+            <div className={`h-full rounded-full ${ulush >= 0.9 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.max(ulush * 100, b.bayt > 0 ? 1 : 0)}%` }} />
+          </div>
+          <p className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+            Chegara to‘lsa eng eski yozuvlar avtomatik o‘chadi — baza hech qachon to‘lib qolmaydi va kassa to‘xtamaydi.
+            {b.engEski && <> Eng eski saqlangan yozuv: {toshkentKuni(b.engEski)}.</>}
+            {' '}Neon bepul tarifida baza ~0,5 GB — chegarani 250 MB dan oshirmang; uzoq saqlash kerak bo‘lsa
+            pullik tarif yoki bulut ombori (Cloudflare R2) ulanadi.
+          </p>
+        </div>
+      )}
       {!t && (
         <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
           Kuryer ilovasi yozuvlarni telefonda saqlab turibdi. Ular serverga tushishi uchun Vercel’da
