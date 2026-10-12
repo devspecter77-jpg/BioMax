@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe, FileImage } from 'lucide-react'
 import { buildChekHtml, buildMijozTarixHtml, chekChopEtish } from '@/lib/chek-print'
+import { chekniA4ChopEt } from '@/lib/chek-a4'
 import { tolovQisqa } from '@/lib/tolov-usullari'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import Modal, { ModalAsosiy, ModalBekor } from '@/components/ui/modal'
@@ -163,6 +164,8 @@ export default function MijozlarPage() {
   // Ekranda ochilgan chek va yuborilayotgan sotuv id'si
   const [chekKorish, setChekKorish] = useState<MijozSotuv | null>(null)
   const [yuborilmoqda, setYuborilmoqda] = useState<string | null>(null)
+  /** A4 rasmli chek tayyorlanayotgan sotuv */
+  const [a4Band, setA4Band] = useState<string | null>(null)
   const [chekBalandligi, setChekBalandligi] = useState(420)
 
   useBodyScrollLock(modal || detailModal || !!chekKorish)
@@ -204,6 +207,19 @@ export default function MijozlarPage() {
   function chekniChopEt(sotuv: MijozSotuv) {
     const html = chekHtml(sotuv)
     if (html) chekChopEtish(html)
+  }
+
+  // A4 — mahsulot rasmlari bilan (kassadagi bilan bir xil hujjat)
+  async function chekniA4(sotuv: MijozSotuv) {
+    if (a4Band) return
+    setA4Band(sotuv.id)
+    try {
+      await chekniA4ChopEt(sotuv.id, tanlanganMijoz?.dokon, chekTili)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'A4 chek chiqmadi')
+    } finally {
+      setA4Band(null)
+    }
   }
 
   // Chekni mijozga Telegram orqali qayta yuborish. Sotuv paytida u
@@ -902,9 +918,18 @@ export default function MijozlarPage() {
             <div className="shrink-0 flex gap-2 p-3 border-t border-gray-200 dark:border-neutral-800 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
               <button
                 onClick={() => chekniChopEt(chekKorish)}
-                className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium text-sm flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium text-sm flex items-center justify-center gap-1.5"
+                title="80 mm chek qog'oziga"
               >
-                <Printer size={15} /> Chop etish
+                <Printer size={15} className="shrink-0" /> Chek
+              </button>
+              <button
+                onClick={() => void chekniA4(chekKorish)}
+                disabled={a4Band === chekKorish.id}
+                className="flex-1 py-2.5 border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 transition font-medium text-sm flex items-center justify-center gap-1.5 disabled:opacity-60"
+                title="A4 — mahsulot rasmlari bilan"
+              >
+                {a4Band === chekKorish.id ? <Loader2 size={15} className="shrink-0 animate-spin" /> : <FileImage size={15} className="shrink-0" />} A4
               </button>
               <button
                 onClick={() => chekniTelegramgaYubor(chekKorish)}

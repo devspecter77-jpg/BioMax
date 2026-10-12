@@ -3,10 +3,11 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone, playBeep, uzSearch } from '@/lib/utils'
 import { buildChekHtml, chekChopEtish as printChek, type ChekData, type ChekTarkib } from '@/lib/chek-print'
+import { chekniA4ChopEt } from '@/lib/chek-a4'
 import { kodniAjrat } from '@/lib/qr-kod'
 import { toast } from 'sonner'
 import type { Html5Qrcode } from 'html5-qrcode'
-import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, LayoutGrid, Link2, Share2, Package, Plus, Minus, Gift, Percent, MapPin, Send } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, CheckCircle, Printer, Download, RotateCcw, Clock, X, Loader2, AlertTriangle, Pencil, Pause, Play, Archive, Languages, ScanLine, LayoutGrid, Link2, Share2, Package, Plus, Minus, Gift, Percent, MapPin, Send, FileImage } from 'lucide-react'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import Modal, { ModalAsosiy, ModalBekor } from '@/components/ui/modal'
 import { jsPDF } from 'jspdf'
@@ -473,6 +474,8 @@ export default function SotuvPage() {
   // 'yuborildi' bo'lgach tugma holatini o'zgartiramiz, ikki marta
   // bosib mijozga bir xil xabar ikki marta ketmasin.
   const [chekYuborish, setChekYuborish] = useState<'tayyor' | 'ketmoqda' | 'yuborildi'>('tayyor')
+  /** A4 rasmli chek tayyorlanmoqda (rasmlar serverdan keladi) */
+  const [a4Band, setA4Band] = useState(false)
   const [dokonInfo, setDokonInfo] = useState<Record<string, string>>({})
   const [editNarx, setEditNarx] = useState<{ tovarId: string; val: string } | null>(null)
   const [mobileTab, setMobileTab] = useState<'tovarlar' | 'savat'>('tovarlar')
@@ -1574,6 +1577,20 @@ export default function SotuvPage() {
 
   function chekChopEtish(s: SotuvYozuvi) {
     printChek(chekHtml(s))
+  }
+
+  // A4 — mahsulot rasmlari bilan. Oyna bosish zahoti ochiladi, rasmlar esa
+  // serverdan kichraytirilgan holda keladi
+  async function chekA4(s: SotuvYozuvi) {
+    if (a4Band) return
+    setA4Band(true)
+    try {
+      await chekniA4ChopEt(s.id, dokonInfo, til)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'A4 chek chiqmadi')
+    } finally {
+      setA4Band(false)
+    }
   }
 
   function chekPdfYuklash(s: SotuvYozuvi) {
@@ -2996,14 +3013,25 @@ export default function SotuvPage() {
                   </button>
                 )}
 
-                <div className="flex gap-2">
+                {/* Chek formati: 80 mm termal chek yoki A4 — mahsulot rasmlari bilan */}
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => chekChopEtish(s)}
-                    className="flex-1 py-2 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-600 dark:text-gray-400"
+                    className="py-2.5 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-700 dark:text-gray-300"
                   >
-                    <Printer size={14} />
-                    {t('Chop etish')}
+                    <Printer size={15} className="shrink-0" />
+                    <span className="truncate">{t('Chek')} (80 mm)</span>
                   </button>
+                  <button
+                    onClick={() => void chekA4(s)}
+                    disabled={a4Band}
+                    className="py-2.5 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-700 dark:text-gray-300 disabled:opacity-60"
+                  >
+                    {a4Band ? <Loader2 size={15} className="shrink-0 animate-spin" /> : <FileImage size={15} className="shrink-0" />}
+                    <span className="truncate">A4 ({t('rasmli')})</span>
+                  </button>
+                </div>
+                <div className="flex gap-2">
                   <button
                     onClick={() => chekPdfYuklash(s)}
                     className="flex-1 py-2 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-600 dark:text-gray-400"
