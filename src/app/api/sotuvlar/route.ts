@@ -77,7 +77,8 @@ export async function GET(req: NextRequest) {
         where,
         include: {
           mijoz: { select: { ism: true, telefon: true } },
-          kassir: { select: { ism: true } },
+          // Telefon — qayta chiqarilgan chekda ham "Kassir tel" bo'lsin
+          kassir: { select: { ism: true, telefon: true } },
           sherikDokon: { select: { nomi: true } },
           tarkiblar: {
             include: { tovar: { select: { nomi: true, birlik: true } } },

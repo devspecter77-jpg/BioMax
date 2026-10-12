@@ -1,9 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
 import { tolovQisqa, tolovBadge, tolovKanallari } from '@/lib/tolov-usullari'
-import { Receipt, Phone, User, Calendar, Search, Download, Wallet, CreditCard, RotateCcw } from 'lucide-react'
+import { buildChekHtml, chekChopEtish, type ChekDokonInfo } from '@/lib/chek-print'
+import { chekniA4ChopEt } from '@/lib/chek-a4'
+import { Receipt, Phone, User, Calendar, Search, Download, Wallet, CreditCard, RotateCcw, Printer, FileImage, Languages, Loader2 } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import Modal from '@/components/ui/modal'
@@ -29,7 +32,7 @@ interface Sotuv {
   clickTolangan: number
   bankTolangan: number
   mijoz: { ism: string; telefon: string | null } | null
-  kassir: { ism: string }
+  kassir: { ism: string; telefon?: string | null }
   tarkiblar: SotuvTarkibiItem[]
   qaytarishlar: Qaytarish[]
 }
@@ -50,6 +53,55 @@ export default function XaridlarPage() {
   const [sanaFilter, setSanaFilter] = useState('')
   const [tafsilot, setTafsilot] = useState<Sotuv | null>(null)
   useBodyScrollLock(!!tafsilot)
+
+  // ── Chekni chop etish: 80 mm chek yoki A4 (mahsulot rasmlari bilan) ──
+  // Do'kon nomi, manzil va telefon — kassadagi chek bilan bir xil manbadan
+  const [dokonInfo, setDokonInfo] = useState<ChekDokonInfo>({})
+  const [chekTili, setChekTili] = useState<'lotin' | 'kirill'>('lotin')
+  const [a4Band, setA4Band] = useState<string | null>(null)
+  useEffect(() => {
+    fetch('/api/sozlamalar').then(r => r.json()).then(d => { if (d && typeof d === 'object' && !d.xato) setDokonInfo(d) }).catch(() => {})
+    try { if (localStorage.getItem('xaridlar-chek-tili') === 'kirill') setChekTili('kirill') } catch { /* ixtiyoriy */ }
+  }, [])
+
+  function tilniAlmashtir() {
+    const yangi = chekTili === 'lotin' ? 'kirill' : 'lotin'
+    setChekTili(yangi)
+    try { localStorage.setItem('xaridlar-chek-tili', yangi) } catch { /* ixtiyoriy */ }
+  }
+
+  function chekniChopEt(s: Sotuv) {
+    chekChopEtish(buildChekHtml({
+      data: {
+        chekRaqami: s.chekRaqami,
+        sana: s.sana,
+        tarkiblar: s.tarkiblar.map(t => ({ tovar: { nomi: t.tovar.nomi }, miqdor: t.miqdor, birlikNarxi: t.birlikNarxi, jami: t.jami })),
+        chegirma: s.chegirma,
+        yakuniySumma: s.yakuniySumma,
+        tolovUsuli: s.tolovUsuli,
+        naqdTolangan: s.naqdTolangan,
+        kartaTolangan: s.kartaTolangan,
+        clickTolangan: s.clickTolangan,
+        bankTolangan: s.bankTolangan,
+        mijoz: s.mijoz ? { ism: s.mijoz.ism } : null,
+        kassir: { telefon: s.kassir.telefon ?? null },
+      },
+      dokonInfo,
+      til: chekTili,
+    }))
+  }
+
+  async function chekniA4(s: Sotuv) {
+    if (a4Band) return
+    setA4Band(s.id)
+    try {
+      await chekniA4ChopEt(s.id, dokonInfo, chekTili)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'A4 chek chiqmadi')
+    } finally {
+      setA4Band(null)
+    }
+  }
 
   // Filtr o'zgarsa ro'yxat qayta yuklanadi va yana boshidan ko'rsatiladi.
   // Ikkalasi ham shu kalitdan hisoblanadi — effekt ichida setState kerak emas.
@@ -147,8 +199,19 @@ export default function XaridlarPage() {
                   <span className="flex items-center gap-1.5 text-sm font-mono text-gray-600 dark:text-gray-300">
                     <Receipt size={15} />{y.sotuv.chekRaqami}
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tolovBadge(y.sotuv.tolovUsuli)}`}>
-                    {tolovQisqa(y.sotuv.tolovUsuli)}
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tolovBadge(y.sotuv.tolovUsuli)}`}>
+                      {tolovQisqa(y.sotuv.tolovUsuli)}
+                    </span>
+                    <button
+                      onClick={e => { e.stopPropagation(); chekniChopEt(y.sotuv) }}
+                      title="Chekni chop etish (80 mm)"
+                      aria-label={`${y.sotuv.chekRaqami} chekini chop etish`}
+                      style={{ minWidth: 32, minHeight: 32 }}
+                      className="-my-1 -mr-1.5 grid place-items-center rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition"
+                    >
+                      <Printer size={16} />
+                    </button>
                   </span>
                 </div>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1.5 flex items-center gap-1">
@@ -253,6 +316,31 @@ export default function XaridlarPage() {
           tavsif={<><p className="text-gray-500 dark:text-gray-400 text-xs mt-1 flex items-center gap-1"> <Calendar size={11} />{formatSanaVaVaqt(tafsilot.sana)} </p></>}
           onYopish={() => setTafsilot(null)}
           tashqaridanYopish={true}
+          footer={
+            <div className="flex gap-2">
+              <button
+                onClick={tilniAlmashtir}
+                title="Chek yozuvi — bosib almashtiring"
+                className="shrink-0 px-3 min-h-11 rounded-xl border border-gray-200 dark:border-neutral-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center gap-1.5"
+              >
+                <Languages size={14} />{chekTili === 'lotin' ? 'Lotin' : 'Кирилл'}
+              </button>
+              <button
+                onClick={() => chekniChopEt(tafsilot)}
+                className="flex-1 min-h-11 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition flex items-center justify-center gap-1.5"
+              >
+                <Printer size={15} className="shrink-0" /><span className="truncate">Chek (80 mm)</span>
+              </button>
+              <button
+                onClick={() => void chekniA4(tafsilot)}
+                disabled={a4Band === tafsilot.id}
+                className="flex-1 min-h-11 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {a4Band === tafsilot.id ? <Loader2 size={15} className="shrink-0 animate-spin" /> : <FileImage size={15} className="shrink-0" />}
+                <span className="truncate">A4 (rasmli)</span>
+              </button>
+            </div>
+          }
         >
           <div className="space-y-4">
               <div className="flex flex-wrap gap-2 text-sm">
