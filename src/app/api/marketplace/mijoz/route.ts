@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
           ism,
           telefon,
           izoh,
+          manba: 'onlayn',
         },
         select: {
           id: true,

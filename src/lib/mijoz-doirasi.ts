@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { sessionEgaId, sessionFilialId } from '@/lib/filial-scope'
 import { ARXIV_PREFIKS } from '@/lib/xodim-hisob'
+import type { MijozKiritgan } from '@/lib/mijoz-manba'
 
 // Mijozlarni ko'rish doirasi — xodim KIMNING mijozlarini ko'radi.
 //
@@ -132,4 +133,11 @@ export function xodimDoirasi(session: Session): Prisma.FoydalanuvchiWhereInput {
       OR: [{ id: ega }, { ulashilganEgaId: ega }, { ulashilganEgaId: null, rol: { not: 'ADMIN' } }],
     }],
   }
+}
+
+/** "Kim qo'shgan" uchun tanlov — brauzerga login o'rniga faqat arxiv belgisi beriladi. */
+export const KIRITGAN_SELECT = { id: true, ism: true, rol: true, login: true } as const
+
+export function kiritganMalumoti(f: { id: string; ism: string; rol: string; login: string } | null | undefined): MijozKiritgan | null {
+  return f ? { id: f.id, ism: f.ism, rol: f.rol, arxiv: f.login.startsWith(ARXIV_PREFIKS) } : null
 }

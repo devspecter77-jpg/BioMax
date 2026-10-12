@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { mijozDoirasi } from '@/lib/mijoz-doirasi'
+import { KIRITGAN_SELECT, kiritganMalumoti, mijozDoirasi } from '@/lib/mijoz-doirasi'
+import { kiritganQisqa, kiritishMalumoti } from '@/lib/mijoz-manba'
 import { formatPhone } from '@/lib/utils'
 
 export async function GET(_req: NextRequest) {
@@ -16,11 +17,14 @@ export async function GET(_req: NextRequest) {
       include: {
         _count: { select: { sotuvlar: true } },
         nasiyalar: { where: { holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] } }, select: { qoldiq: true } },
+        yaratgan: { select: KIRITGAN_SELECT },
       },
       orderBy: { ism: 'asc' },
     })
 
-    const rows = mijozlar.map(m => ({
+    const rows = mijozlar.map(m => {
+      const k = kiritishMalumoti({ yaratgan: kiritganMalumoti(m.yaratgan), manba: m.manba, izoh: m.izoh })
+      return {
       'Ism': m.ism,
       'Telefon': m.telefon ? formatPhone(m.telefon) : '',
       "Qo'shimcha raqam": m.telefon2 ? formatPhone(m.telefon2) : '',
@@ -32,11 +36,15 @@ export async function GET(_req: NextRequest) {
       'Jami sotuv': m._count.sotuvlar,
       'Jami qarz': m.nasiyalar.reduce((s, n) => s + Number(n.qoldiq), 0),
       'Ro\'yxatga olingan': m.yaratilgan.toISOString().slice(0, 10),
-    }))
+      // Kim va qayerdan qo'shgan
+      "Qo'shgan": kiritganQisqa(k),
+      'Qayerdan': k.qayerda ?? '',
+    }
+    })
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 11 }, { wch: 13 }, { wch: 16 }]
+    ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 11 }, { wch: 13 }, { wch: 16 }, { wch: 28 }, { wch: 26 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Mijozlar')
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 

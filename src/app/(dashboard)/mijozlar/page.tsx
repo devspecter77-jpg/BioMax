@@ -26,6 +26,8 @@ import { rangKlassi, type KategoriyaQisqa, type KategoriyalarJavobi } from '@/li
 import KategoriyaBelgisi from '@/components/mijoz/KategoriyaBelgisi'
 import KategoriyalarOynasi from '@/components/mijoz/KategoriyalarOynasi'
 import TanlovPaneli from '@/components/mijoz/TanlovPaneli'
+import KiritganBelgisi from '@/components/mijoz/KiritganBelgisi'
+import type { MijozKiritgan } from '@/lib/mijoz-manba'
 
 interface Mijoz {
   id: string; ism: string; telefon: string | null; telefon2: string | null
@@ -38,6 +40,11 @@ interface Mijoz {
   kategoriya?: KategoriyaQisqa | null
   /** Mas'ul xodim — mijoz shu xodimga doim ko'rinadi */
   masul?: { id: string; ism: string } | null
+  /** Kim qo'shgan (xodim yoki administrator) va qayerdan */
+  yaratgan?: MijozKiritgan | null
+  manba?: string | null
+  izoh?: string | null
+  yaratilgan?: string
 }
 
 const BOSH_FORMA = {
@@ -71,8 +78,6 @@ interface FoydaNatijasi {
   foiz: number | null
 }
 interface MijozDetail extends Mijoz {
-  /** Kim kiritgan */
-  yaratgan?: { id: string; ism: string } | null
   sotuvlar: MijozSotuv[]
   dokon?: DokonInfo
   /** Butun tarix bo'yicha yig'ma foyda. Kelish narxi yashirilgan bo'lsa null. */
@@ -652,16 +657,15 @@ export default function MijozlarPage() {
                         </div>
                         <div className="min-w-0">
                           <span className="block text-gray-900 dark:text-gray-100 font-medium text-sm truncate">{m.ism}</span>
-                          {(m.kategoriya || (admin && m.masul)) && (
-                            <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                              <KategoriyaBelgisi k={m.kategoriya} kichik />
-                              {admin && m.masul && (
-                                <span className="inline-flex min-w-0 items-center gap-0.5 text-[11px] text-gray-500 dark:text-gray-400" title="Mas’ul xodim">
-                                  <UserCheck size={11} className="shrink-0" aria-hidden /><span className="truncate">{m.masul.ism}</span>
-                                </span>
-                              )}
-                            </span>
-                          )}
+                          <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                            <KategoriyaBelgisi k={m.kategoriya} kichik />
+                            <KiritganBelgisi m={m} ixcham />
+                            {admin && m.masul && m.masul.id !== m.yaratgan?.id && (
+                              <span className="inline-flex min-w-0 items-center gap-0.5 text-[11px] text-gray-500 dark:text-gray-400" title="Mas’ul xodim">
+                                <UserCheck size={11} className="shrink-0" aria-hidden /><span className="truncate">{m.masul.ism}</span>
+                              </span>
+                            )}
+                          </span>
                         </div>
                       </div>
                     </td>
@@ -771,16 +775,15 @@ export default function MijozlarPage() {
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-gray-900 dark:text-gray-100 font-semibold text-lg sm:text-base">{m.ism}</p>
-                  {(m.kategoriya || (admin && m.masul)) && (
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <KategoriyaBelgisi k={m.kategoriya} />
-                      {admin && m.masul && (
-                        <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400" title="Mas’ul xodim">
-                          <UserCheck size={12} aria-hidden />{m.masul.ism}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <KategoriyaBelgisi k={m.kategoriya} />
+                    <KiritganBelgisi m={m} ixcham />
+                    {admin && m.masul && m.masul.id !== m.yaratgan?.id && (
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400" title="Mas’ul xodim">
+                        <UserCheck size={12} aria-hidden />{m.masul.ism}
+                      </span>
+                    )}
+                  </div>
                   {m.telefon && (
                     <a href={`tel:${m.telefon.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="text-blue-500 hover:text-blue-600 text-base sm:text-sm flex items-center gap-1 mt-1 sm:mt-0.5">
                       <Phone size={14} className="sm:hidden" /><Phone size={12} className="hidden sm:block" /> {formatPhone(m.telefon)}
@@ -1234,11 +1237,11 @@ export default function MijozlarPage() {
                       <UserCheck size={12} /> {tanlanganMijoz.masul ? `Mas’ul: ${tanlanganMijoz.masul.ism}` : 'Faqat administratorlar'}
                     </span>
                   )}
-                  {admin && tanlanganMijoz.yaratgan && (
-                    <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 px-2.5 py-1 rounded-lg">
-                      Kiritgan: {tanlanganMijoz.yaratgan.ism}
-                    </span>
-                  )}
+                </div>
+
+                {/* Kim qo'shgan: xodim yoki administrator, qayerdan va qachon */}
+                <div className="mt-3">
+                  <KiritganBelgisi m={tanlanganMijoz} />
                 </div>
 
                 {/* ── Mijoz keltirgan foyda ──

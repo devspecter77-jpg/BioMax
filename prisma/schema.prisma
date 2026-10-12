@@ -417,6 +417,9 @@ model Mijoz {
   // "o'ziniki qilib" olmasin). Administrator hammasini ko'radi.
   /// Kim kiritgan — o'zgarmaydi (tarix uchun)
   yaratganId    String?
+  /// Qayerdan qo'shilgan: mijozlar | kassa | nasiya | import | nasiya_import | onlayn.
+  /// null — bu maydon paydo bo'lishidan oldingi mijoz
+  manba         String?
   /// Mas'ul xodim: mijoz shu xodimga doim ko'rinadi. Kiritganda — kirituvchi;
   /// administrator almashtira oladi. null — faqat administratorlarga
   masulId       String?

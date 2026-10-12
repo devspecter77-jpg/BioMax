@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
               viloyat, tuman, manzil,
               maxsus_kod, filialId, egaId,
               ...egalik,
+              manba: 'import',
             },
           })
           qoshildi++

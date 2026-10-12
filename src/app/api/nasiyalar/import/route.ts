@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
           }
         }
         if (!mijoz) {
-          mijoz = await prisma.mijoz.create({ data: { ism, manzil, telefon: finalPhone, ...egaFilialWhere(session), ...egalik } })
+          mijoz = await prisma.mijoz.create({ data: { ism, manzil, telefon: finalPhone, ...egaFilialWhere(session), ...egalik, manba: 'nasiya_import' } })
         }
 
         const muddatQiymati = row['Muddat'] ? new Date(row['Muddat'] as string | number) : null

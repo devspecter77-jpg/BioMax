@@ -1293,7 +1293,7 @@ export default function SotuvPage() {
       const res = await fetch('/api/mijozlar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ism: mijozIsmi, telefon: mijozTelefon, manzil: mijozManzil || null }),
+        body: JSON.stringify({ ism: mijozIsmi, telefon: mijozTelefon, manzil: mijozManzil || null, manba: 'kassa' }),
       })
       if (!res.ok) {
         // Masalan: raqam boshqa xodimning mijozida — server sababini aytadi

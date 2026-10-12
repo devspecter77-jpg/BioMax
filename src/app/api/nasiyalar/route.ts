@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
           telefon: finalPhone,
           ...egaFilialWhere(session),
           ...yangiMijozEgaligi(session),
+          manba: 'nasiya',
         },
       })
     } else {

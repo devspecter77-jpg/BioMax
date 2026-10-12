@@ -6,7 +6,7 @@ import { qoshimchaTelefonBoyichaIdlar } from '@/lib/mijoz-telefon-server'
 import { toKirill, toLotin } from '@/lib/utils'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 import {
-  kategoriyaniTekshir, masulniTekshir, mijozDoirasi, mijozKorinadimi, yangiMijozEgaligi,
+  KIRITGAN_SELECT, kategoriyaniTekshir, kiritganMalumoti, masulniTekshir, mijozDoirasi, mijozKorinadimi, yangiMijozEgaligi,
 } from '@/lib/mijoz-doirasi'
 
 async function generateUniqueKod(): Promise<string> {
@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
       include: {
         kategoriya: { select: { id: true, nomi: true, rang: true } },
         masul: { select: { id: true, ism: true } },
+        yaratgan: { select: KIRITGAN_SELECT },
         _count: { select: { sotuvlar: true, nasiyalar: true } },
         nasiyalar: {
           where: { holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] } },
@@ -70,6 +71,8 @@ export async function GET(req: NextRequest) {
 
     const natija = mijozlar.map((m) => ({
       ...m,
+      // Kim qo'shgan — kartada ko'rinadi (login emas, ism va lavozim)
+      yaratgan: kiritganMalumoti(m.yaratgan),
       jami_qarz: m.nasiyalar.reduce((s, n) => s + Number(n.qoldiq), 0),
     }))
 
@@ -148,6 +151,8 @@ export async function POST(req: NextRequest) {
         izoh: data.izoh,
         maxsus_kod, filialId, egaId,
         yaratganId: egalik.yaratganId,
+        // Qayerdan: kassa o'zi "kassa" deb yuboradi, aks holda Mijozlar bo'limi
+        manba: data.manba === 'kassa' ? 'kassa' : 'mijozlar',
         masulId,
         kategoriyaId: kat.kategoriyaId ?? null,
         lokatsiyaLat: typeof data.lokatsiyaLat === 'number' ? data.lokatsiyaLat : null,

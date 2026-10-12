@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { telefonlarniTozala } from '@/lib/mijoz-telefon'
-import { kategoriyaniTekshir, masulniTekshir, mijozDoirasi } from '@/lib/mijoz-doirasi'
+import { KIRITGAN_SELECT, kategoriyaniTekshir, kiritganMalumoti, masulniTekshir, mijozDoirasi } from '@/lib/mijoz-doirasi'
 import { foydalanuvchiYashirilganMaydonlari } from '@/lib/maydon-yashirish'
 import { joriyUsdKursi } from '@/lib/kurs'
 import { sotuvFoydasi, foydalarniYig, type FoydaQatori } from '@/lib/foyda'
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       include: {
         kategoriya: { select: { id: true, nomi: true, rang: true } },
         masul: { select: { id: true, ism: true } },
-        yaratgan: { select: { id: true, ism: true } },
+        yaratgan: { select: KIRITGAN_SELECT },
         sotuvlar: {
           orderBy: { sana: 'desc' },
           include: {
@@ -97,6 +97,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({
       ...mijoz,
+      yaratgan: kiritganMalumoti(mijoz.yaratgan),
       // Har bir chek yonida o'z foydasi ko'rsatiladi
       sotuvlar: mijoz.sotuvlar.map(s => ({
         ...s,

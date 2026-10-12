@@ -152,6 +152,7 @@ export async function onlaynSotuvYarat(
             lokatsiyaLat: b.lat,
             lokatsiyaLng: b.lng,
             izoh: `Onlayn do‘kondan: ${b.raqam}`,
+            manba: 'onlayn',
             ...doira,
           },
           select: { id: true },
