@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { agingBucket, type AgingBucket } from '@/lib/hisobotlar'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 
 const BUCKET_LABEL: Record<AgingBucket, string> = {
   kechikmagan: 'Kechikmagan',
@@ -41,7 +41,7 @@ export async function GET(_req: NextRequest) {
         holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] },
         qoldiq: { gt: 0 },
         ochirilgan: false,
-        mijoz: egaFilialWhere(session),
+        mijoz: await mijozDoirasi(session),
       },
       select: {
         id: true,

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 import { qarzQoshildiXabar } from '@/lib/telegram'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ xato: 'Summa kiritilishi shart' }, { status: 400 })
     }
 
-    const nasiya = await prisma.nasiya.findFirst({ where: { id, mijoz: egaFilialWhere(session) } })
+    const nasiya = await prisma.nasiya.findFirst({ where: { id, mijoz: await mijozDoirasi(session) } })
     if (!nasiya) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
 
     // YOPILGAN bo'lsa ham — shu nasiyani qayta ochamiz (yangi record yaratmaymiz)

@@ -9,6 +9,7 @@ import {
 import { useConfirm } from '@/components/ConfirmProvider'
 import { navItems } from '@/components/layout/nav-items'
 import { katalogBoyicha, ruxsatKatalogi, type RuxsatBolim } from '@/lib/ruxsat-katalogi'
+import { KATEGORIYA_KALIT, rangKlassi } from '@/lib/mijoz-kategoriya'
 import { formatSanaVaVaqt } from '@/lib/utils'
 
 // Ruxsatlar — har bir xodim uchun qaysi bo'lim, qaysi amal va qaysi ma'lumot
@@ -33,8 +34,15 @@ interface Tafsilot {
   faqatMaydon: boolean
   sabab: string | null
   tovarBayroqlari: Record<string, boolean> | null
+  /** Xodimga ochiq mijoz kategoriyalari (o'zi kiritgan mijozlardan tashqari) */
+  mijozKategoriyalari?: MijozKategoriyaRuxsati[]
   jurnal: JurnalQator[]
 }
+interface MijozKategoriyaRuxsati { id: string; nomi: string; rang: string; hammaga: boolean; ruxsat: boolean }
+
+/** Jurnal yorliqlari uchun: kategoriya id → nomi (ro'yxat va tafsilot yuklanganda to'ldiriladi) */
+const KATEGORIYA_NOMLARI = new Map<string, string>()
+const MIJOZ_DOIRASI = 'mijoz-doirasi'
 
 const ROL: Record<string, { nomi: string; rang: string }> = {
   ADMIN: { nomi: 'Administrator', rang: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400' },
@@ -55,6 +63,10 @@ const SABAB: Record<string, string> = { QOLDA: 'qo‘lda', NUSXA: 'nusxa', STAND
 function kalitNomi(k: string): string {
   const u = ULASHISH.find(x => x.kalit === k)
   if (u) return `Ulashilgan katalog › ${u.label}`
+  if (k.startsWith(KATEGORIYA_KALIT)) {
+    const nomi = KATEGORIYA_NOMLARI.get(k.slice(KATEGORIYA_KALIT.length))
+    return `Mijozlar ko‘rinishi › ${nomi ? `«${nomi}» kategoriyasi` : 'o‘chirilgan kategoriya'}`
+  }
   const r = katalogBoyicha.get(k)
   if (!r) return k
   return r.ota ? `${katalogBoyicha.get(r.ota)?.label ?? r.ota} › ${r.label}` : r.label
@@ -62,6 +74,8 @@ function kalitNomi(k: string): string {
 
 // Menyudagi guruh va ikonka — Ruxsatlar ekrani menyu bilan bir xil tartibda o'qilsin
 function navMalumoti(kalit: string) {
+  // Mijozlar ko'rinishi — menyu bandi emas, Mijozlar yonida turadi
+  if (kalit === MIJOZ_DOIRASI) return { icon: Eye, guruh: navItems.find(i => i.href === '/mijozlar')?.section ?? 'UMUMIY' }
   const n = navItems.find(i => i.href === (kalit === 'bosh' ? '/' : `/${kalit}`))
   return { icon: n?.icon ?? ShieldCheck, guruh: n?.section ?? 'UMUMIY' }
 }
@@ -111,6 +125,7 @@ export default function RuxsatlarPage() {
       const r = await fetch('/api/ruxsatlar', { cache: 'no-store' })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { toast.error(j.xato || 'Xodimlar yuklanmadi'); return }
+      for (const [id, nomi] of Object.entries((j.kategoriyaNomlari ?? {}) as Record<string, string>)) KATEGORIYA_NOMLARI.set(id, nomi)
       setXodimlar(j.xodimlar ?? [])
       setSonggi(j.songgi ?? [])
     } catch {
@@ -126,6 +141,7 @@ export default function RuxsatlarPage() {
       const r = await fetch(`/api/ruxsatlar?foydalanuvchiId=${encodeURIComponent(id)}`, { cache: 'no-store' })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { toast.error(j.xato || 'Ruxsatlar yuklanmadi'); setTanlanganId(null); return }
+      for (const k of (j.mijozKategoriyalari ?? []) as MijozKategoriyaRuxsati[]) KATEGORIYA_NOMLARI.set(k.id, k.nomi)
       setTafsilot(j)
     } catch {
       toast.error('Tarmoq xatosi')
@@ -167,16 +183,19 @@ export default function RuxsatlarPage() {
   // ── Qiymatlar (qoralama ustiga) ──
   const holat = tafsilot?.holat
   const adminmi = tafsilot?.xodim.rol === 'ADMIN'
+  const kategoriyalar = useMemo(() => tafsilot?.mijozKategoriyalari ?? [], [tafsilot?.mijozKategoriyalari])
   const qiymat = useCallback((k: string): boolean => {
     if (k in qoralama) return qoralama[k]!
     if (k.startsWith('ulashish.')) return tafsilot?.tovarBayroqlari?.[k] ?? true
+    if (k.startsWith(KATEGORIYA_KALIT)) return kategoriyalar.find(x => KATEGORIYA_KALIT + x.id === k)?.ruxsat ?? false
     return holat?.[k]?.qiymat ?? false
-  }, [qoralama, holat, tafsilot?.tovarBayroqlari])
+  }, [qoralama, holat, tafsilot?.tovarBayroqlari, kategoriyalar])
 
   const asl = useCallback((k: string): boolean => {
     if (k.startsWith('ulashish.')) return tafsilot?.tovarBayroqlari?.[k] ?? true
+    if (k.startsWith(KATEGORIYA_KALIT)) return kategoriyalar.find(x => KATEGORIYA_KALIT + x.id === k)?.ruxsat ?? false
     return holat?.[k]?.qiymat ?? false
-  }, [holat, tafsilot?.tovarBayroqlari])
+  }, [holat, tafsilot?.tovarBayroqlari, kategoriyalar])
 
   function almashtir(k: string, yangi?: boolean) {
     setQoralama(prev => {
@@ -192,7 +211,10 @@ export default function RuxsatlarPage() {
     for (const c of b.children ?? []) if ((c.turi ?? 'amal') === 'amal') almashtir(c.kalit, v)
   }
 
-  const standart = useCallback((k: string) => (k.startsWith('ulashish.') ? true : holat?.[k]?.standart ?? false), [holat])
+  // Rol standartida xodimga hech qanday mijoz kategoriyasi ochilmagan
+  const standart = useCallback((k: string) => (
+    k.startsWith('ulashish.') ? true : k.startsWith(KATEGORIYA_KALIT) ? false : holat?.[k]?.standart ?? false
+  ), [holat])
   const tahrirlanadi = !!tafsilot?.tahrirlanadi && !saqlanmoqda
 
   async function saqla() {
@@ -538,8 +560,10 @@ export default function RuxsatlarPage() {
                         const ochiqAmal = amallar.filter(c => qiymat(c.kalit)).length
                         const kengaygan = qidiruvBor || ochiqBolimlar.has(b.kalit)
                         const bolimFarq = !adminmi && !b.doimOchiq && ozgarganmi(b.kalit)
+                        const katKalitlari = b.kalit === MIJOZ_DOIRASI && !adminmi ? kategoriyalar.map(k => KATEGORIYA_KALIT + k.id) : []
                         const ichidaFarq = (b.children ?? []).some(c => (adminmi ? c.turi === 'maydon' : true) && ozgarganmi(c.kalit))
-                        const qoralamada = [b.kalit, ...(b.children ?? []).map(c => c.kalit)].some(k => k in qoralama)
+                          || katKalitlari.some(k => ozgarganmi(k))
+                        const qoralamada = [b.kalit, ...(b.children ?? []).map(c => c.kalit), ...katKalitlari].some(k => k in qoralama)
                         return (
                           <div key={b.kalit} className={`bg-white dark:bg-neutral-900 border rounded-2xl overflow-hidden ${qoralamada ? 'border-amber-300 dark:border-amber-800' : 'border-gray-200 dark:border-neutral-800'}`}>
                             <div className="flex items-center gap-3 px-3.5 py-3">
@@ -617,6 +641,16 @@ export default function RuxsatlarPage() {
                                     )
                                   })}
                                 </ul>
+                                {b.kalit === MIJOZ_DOIRASI && !adminmi && (
+                                  <MijozKategoriyalari
+                                    kategoriyalar={kategoriyalar}
+                                    hammasi={qiymat('mijoz-doirasi.hammasi')}
+                                    qiymat={qiymat}
+                                    qoralama={qoralama}
+                                    tahrirlanadi={tahrirlanadi}
+                                    almashtir={almashtir}
+                                  />
+                                )}
                               </div>
                             )}
                           </div>
@@ -731,6 +765,54 @@ function SonggiOzgarishlar({ songgi, yuklanmoqda }: { songgi: JurnalQator[]; yuk
       </div>
       <h3 className="px-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">So‘nggi o‘zgarishlar</h3>
       {yuklanmoqda ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-primary" /></div> : <Jurnal qatorlar={songgi} />}
+    </div>
+  )
+}
+
+/** Xodimga ochiq mijoz kategoriyalari — "Mijozlar ko'rinishi" bloki ichida. */
+function MijozKategoriyalari({ kategoriyalar, hammasi, qiymat, qoralama, tahrirlanadi, almashtir }: {
+  kategoriyalar: MijozKategoriyaRuxsati[]
+  hammasi: boolean
+  qiymat: (k: string) => boolean
+  qoralama: Record<string, boolean>
+  tahrirlanadi: boolean
+  almashtir: (k: string, yangi?: boolean) => void
+}) {
+  return (
+    <div className="border-t border-gray-100 dark:border-neutral-800 px-4 py-3">
+      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Ochiq mijoz kategoriyalari</p>
+      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+        {hammasi
+          ? 'Barcha mijozlar ochiq — kategoriya belgilash shart emas'
+          : 'O‘zi kiritgan mijozlardan tashqari shu kategoriyalardagi mijozlarni ham ko‘radi'}
+      </p>
+      {kategoriyalar.length === 0 ? (
+        <p className="mt-2 rounded-xl bg-gray-100/70 dark:bg-neutral-800/60 px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400">
+          Hali kategoriya yo‘q. «Mijozlar» bo‘limidagi «Kategoriyalar» tugmasi orqali yarating.
+        </p>
+      ) : (
+        <ul className="mt-2 divide-y divide-gray-100 dark:divide-neutral-800 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+          {kategoriyalar.map(k => {
+            const kalit = KATEGORIYA_KALIT + k.id
+            const yoniq = hammasi || k.hammaga || qiymat(kalit)
+            return (
+              <li key={k.id} className={`flex items-center gap-3 px-3 py-2.5 ${kalit in qoralama ? 'bg-amber-50/60 dark:bg-amber-950/10' : ''}`}>
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${rangKlassi(k.rang).nuqta}`} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm truncate ${yoniq ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>{k.nomi}</p>
+                  {k.hammaga && <p className="text-[11px] text-gray-400 dark:text-gray-500">Barcha xodimlarga ochiq</p>}
+                </div>
+                <Almashtirgich
+                  yoniq={yoniq}
+                  onChange={() => almashtir(kalit)}
+                  disabled={!tahrirlanadi || hammasi || k.hammaga}
+                  label={`«${k.nomi}» kategoriyasidagi mijozlar`}
+                />
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 import { formatPhone } from '@/lib/utils'
 
 export async function GET(_req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
+    // Faqat xodim ko'radigan mijozlar — eksport boshqalarning mijozini olib chiqmasin
     const mijozlar = await prisma.mijoz.findMany({
-      where: filialId ? { filialId } : { egaId: sessionEgaId(session) },
+      where: await mijozDoirasi(session),
       include: {
         _count: { select: { sotuvlar: true } },
         nasiyalar: { where: { holati: { in: ['OCHIQ', 'MUDDATI_OTGAN'] } }, select: { qoldiq: true } },

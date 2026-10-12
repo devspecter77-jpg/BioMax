@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 import { sotuvChekiXabar, nasiyaYaratildiXabarToliq } from '@/lib/telegram'
 
 // Sotuv chekini mijozga Telegram orqali yuborish.
@@ -23,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     // Sotuv shu foydalanuvchining ko'rish doirasidami — boshqa Eganing
     // mijoziga xabar yuborib bo'lmasin.
     const sotuv = await prisma.sotuv.findFirst({
-      where: { id, ...egaFilialWhere(session) },
+      where: { id, ...egaFilialWhere(session), ...mijozliYozuvSharti(await mijozKorinishi(session)) },
       select: {
         id: true, chekRaqami: true, yakuniySumma: true, jamiSumma: true,
         chegirma: true, tolovUsuli: true, holati: true,

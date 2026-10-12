@@ -1295,7 +1295,12 @@ export default function SotuvPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ism: mijozIsmi, telefon: mijozTelefon, manzil: mijozManzil || null }),
       })
-      if (!res.ok) { toast.error("Mijoz qo'shilmadi"); return }
+      if (!res.ok) {
+        // Masalan: raqam boshqa xodimning mijozida — server sababini aytadi
+        const j = await res.json().catch(() => ({}))
+        toast.error(j.xato || "Mijoz qo'shilmadi")
+        return
+      }
       const natija = await res.json()
       if (!mijozlar.some(m => m.id === natija.id)) {
         setMijozlar(prev => [...prev, natija])

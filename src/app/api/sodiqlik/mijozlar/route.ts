@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { qoshimchaTelefonBoyichaIdlar } from '@/lib/mijoz-telefon-server'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 import { toKirill, toLotin } from '@/lib/utils'
 
 // "Ballar va keshbeklar" bo'limining asosiy jadvali — mijozlar va
@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
     // bilan to'lib ketmasin. "barchasi=true" bilan hammasi ko'rinadi.
     const faqatBalansli = searchParams.get('barchasi') !== 'true'
 
-    const shartlar: Record<string, unknown>[] = [egaFilialWhere(session) as Record<string, unknown>]
+    // Faqat xodim ko'radigan mijozlar (o'ziniki va ochilgan kategoriyalar)
+    const doira = await mijozDoirasi(session)
+    const shartlar: Record<string, unknown>[] = [doira as Record<string, unknown>]
 
     if (faqatBalansli) {
       shartlar.push({ OR: [{ ballBalans: { gt: 0 } }, { keshbekBalans: { gt: 0 } }] })
@@ -55,7 +57,7 @@ export async function GET(req: NextRequest) {
       // Umumiy yakun — do'kon mijozlar oldida qancha "majburiyat"
       // to'plaganini ko'rsatadi.
       prisma.mijoz.aggregate({
-        where: egaFilialWhere(session),
+        where: doira,
         _sum: { ballBalans: true, keshbekBalans: true },
       }),
     ])

@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { hisoblaOrtachaChek, soatTaqsimoti } from '@/lib/analitika'
 import type { TolovUsuli } from '@prisma/client'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 
 const TOP_N = 20
 
@@ -25,6 +26,8 @@ export async function GET(req: NextRequest) {
     oyBoshi.setDate(1)
     oyBoshi.setHours(0, 0, 0, 0)
 
+    // Xodim faqat o'zi ko'radigan mijozlarning (va mijozsiz) sotuvlarini tahlil qiladi
+    const mijozSharti = mijozliYozuvSharti(await mijozKorinishi(session))
     const danSana = dan ? new Date(dan) : oyBoshi
     const gachaSana = gacha ? new Date(gacha) : bugun
     if (gacha) gachaSana.setHours(23, 59, 59, 999)
@@ -36,6 +39,7 @@ export async function GET(req: NextRequest) {
       ...(kassirId ? { kassirId } : {}),
       ...(mijozId ? { mijozId } : {}),
       ...egaFilialWhere(session),
+      ...mijozSharti,
     }
 
     const [joriySotuvlar, qaytarishSum, topTarkiblar] = await Promise.all([
@@ -51,7 +55,7 @@ export async function GET(req: NextRequest) {
         where: {
           yaratilgan: { gte: danSana, lte: gachaSana },
           ...(kassirId ? { kassirId } : {}),
-          aslSotuv: { ...(mijozId ? { mijozId } : {}), ...egaFilialWhere(session) },
+          aslSotuv: { ...(mijozId ? { mijozId } : {}), ...egaFilialWhere(session), ...mijozSharti },
         },
         _sum: { jamiSumma: true },
       }),
@@ -134,7 +138,7 @@ export async function GET(req: NextRequest) {
       _count: true,
       where: {
         yaratilgan: { gte: danSana, lte: gachaSana },
-        aslSotuv: egaFilialWhere(session),
+        aslSotuv: { ...egaFilialWhere(session), ...mijozSharti },
       },
     })
     for (const q of qaytarishlar) {

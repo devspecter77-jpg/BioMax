@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { mijozKorinadimi, yangiMijozEgaligi } from '@/lib/mijoz-doirasi'
 
 async function generateUniqueKod(): Promise<string> {
   while (true) {
@@ -29,7 +30,9 @@ export async function POST(req: NextRequest) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
 
-    let qoshildi = 0, yangilandi = 0, xatolar = 0
+    let qoshildi = 0, yangilandi = 0, xatolar = 0, boshqaXodimniki = 0
+    // Yangi mijozlar kirituvchiga biriktiriladi (administrator kiritsa — hech kimga)
+    const egalik = yangiMijozEgaligi(session)
 
     for (const row of rows) {
       const ism = String(row['Ism'] || '').trim()
@@ -50,7 +53,10 @@ export async function POST(req: NextRequest) {
             })
           : null
 
-        if (mavjud) {
+        // Boshqa xodimning mijozi — tegilmaydi (o'zgartirib bo'lmaydi va ko'rinmaydi)
+        if (mavjud && !(await mijozKorinadimi(session, mavjud.id))) {
+          boshqaXodimniki++
+        } else if (mavjud) {
           await prisma.mijoz.update({
             where: { id: mavjud.id },
             // Faylda bo'sh qolgan ustun mavjud qiymatni O'CHIRMAYDI —
@@ -75,6 +81,7 @@ export async function POST(req: NextRequest) {
               qoshimchaTelefonlar: [...new Set(boshqaRaqamlar)].slice(0, 8),
               viloyat, tuman, manzil,
               maxsus_kod, filialId, egaId,
+              ...egalik,
             },
           })
           qoshildi++
@@ -84,7 +91,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ muvaffaqiyat: true, qoshildi, yangilandi, xatolar, jami: rows.length })
+    return NextResponse.json({ muvaffaqiyat: true, qoshildi, yangilandi, boshqaXodimniki, xatolar, jami: rows.length })
   } catch (e) {
     console.error('[/api/mijozlar/import]', e)
     return NextResponse.json({ xato: 'Import muvaffaqiyatsiz' }, { status: 500 })

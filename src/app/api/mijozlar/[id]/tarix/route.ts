@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 
 // Mijoz avval qaysi mahsulotlarni sotib olganini tez tekshirish uchun
 // yengil endpoint — POS'da savatga mahsulot qo'shilganda "bu mijoz
@@ -11,11 +11,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { id } = await params
     const mijoz = await prisma.mijoz.findFirst({
-      where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
+      where: { AND: [{ id }, await mijozDoirasi(session)] },
       select: { id: true },
     })
     if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })

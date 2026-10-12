@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 import { formatPhone } from '@/lib/utils'
 
 const HOLATI_LABEL: Record<string, string> = {
@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest) {
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
 
     const nasiyalar = await prisma.nasiya.findMany({
-      where: { ochirilgan: false, mijoz: egaFilialWhere(session) },
+      where: { ochirilgan: false, mijoz: await mijozDoirasi(session) },
       include: {
         mijoz: { select: { ism: true, telefon: true } },
         sotuv: { select: { chekRaqami: true } },

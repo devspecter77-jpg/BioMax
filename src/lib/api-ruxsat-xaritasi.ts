@@ -107,6 +107,10 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/kunlik-hisobot/*', OQISH, ['kunlik-hisobot'], 'Kunlik hisobot'),
 
   // ── Mijozlar va nasiya ──
+  Q('/api/mijozlar/ommaviy', '*', 'ADMIN', 'Mijozlarni xodimlarga taqsimlash'),
+  // Kategoriyalar ro'yxati — kim nimani ko'rishini marshrutning o'zi filtrlaydi (kassada ham kerak)
+  Q('/api/mijoz-kategoriyalar/*', YOZISH, 'ADMIN', 'Mijoz kategoriyalarini boshqarish'),
+  Q('/api/mijoz-kategoriyalar/*', OQISH, ['mijozlar', 'sotuv', 'nasiyalar', 'ballar'], 'Mijoz kategoriyalari'),
   Q('/api/mijozlar/import', '*', ['mijozlar.import'], 'Mijozlarni import qilish'),
   Q('/api/mijozlar/export', '*', ['mijozlar.export'], 'Mijozlarni eksport qilish'),
   // Kassada yangi mijoz ham qo'shiladi — Sotuv bo'limi ham yetarli

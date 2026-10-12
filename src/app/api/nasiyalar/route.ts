@@ -3,6 +3,8 @@ import type { NasiyaHolati, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi, yangiMijozEgaligi } from '@/lib/mijoz-doirasi'
+import { telefonBoyichaSharti } from '@/lib/mijoz-telefon-server'
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,7 +15,8 @@ export async function GET(req: NextRequest) {
     const holati = searchParams.get('holati') || ''
     const mijozId = searchParams.get('mijozId') || ''
 
-    const where: Prisma.NasiyaWhereInput = { ochirilgan: false, mijoz: egaFilialWhere(session) }
+    // Faqat xodim ko'radigan mijozlarning nasiyalari
+    const where: Prisma.NasiyaWhereInput = { ochirilgan: false, mijoz: await mijozDoirasi(session) }
     if (holati) where.holati = holati as NasiyaHolati
     if (mijozId) where.mijozId = mijozId
 
@@ -64,20 +67,23 @@ export async function POST(req: NextRequest) {
     const normalizeManzil = (m: string) => m.trim().toLowerCase().replace(/\s+/g, ' ')
 
     let mijoz = null
+    // Mijoz faqat xodim ko'radiganlar orasidan topiladi — boshqa xodimning
+    // mijoziga nasiya yozilmaydi
+    const doira = await mijozDoirasi(session)
 
     // Ro'yxatdan tanlangan mijoz — ism bo'yicha qidirish shart emas.
     // Bu takroriy mijoz yaratilishining oldini oladi: ilgari faqat ism
     // bilan qidirilardi va bir xil ismli ikkinchi mijoz paydo bo'lardi.
     if (mijozId) {
       mijoz = await prisma.mijoz.findFirst({
-        where: { id: String(mijozId), ...egaFilialWhere(session) },
+        where: { AND: [{ id: String(mijozId) }, doira] },
       })
       if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
     }
 
     if (!mijoz && manzil) {
       const candidates = await prisma.mijoz.findMany({
-        where: { ism: { equals: ism, mode: 'insensitive' }, ...egaFilialWhere(session) },
+        where: { AND: [{ ism: { equals: ism, mode: 'insensitive' } }, doira] },
       })
       mijoz = candidates.find(c =>
         c.manzil && normalizeManzil(c.manzil) === normalizeManzil(manzil)
@@ -86,10 +92,18 @@ export async function POST(req: NextRequest) {
 
     if (!mijoz && !mijozId) {
       // Agar telefon bor bo'lsa, telefon bo'yicha ham tekshirish
-      if (finalPhone) {
+      const tel = telefonBoyichaSharti(finalPhone)
+      if (tel) {
         mijoz = await prisma.mijoz.findFirst({
-          where: { telefon: finalPhone, ...egaFilialWhere(session) },
+          where: { AND: [tel, doira] },
         })
+        // Raqam boshqa xodimning mijozida — ikkinchi nusxa yaratilmaydi
+        if (!mijoz && await prisma.mijoz.count({ where: { AND: [tel, egaFilialWhere(session)] } })) {
+          return NextResponse.json({
+            xato: 'Bu telefon raqamli mijoz bazada bor, lekin boshqa xodimga biriktirilgan. Administratorga murojaat qiling',
+            kod: 'boshqa_xodimniki',
+          }, { status: 409 })
+        }
       }
     }
 
@@ -100,6 +114,7 @@ export async function POST(req: NextRequest) {
           manzil: manzil || null,
           telefon: finalPhone,
           ...egaFilialWhere(session),
+          ...yangiMijozEgaligi(session),
         },
       })
     } else {

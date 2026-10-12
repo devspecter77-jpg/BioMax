@@ -106,6 +106,18 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
     ],
   },
   {
+    // Bo'lim emas — xodim QAYSI mijozlarni ko'rishi (kassa, mijozlar, nasiyalar,
+    // xaridlar, ballar). Kategoriyalar ro'yxati shu blok ostida alohida chiziladi
+    kalit: 'mijoz-doirasi', label: 'Mijozlar ko‘rinishi', doimOchiq: true,
+    izoh: 'O‘zi kiritgan (o‘ziga biriktirilgan) mijozlar doim ko‘rinadi. Boshqa xodimlarnikini ko‘rmaydi',
+    children: [
+      {
+        kalit: 'mijoz-doirasi.hammasi', label: 'Barcha mijozlarni ko‘rish', xavfli: true,
+        izoh: 'Boshqa xodimlar kiritgan mijozlar ham. Yopiq bo‘lsa — faqat o‘ziniki va unga ochilgan kategoriyalar',
+      },
+    ],
+  },
+  {
     kalit: 'nasiyalar', label: 'Nasiyalar', children: [
       { kalit: 'nasiyalar.tolov', label: 'To‘lov qabul qilish' },
       { kalit: 'nasiyalar.qarz', label: 'Qarz yaratish va qo‘shish', xavfli: true },
@@ -208,6 +220,9 @@ const STANDART_YOPIQ = new Set([
   'onlayn-buyurtmalar.boshqarish:DOSTAVCHIK', 'onlayn-buyurtmalar.bekor:DOSTAVCHIK', 'onlayn-buyurtmalar.kuryer:DOSTAVCHIK',
   'namuna-tovar.dostavchik', 'ilova-qr.manzil',
   'tovarlar.ochirish', 'tovarlar.import', 'mijozlar.ochirish', 'mijozlar.import', 'mijozlar.export',
+  // Xodim boshqalarning mijozini ko'rmaydi — faqat Ega ochib beradi. Onlayn
+  // do'kon mijozlarini ham (ularni xodim kiritmagan — do'konning umumiy bazasi)
+  'mijoz-doirasi.hammasi', 'mijozlar.onlayn',
   'nasiyalar.ochirish', 'nasiyalar.import', 'nasiyalar.xarajat',
   'taminotchilar.ochirish', 'taminotchilar.qarz', 'ballar.qolda', 'ballar.sozlama', 'xodimlar.qoshish', 'xodimlar.oylik', 'xodimlar.mulk', 'xodimlar.sotuvlar', 'xodimlar.smena',
   'kunlik-hisobot.sozlama', 'ombor.sozlash', 'onlayn-vitrina.tahrirlash',

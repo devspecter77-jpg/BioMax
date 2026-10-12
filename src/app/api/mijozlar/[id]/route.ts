@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { telefonlarniTozala } from '@/lib/mijoz-telefon'
-import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { kategoriyaniTekshir, masulniTekshir, mijozDoirasi } from '@/lib/mijoz-doirasi'
 import { foydalanuvchiYashirilganMaydonlari } from '@/lib/maydon-yashirish'
 import { joriyUsdKursi } from '@/lib/kurs'
 import { sotuvFoydasi, foydalarniYig, type FoydaQatori } from '@/lib/foyda'
@@ -11,16 +11,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { id } = await params
     // Chekni qayta chop etish uchun sotuv yozuvi TO'LIQ kerak — summa
     // taqsimoti, chegirma, to'lov kanallari, birlik va kassir telefoni.
     // Oldin faqat mahsulot nomi qaytarilar edi, shuning uchun mijoz
     // kartasidan chek chiqarib bo'lmasdi.
+    // Boshqa xodimning mijozi — "topilmadi" (borligi ham oshkor qilinmaydi)
     const mijoz = await prisma.mijoz.findFirst({
-      where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) },
+      where: { AND: [{ id }, await mijozDoirasi(session)] },
       include: {
+        kategoriya: { select: { id: true, nomi: true, rang: true } },
+        masul: { select: { id: true, ism: true } },
+        yaratgan: { select: { id: true, ism: true } },
         sotuvlar: {
           orderBy: { sana: 'desc' },
           include: {
@@ -118,11 +121,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { id } = await params
 
-    const mijoz = await prisma.mijoz.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
+    const mijoz = await prisma.mijoz.findFirst({ where: { AND: [{ id }, await mijozDoirasi(session)] }, select: { id: true } })
     if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
 
     const nasiyalar = await prisma.nasiya.findMany({ where: { mijozId: id }, select: { id: true } })
@@ -149,15 +151,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const filialId = sessionFilialId(session)
 
     const { id } = await params
-    const mavjud = await prisma.mijoz.findFirst({ where: { id, ...(filialId ? { filialId } : { egaId: sessionEgaId(session) }) }, select: { id: true } })
+    const mavjud = await prisma.mijoz.findFirst({
+      where: { AND: [{ id }, await mijozDoirasi(session)] },
+      select: { id: true, masulId: true, kategoriyaId: true },
+    })
     if (!mavjud) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
 
     const data = await req.json()
     const tel = telefonlarniTozala(data.telefon, data.telefon2, data.qoshimchaTelefonlar)
     if ('xato' in tel) return NextResponse.json({ xato: tel.xato }, { status: 400 })
+
+    // Kategoriya: ko'radigan kategoriyalardan biri. Xodim faqat o'ziga
+    // biriktirilgan mijozni boshqa kategoriyaga o'tkaza oladi — umumiy
+    // kategoriyadagi mijozni hamkasblaridan "yashirib" qo'ymasin
+    const kat = await kategoriyaniTekshir(session, data.kategoriyaId)
+    if (!kat.ok) return NextResponse.json({ xato: kat.xato }, { status: 400 })
+    const meId = (session.user as { id: string; rol?: string }).id
+    const admin = (session.user as { rol?: string }).rol === 'ADMIN'
+    if (kat.kategoriyaId !== undefined && kat.kategoriyaId !== mavjud.kategoriyaId && !admin && mavjud.masulId !== meId) {
+      return NextResponse.json({ xato: 'Faqat o‘zingizga biriktirilgan mijozning kategoriyasini o‘zgartira olasiz' }, { status: 403 })
+    }
+    // Mas'ul xodim — faqat administrator
+    const masul = await masulniTekshir(session, data.masulId)
+    if (!masul.ok) return NextResponse.json({ xato: masul.xato }, { status: masul.holat })
 
     const mijoz = await prisma.mijoz.update({
       where: { id },
@@ -172,6 +190,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         izoh: data.izoh || null,
         lokatsiyaLat: typeof data.lokatsiyaLat === 'number' ? data.lokatsiyaLat : null,
         lokatsiyaLng: typeof data.lokatsiyaLng === 'number' ? data.lokatsiyaLng : null,
+        ...(kat.kategoriyaId !== undefined ? { kategoriyaId: kat.kategoriyaId } : {}),
+        ...(masul.masulId !== undefined ? { masulId: masul.masulId } : {}),
       },
     })
     return NextResponse.json(mijoz)

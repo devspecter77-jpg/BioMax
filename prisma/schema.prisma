@@ -27,6 +27,7 @@ model Filial {
   omborlar      Ombor[]
   tovarlar      Tovar[]
   mijozlar      Mijoz[]
+  mijozKategoriyalari MijozKategoriya[]
   taminotchilar Taminotchi[]
   sotuvlar      Sotuv[]
   xarajatlar    Xarajat[]
@@ -120,6 +121,10 @@ model Foydalanuvchi {
   berganNamunalari      NamunaBerish[]     @relation("NamunaBergan")
   qabulQilganNamunalar  NamunaTarkibi[]    @relation("NamunaQabulQilgan")
   smenalari             Smena[]            @relation("XodimSmenalari")
+  yaratganMijozlar      Mijoz[]            @relation("MijozYaratgan")
+  masulMijozlar         Mijoz[]            @relation("MijozMasul")
+  ozMijozKategoriyalari MijozKategoriya[]  @relation("MijozKategoriyaEgasi")
+  mijozKategoriyaRuxsatlari MijozKategoriyaXodim[] @relation("MijozKategoriyaXodimlari")
 
   @@index([filialId])
   @@index([ulashilganEgaId])
@@ -407,8 +412,21 @@ model Mijoz {
   egaId         String?
   yaratilgan    DateTime @default(now())
 
+  // Ko'rish doirasi: xodim faqat o'ziga biriktirilgan mijozlarni va unga
+  // ochilgan kategoriyalardagilarni ko'radi (boshqa xodimning mijozini
+  // "o'ziniki qilib" olmasin). Administrator hammasini ko'radi.
+  /// Kim kiritgan — o'zgarmaydi (tarix uchun)
+  yaratganId    String?
+  /// Mas'ul xodim: mijoz shu xodimga doim ko'rinadi. Kiritganda — kirituvchi;
+  /// administrator almashtira oladi. null — faqat administratorlarga
+  masulId       String?
+  kategoriyaId  String?
+
   filial          Filial?  @relation(fields: [filialId], references: [id])
   ega             Foydalanuvchi?    @relation("MijozEgasi", fields: [egaId], references: [id])
+  yaratgan        Foydalanuvchi?    @relation("MijozYaratgan", fields: [yaratganId], references: [id], onDelete: SetNull)
+  masul           Foydalanuvchi?    @relation("MijozMasul", fields: [masulId], references: [id], onDelete: SetNull)
+  kategoriya      MijozKategoriya?  @relation(fields: [kategoriyaId], references: [id], onDelete: SetNull)
   sotuvlar        Sotuv[]
   nasiyalar       Nasiya[]
   bildirishnomlar BildirishnomLog[]
@@ -418,7 +436,50 @@ model Mijoz {
   @@index([filialId])
   @@index([egaId])
   @@index([viloyat])
+  @@index([masulId])
+  @@index([kategoriyaId])
   @@map("mijozlar")
+}
+
+// Mijozlar kategoriyasi (masalan "Ulgurji", "Do'konlar", "Umumiy").
+//
+// Ko'rinish shu yerda boshqariladi: `hammaga` — barcha xodimlarga, aks holda
+// faqat `xodimlar` ro'yxatidagilarga (Ruxsatlar bo'limidan ham belgilanadi).
+// Nom takrorlanmasligi API'da tekshiriladi — filialsiz qatorlarda @@unique ishlamaydi.
+model MijozKategoriya {
+  id          String   @id @default(cuid())
+  nomi        String
+  /// Belgi rangi: kulrang | qizil | sariq | yashil | kok | binafsha
+  rang        String   @default("kulrang")
+  /// Barcha xodimlarga ko'rinadi
+  hammaga     Boolean  @default(false)
+  filialId    String?
+  egaId       String?
+  yaratilgan  DateTime @default(now())
+  yangilangan DateTime @updatedAt
+
+  filial   Filial?        @relation(fields: [filialId], references: [id])
+  ega      Foydalanuvchi? @relation("MijozKategoriyaEgasi", fields: [egaId], references: [id])
+  mijozlar Mijoz[]
+  xodimlar MijozKategoriyaXodim[]
+
+  @@index([filialId])
+  @@index([egaId])
+  @@map("mijoz_kategoriyalari")
+}
+
+/// Kategoriya shu xodimga ham ko'rinadi
+model MijozKategoriyaXodim {
+  kategoriyaId    String
+  foydalanuvchiId String
+  yaratilgan      DateTime @default(now())
+
+  kategoriya    MijozKategoriya @relation(fields: [kategoriyaId], references: [id], onDelete: Cascade)
+  foydalanuvchi Foydalanuvchi   @relation("MijozKategoriyaXodimlari", fields: [foydalanuvchiId], references: [id], onDelete: Cascade)
+
+  @@id([kategoriyaId, foydalanuvchiId])
+  @@index([foydalanuvchiId])
+  @@map("mijoz_kategoriya_xodimlari")
 }
 
 // ========================

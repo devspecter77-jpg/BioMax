@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { getReportDateRange, baseSotuvFilter, type ReportTur } from '@/lib/hisobotlar'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,12 +22,15 @@ export async function GET(req: NextRequest) {
 
     const { dan: d, gacha: g } = getReportDateRange(tur, dan, gacha)
     const egaScope = egaFilialWhere(session)
+    // Hisobotda faqat xodim ko'radigan mijozlar (ismlari ro'yxatda chiqadi)
+    const doira = await mijozDoirasi(session)
 
     // Sotuv grouped by mijozId (davrda)
     const sotuvlar = await prisma.sotuv.findMany({
       where: {
         ...baseSotuvFilter(d, g, undefined, egaScope),
         mijozId: { not: null },
+        mijoz: doira,
       },
       select: {
         mijozId: true,
@@ -65,7 +69,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Jami mijozlar soni (tizimda)
-    const jamiMijozlar = await prisma.mijoz.count({ where: egaScope })
+    const jamiMijozlar = await prisma.mijoz.count({ where: doira })
 
     // Aktiv mijozlar: davrda sotuvi borlar
     const aktivMijozlar = mijozMap.size

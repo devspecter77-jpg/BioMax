@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 
 // Bitta mijozning joriy balansi — kassada mijoz tanlanganda chaqiriladi.
 // Ataylab yengil: sotuvlar tarixini yuklamaydi, faqat ikkita son.
@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params
     const mijoz = await prisma.mijoz.findFirst({
-      where: { id, ...egaFilialWhere(session) },
+      where: { AND: [{ id }, await mijozDoirasi(session)] },
       select: { id: true, ism: true, ballBalans: true, keshbekBalans: true },
     })
     if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })

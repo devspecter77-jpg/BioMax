@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { tolovQisqa } from '@/lib/tolov-usullari'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,7 +19,8 @@ export async function GET(req: NextRequest) {
     const mijozId = searchParams.get('mijozId') || undefined
     const tolovUsuli = searchParams.get('tolovUsuli') || undefined
 
-    const where: Record<string, unknown> = { holati: 'YAKUNLANGAN', ...egaFilialWhere(session) }
+    // Boshqa xodimning mijozlariga qilingan sotuvlar eksportga ham chiqmaydi
+    const where: Record<string, unknown> = { holati: 'YAKUNLANGAN', ...egaFilialWhere(session), AND: [mijozliYozuvSharti(await mijozKorinishi(session))] }
     if (dan || gacha) {
       const sana: { gte?: Date; lte?: Date } = {}
       if (dan) sana.gte = new Date(dan)

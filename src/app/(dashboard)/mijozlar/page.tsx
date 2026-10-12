@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
-import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe, FileImage } from 'lucide-react'
+import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe, FileImage, Tags, ListChecks, UserCheck, EyeOff } from 'lucide-react'
 import { buildChekHtml, buildMijozTarixHtml, chekChopEtish } from '@/lib/chek-print'
 import { chekniA4ChopEt } from '@/lib/chek-a4'
 import { tolovQisqa } from '@/lib/tolov-usullari'
@@ -22,6 +22,10 @@ import { useRuxsat } from '@/hooks/useRuxsat'
 import { XaritadaKorish } from '@/components/LokatsiyaModal'
 import OnlaynMijozlarPanel from '@/components/OnlaynMijozlarPanel'
 import { MAX_TELEFON, mijozTelefonlari } from '@/lib/mijoz-telefon'
+import { rangKlassi, type KategoriyaQisqa, type KategoriyalarJavobi } from '@/lib/mijoz-kategoriya'
+import KategoriyaBelgisi from '@/components/mijoz/KategoriyaBelgisi'
+import KategoriyalarOynasi from '@/components/mijoz/KategoriyalarOynasi'
+import TanlovPaneli from '@/components/mijoz/TanlovPaneli'
 
 interface Mijoz {
   id: string; ism: string; telefon: string | null; telefon2: string | null
@@ -31,6 +35,18 @@ interface Mijoz {
   lokatsiyaLat: number | null; lokatsiyaLng: number | null
   maxsus_kod: string | null
   _count: { sotuvlar: number; nasiyalar: number }; jami_qarz: number
+  kategoriya?: KategoriyaQisqa | null
+  /** Mas'ul xodim — mijoz shu xodimga doim ko'rinadi */
+  masul?: { id: string; ism: string } | null
+}
+
+const BOSH_FORMA = {
+  ism: '', telefon: '', telefon2: '', qoshimchaTelefonlar: [''] as string[], viloyat: '', tuman: '', manzil: '', izoh: '',
+  lokatsiyaLat: null as number | null, lokatsiyaLng: null as number | null,
+  /** '' — kategoriyasiz */
+  kategoriyaId: '',
+  /** '' — hech kim (faqat administratorlar). Faqat administrator belgilaydi */
+  masulId: '',
 }
 
 interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
@@ -55,6 +71,8 @@ interface FoydaNatijasi {
   foiz: number | null
 }
 interface MijozDetail extends Mijoz {
+  /** Kim kiritgan */
+  yaratgan?: { id: string; ism: string } | null
   sotuvlar: MijozSotuv[]
   dokon?: DokonInfo
   /** Butun tarix bo'yicha yig'ma foyda. Kelish narxi yashirilgan bo'lsa null. */
@@ -89,10 +107,25 @@ export default function MijozlarPage() {
   const [qidiruv, setQidiruv] = useState('')
   const [modal, setModal] = useState(false)
   const [tahrirlash, setTahrirlash] = useState<Mijoz | null>(null)
-  const [form, setForm] = useState({
-    ism: '', telefon: '', telefon2: '', qoshimchaTelefonlar: [''] as string[], viloyat: '', tuman: '', manzil: '', izoh: '',
-    lokatsiyaLat: null as number | null, lokatsiyaLng: null as number | null,
-  })
+  const [form, setForm] = useState(BOSH_FORMA)
+  // ── Kategoriyalar va ko'rish doirasi ──
+  const admin = ruxsat.admin
+  const [katMalumot, setKatMalumot] = useState<KategoriyalarJavobi | null>(null)
+  /** '' — hammasi, 'yoq' — kategoriyasizlar, aks holda kategoriya id */
+  const [katFiltr, setKatFiltr] = useState('')
+  const [katOyna, setKatOyna] = useState(false)
+  // Administrator: bir nechta mijozni birdaniga kategoriyaga / xodimga o'tkazish
+  const [tanlash, setTanlash] = useState(false)
+  const [tanlangan, setTanlangan] = useState<Set<string>>(new Set())
+  const tanlashniAlmashtir = (id: string) => setTanlangan(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const kategoriyalarniYukla = useCallback(async () => {
+    try {
+      const r = await fetch('/api/mijoz-kategoriyalar', { cache: 'no-store' })
+      if (r.ok) setKatMalumot(await r.json())
+    } catch {
+      // Kategoriyalarsiz ham ro'yxat ishlaydi
+    }
+  }, [])
   const [joylashuvOlinmoqda, setJoylashuvOlinmoqda] = useState(false)
 
   function modalOchish(mijoz?: Mijoz) {
@@ -109,10 +142,12 @@ export default function MijozlarPage() {
         manzil: mijoz.manzil || '',
         izoh: '',
         lokatsiyaLat: mijoz.lokatsiyaLat, lokatsiyaLng: mijoz.lokatsiyaLng,
+        kategoriyaId: mijoz.kategoriya?.id ?? '',
+        masulId: mijoz.masul?.id ?? '',
       })
     } else {
       setTahrirlash(null)
-      setForm({ ism: '', telefon: '', telefon2: '', qoshimchaTelefonlar: [''], viloyat: '', tuman: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
+      setForm(BOSH_FORMA)
     }
     setModal(true)
   }
@@ -307,10 +342,20 @@ export default function MijozlarPage() {
 
   const yuklash = useCallback(async () => {
     setYuklanmoqda(true)
-    const data = await fetch(`/api/mijozlar?q=${encodeURIComponent(qidiruv)}`).then(r => r.json())
-    setMijozlar(data || [])
+    const p = new URLSearchParams({ q: qidiruv })
+    if (katFiltr) p.set('kategoriya', katFiltr)
+    const data = await fetch(`/api/mijozlar?${p}`).then(r => r.json()).catch(() => [])
+    setMijozlar(Array.isArray(data) ? data : [])
     setYuklanmoqda(false)
-  }, [qidiruv])
+  }, [qidiruv, katFiltr])
+
+  useEffect(() => { void kategoriyalarniYukla() }, [kategoriyalarniYukla])
+
+  /** Kategoriya yoki mas'ul o'zgargach — ro'yxat ham, sonlar ham yangilanadi */
+  function hammasiniYangila() {
+    void yuklash()
+    void kategoriyalarniYukla()
+  }
 
   useEffect(() => {
     // Restore saved view preference from localStorage
@@ -336,7 +381,7 @@ export default function MijozlarPage() {
       const res = await fetch('/api/mijozlar/import', { method: 'POST', body: fd })
       const data = await res.json()
       if (res.ok) {
-        toast.success(`Import tugadi: ${data.qoshildi} ta qo'shildi, ${data.yangilandi} ta yangilandi`)
+        toast.success(`Import tugadi: ${data.qoshildi} ta qo'shildi, ${data.yangilandi} ta yangilandi${data.boshqaXodimniki ? `, ${data.boshqaXodimniki} tasi boshqa xodimniki — tegilmadi` : ''}`)
         yuklash()
       } else {
         toast.error(data.xato || 'Import xatoligi')
@@ -370,15 +415,21 @@ export default function MijozlarPage() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, qoshimchaTelefonlar: form.qoshimchaTelefonlar.filter(t => t.trim()) })
+        body: JSON.stringify({
+          ...form,
+          qoshimchaTelefonlar: form.qoshimchaTelefonlar.filter(t => t.trim()),
+          kategoriyaId: form.kategoriyaId || null,
+          // Mas'ul xodimni faqat administrator belgilaydi — xodim kiritgan mijoz o'ziga biriktiriladi
+          masulId: admin ? form.masulId || null : undefined,
+        })
       })
       if (res.ok) {
         const javob = await res.clone().json().catch(() => ({}))
         toast.success(tahrirlash ? 'Mijoz yangilandi' : javob?.mavjud ? `Bu raqam bilan mijoz allaqachon bor: ${javob.ism}` : "Mijoz qo'shildi")
         setModal(false)
         setTahrirlash(null)
-        setForm({ ism: '', telefon: '', telefon2: '', qoshimchaTelefonlar: [''], viloyat: '', tuman: '', manzil: '', izoh: '', lokatsiyaLat: null, lokatsiyaLng: null })
-        yuklash()
+        setForm(BOSH_FORMA)
+        hammasiniYangila()
       } else {
         const j = await res.json().catch(() => ({}))
         toast.error(j.xato || 'Xatolik yuz berdi')
@@ -472,6 +523,74 @@ export default function MijozlarPage() {
         </button>
       </div>
 
+      {/* Xodimga: nega hamma mijozlar ko'rinmasligi */}
+      {katMalumot && !katMalumot.hammasi && (
+        <p className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <EyeOff size={13} className="shrink-0" aria-hidden />
+          Sizga o‘zingiz kiritgan mijozlar{katMalumot.kategoriyalar.length > 0 ? ' va sizga ochilgan kategoriyalar' : ''} ko‘rinadi.
+        </p>
+      )}
+
+      {/* Kategoriyalar: filtr va (administratorga) boshqaruv */}
+      {katMalumot && (admin || katMalumot.kategoriyalar.length > 0) && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+              {[
+                { id: '', nomi: 'Hammasi', soni: katMalumot.kategoriyasiz + katMalumot.kategoriyalar.reduce((t, k) => t + k.mijozlar, 0), rang: null as string | null },
+                ...katMalumot.kategoriyalar.map(k => ({ id: k.id, nomi: k.nomi, soni: k.mijozlar, rang: k.rang as string | null })),
+                ...(katMalumot.kategoriyasiz > 0 || katFiltr === 'yoq' ? [{ id: 'yoq', nomi: 'Kategoriyasiz', soni: katMalumot.kategoriyasiz, rang: null as string | null }] : []),
+              ].map(c => {
+                const faol = katFiltr === c.id
+                return (
+                  <button
+                    key={c.id || 'hammasi'} type="button" onClick={() => setKatFiltr(c.id)} aria-pressed={faol}
+                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      faol
+                        ? 'border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-gray-900'
+                        : 'border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-gray-700 dark:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    {c.rang && <KategoriyaNuqta rang={c.rang} />}
+                    {c.nomi}
+                    <span className={`tabular-nums ${faol ? 'opacity-70' : 'text-gray-400'}`}>{c.soni}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {admin && (
+              <div className="flex shrink-0 gap-1.5">
+                <button
+                  type="button" onClick={() => { setTanlash(t => !t); setTanlangan(new Set()) }} aria-pressed={tanlash}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition ${
+                    tanlash ? 'border-primary bg-primary text-white' : 'border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800'
+                  }`}
+                  title="Bir nechta mijozni kategoriyaga yoki xodimga o‘tkazish"
+                >
+                  <ListChecks size={14} /> <span className="hidden sm:inline">Tanlash</span>
+                </button>
+                <button
+                  type="button" onClick={() => setKatOyna(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-700 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                >
+                  <Tags size={14} /> <span className="hidden sm:inline">Kategoriyalar</span>
+                </button>
+              </div>
+            )}
+          </div>
+          {admin && tanlash && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Mijozlarni belgilang — pastdagi paneldan kategoriya yoki mas’ul xodimni tanlab «Qo‘llash»ni bosing.
+              {korsatiladiganMijozlar.length > 0 && (
+                <button type="button" onClick={() => setTanlangan(new Set(korsatiladiganMijozlar.map(m => m.id)))} className="ml-1.5 font-semibold text-primary hover:underline">
+                  Hammasini belgilash ({korsatiladiganMijozlar.length})
+                </button>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* TABLE VIEW — faqat desktopda */}
       {view === 'table' && (
         <div className="hidden sm:block bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
@@ -479,6 +598,7 @@ export default function MijozlarPage() {
             <table className="w-full table-fixed">
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-800">
+                  {tanlash && <th style={{ width: '44px' }} className="px-2 py-3"><span className="sr-only">Tanlash</span></th>}
                   {kategoriya === 'top' && (
                     <th style={{ width: '44px' }} className="text-center text-gray-500 dark:text-gray-400 text-xs font-medium px-2 py-3 whitespace-nowrap">#</th>
                   )}
@@ -493,9 +613,9 @@ export default function MijozlarPage() {
               </thead>
               <tbody>
                 {yuklanmoqda ? (
-                  <tr><td colSpan={kategoriya === 'top' ? 8 : 7} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
+                  <tr><td colSpan={(kategoriya === 'top' ? 8 : 7) + (tanlash ? 1 : 0)} className="text-center text-gray-500 dark:text-gray-400 py-12">Yuklanmoqda...</td></tr>
                 ) : korsatiladiganMijozlar.length === 0 ? (
-                  <tr><td colSpan={kategoriya === 'top' ? 8 : 7} className="py-12">
+                  <tr><td colSpan={(kategoriya === 'top' ? 8 : 7) + (tanlash ? 1 : 0)} className="py-12">
                     <div className="text-center">
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         {qidiruv ? 'Shu nom bo\'yicha mijoz topilmadi' : 'Hali mijoz qo\'shilmagan'}
@@ -511,7 +631,12 @@ export default function MijozlarPage() {
                     </div>
                   </td></tr>
                 ) : korsatiladiganMijozlar.map((m, idx) => (
-                  <tr key={m.id} onClick={() => mijozOch(m.id)} className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition cursor-pointer ${idx % 2 === 1 ? 'bg-gray-50/40 dark:bg-neutral-800/40' : ''}`}>
+                  <tr key={m.id} onClick={() => (tanlash ? tanlashniAlmashtir(m.id) : mijozOch(m.id))} className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 transition cursor-pointer ${tanlangan.has(m.id) ? 'bg-primary/5' : idx % 2 === 1 ? 'bg-gray-50/40 dark:bg-neutral-800/40' : ''}`}>
+                    {tanlash && (
+                      <td className="px-2 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={tanlangan.has(m.id)} onChange={() => tanlashniAlmashtir(m.id)} aria-label={`${m.ism} — tanlash`} className="h-4 w-4 accent-red-600" />
+                      </td>
+                    )}
                     {kategoriya === 'top' && (
                       <td className="px-2 py-3 text-center">
                         <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-bold ${
@@ -525,7 +650,19 @@ export default function MijozlarPage() {
                         <div className="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center text-red-600 font-bold text-sm shrink-0">
                           {m.ism[0]?.toUpperCase()}
                         </div>
-                        <span className="text-gray-900 dark:text-gray-100 font-medium text-sm truncate">{m.ism}</span>
+                        <div className="min-w-0">
+                          <span className="block text-gray-900 dark:text-gray-100 font-medium text-sm truncate">{m.ism}</span>
+                          {(m.kategoriya || (admin && m.masul)) && (
+                            <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                              <KategoriyaBelgisi k={m.kategoriya} kichik />
+                              {admin && m.masul && (
+                                <span className="inline-flex min-w-0 items-center gap-0.5 text-[11px] text-gray-500 dark:text-gray-400" title="Mas’ul xodim">
+                                  <UserCheck size={11} className="shrink-0" aria-hidden /><span className="truncate">{m.masul.ism}</span>
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     {/* Maxsus kod */}
@@ -617,9 +754,15 @@ export default function MijozlarPage() {
           ) : korsatiladiganMijozlar.map((m, idx) => (
             <div
               key={m.id}
-              onClick={() => mijozOch(m.id)}
-              className="relative bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5 sm:p-4 hover:shadow-md active:scale-[0.98] transition-all cursor-pointer"
+              onClick={() => (tanlash ? tanlashniAlmashtir(m.id) : mijozOch(m.id))}
+              className={`relative bg-white dark:bg-neutral-900 border rounded-2xl p-5 sm:p-4 hover:shadow-md active:scale-[0.98] transition-all cursor-pointer ${tanlangan.has(m.id) ? 'border-primary ring-2 ring-primary/20' : 'border-gray-200 dark:border-neutral-800'}`}
             >
+              {tanlash && (
+                <input
+                  type="checkbox" checked={tanlangan.has(m.id)} onChange={() => tanlashniAlmashtir(m.id)} onClick={e => e.stopPropagation()}
+                  aria-label={`${m.ism} — tanlash`} className="absolute right-3 top-3 h-5 w-5 accent-red-600"
+                />
+              )}
               {kategoriya === 'top' && (
                 <span className={`absolute -top-2 -left-2 inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shadow ${
                   idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-gray-300 text-gray-700' : idx === 2 ? 'bg-orange-400 text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400'
@@ -628,6 +771,16 @@ export default function MijozlarPage() {
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-gray-900 dark:text-gray-100 font-semibold text-lg sm:text-base">{m.ism}</p>
+                  {(m.kategoriya || (admin && m.masul)) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <KategoriyaBelgisi k={m.kategoriya} />
+                      {admin && m.masul && (
+                        <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400" title="Mas’ul xodim">
+                          <UserCheck size={12} aria-hidden />{m.masul.ism}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {m.telefon && (
                     <a href={`tel:${m.telefon.replace(/\s/g, '')}`} onClick={e => e.stopPropagation()} className="text-blue-500 hover:text-blue-600 text-base sm:text-sm flex items-center gap-1 mt-1 sm:mt-0.5">
                       <Phone size={14} className="sm:hidden" /><Phone size={12} className="hidden sm:block" /> {formatPhone(m.telefon)}
@@ -709,6 +862,19 @@ export default function MijozlarPage() {
           ))}
       </div>
 
+      {admin && tanlash && tanlangan.size > 0 && katMalumot && (
+        <TanlovPaneli
+          idlar={[...tanlangan]}
+          kategoriyalar={katMalumot.kategoriyalar}
+          xodimlar={katMalumot.xodimlar}
+          onTayyor={() => { setTanlangan(new Set()); setTanlash(false); hammasiniYangila() }}
+          onBekor={() => setTanlangan(new Set())}
+        />
+      )}
+      {katOyna && katMalumot && (
+        <KategoriyalarOynasi malumot={katMalumot} onYopish={() => setKatOyna(false)} onOzgardi={hammasiniYangila} />
+      )}
+
       {modal && (
         <Modal
           sarlavha={tahrirlash ? 'Mijozni tahrirlash' : 'Yangi mijoz'}
@@ -733,6 +899,32 @@ export default function MijozlarPage() {
                   onChange={e => setForm(prev => ({ ...prev, ism: e.target.value }))}
                   className={inputCls} />
               </div>
+              {/* Kategoriya va mas'ul xodim — kim ko'rishini belgilaydi */}
+              {katMalumot && (katMalumot.kategoriyalar.length > 0 || admin) && (
+                <div className={`grid gap-3 ${admin ? 'sm:grid-cols-2' : ''}`}>
+                  <div>
+                    <label htmlFor="mijoz-kategoriya" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kategoriya</label>
+                    <select id="mijoz-kategoriya" value={form.kategoriyaId} onChange={e => setForm(f => ({ ...f, kategoriyaId: e.target.value }))} className={inputCls}>
+                      <option value="">Kategoriyasiz</option>
+                      {katMalumot.kategoriyalar.map(k => <option key={k.id} value={k.id}>{k.nomi}</option>)}
+                    </select>
+                  </div>
+                  {admin && (
+                    <div>
+                      <label htmlFor="mijoz-masul" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Mas’ul xodim</label>
+                      <select id="mijoz-masul" value={form.masulId} onChange={e => setForm(f => ({ ...f, masulId: e.target.value }))} className={inputCls}>
+                        <option value="">Hech kim — faqat administratorlar</option>
+                        {katMalumot.xodimlar.map(x => <option key={x.id} value={x.id}>{x.ism}{x.faol ? '' : ' (faol emas)'}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <p className={`text-xs text-gray-500 dark:text-gray-400 ${admin ? 'sm:col-span-2' : ''}`}>
+                    {admin
+                      ? 'Mijoz mas’ul xodimga va kategoriyasi ochiq xodimlarga ko‘rinadi. Boshqa xodimlar uni ko‘rmaydi.'
+                      : 'Siz kiritgan mijoz sizga biriktiriladi — boshqa xodimlar uni ko‘rmaydi.'}
+                  </p>
+                </div>
+              )}
               {/* Telefon raqamlari: asosiy, qo'shimcha (Telegram) va 3-raqamdan boshlab — kerakicha qo'shiladi */}
               <fieldset className="space-y-2.5">
                 <legend className="sr-only">Telefon raqamlari</legend>
@@ -1036,6 +1228,17 @@ export default function MijozlarPage() {
                       Qarz: {formatSum(tanlanganMijoz.jami_qarz)}
                     </span>
                   )}
+                  {tanlanganMijoz.kategoriya && <KategoriyaBelgisi k={tanlanganMijoz.kategoriya} />}
+                  {admin && (
+                    <span className="flex items-center gap-1 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-neutral-800 px-2.5 py-1 rounded-lg">
+                      <UserCheck size={12} /> {tanlanganMijoz.masul ? `Mas’ul: ${tanlanganMijoz.masul.ism}` : 'Faqat administratorlar'}
+                    </span>
+                  )}
+                  {admin && tanlanganMijoz.yaratgan && (
+                    <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 px-2.5 py-1 rounded-lg">
+                      Kiritgan: {tanlanganMijoz.yaratgan.ism}
+                    </span>
+                  )}
                 </div>
 
                 {/* ── Mijoz keltirgan foyda ──
@@ -1199,4 +1402,9 @@ export default function MijozlarPage() {
       </>)}
     </div>
   )
+}
+
+/** Kategoriya filtridagi rangli nuqta. */
+function KategoriyaNuqta({ rang }: { rang: string }) {
+  return <span className={`h-2 w-2 shrink-0 rounded-full ${rangKlassi(rang).nuqta}`} aria-hidden />
 }

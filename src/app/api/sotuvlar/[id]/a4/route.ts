@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 import type { ChekA4Malumot } from '@/lib/chek-a4'
 
 export const dynamic = 'force-dynamic'
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Sotuv shu foydalanuvchining ko'rish doirasidami (boshqa Ega/filial cheki ochilmasin)
     const sotuv = await prisma.sotuv.findFirst({
-      where: { id, ...egaFilialWhere(session) },
+      where: { id, ...egaFilialWhere(session), ...mijozliYozuvSharti(await mijozKorinishi(session)) },
       select: {
         chekRaqami: true, sana: true, holati: true,
         jamiSumma: true, chegirma: true, ballIshlatilgan: true, keshbekIshlatilgan: true,

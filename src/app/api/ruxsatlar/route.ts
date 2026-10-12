@@ -8,6 +8,8 @@ import {
   holatXulosasi, nusxaSorovi, ozgarishRejasi, standartSorovi, xodimHolati,
   type JurnalQatori,
 } from '@/lib/ruxsat-boshqaruv'
+import { mijozTenant } from '@/lib/mijoz-doirasi'
+import { KATEGORIYA_KALIT } from '@/lib/mijoz-kategoriya'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,8 +81,9 @@ const JURNAL_SELECT = {
 
 export async function GET(req: NextRequest) {
   try {
-    const a = adminOl(await auth())
-    if (!a) return xato("Ruxsat yo'q", 403)
+    const session = await auth()
+    const a = adminOl(session)
+    if (!a || !session) return xato("Ruxsat yo'q", 403)
 
     const foydalanuvchiId = new URL(req.url).searchParams.get('foydalanuvchiId')
 
@@ -97,8 +100,10 @@ export async function GET(req: NextRequest) {
         orderBy: { sana: 'desc' },
         take: 40,
       })
+      const katlar = await prisma.mijozKategoriya.findMany({ where: mijozTenant(session), select: { id: true, nomi: true } })
       return NextResponse.json({
         meId: a.id,
+        kategoriyaNomlari: Object.fromEntries(katlar.map(k => [k.id, k.nomi])),
         xodimlar: xodimlar.map(x => {
           const h = tahrirHuquqi(a, x)
           return {
@@ -115,12 +120,22 @@ export async function GET(req: NextRequest) {
     const x = await prisma.foydalanuvchi.findFirst({ where: { AND: [{ id: foydalanuvchiId }, doira(a)] }, select: XODIM_SELECT })
     if (!x) return xato('Xodim topilmadi', 404)
     const huquq = tahrirHuquqi(a, x)
-    const jurnal = await prisma.ruxsatJurnali.findMany({
-      where: { foydalanuvchiId: x.id },
-      select: JURNAL_SELECT,
-      orderBy: { sana: 'desc' },
-      take: 60,
-    })
+    const [jurnal, kategoriyalar] = await Promise.all([
+      prisma.ruxsatJurnali.findMany({
+        where: { foydalanuvchiId: x.id },
+        select: JURNAL_SELECT,
+        orderBy: { sana: 'desc' },
+        take: 60,
+      }),
+      prisma.mijozKategoriya.findMany({
+        where: mijozTenant(session),
+        orderBy: { nomi: 'asc' },
+        select: {
+          id: true, nomi: true, rang: true, hammaga: true,
+          xodimlar: { where: { foydalanuvchiId: x.id }, select: { foydalanuvchiId: true } },
+        },
+      }),
+    ])
 
     return NextResponse.json({
       xodim: {
@@ -133,6 +148,10 @@ export async function GET(req: NextRequest) {
       tovarBayroqlari: x.rol === 'ADMIN' && x.ulashilganEgaId
         ? { 'ulashish.tovarTahrirlash': x.tovarTahrirlashMumkin, 'ulashish.tovarOchirish': x.tovarOchirishMumkin }
         : null,
+      // Xodimga qaysi mijoz kategoriyalari ochiq (o'zi kiritgan mijozlardan tashqari)
+      mijozKategoriyalari: kategoriyalar.map(k => ({
+        id: k.id, nomi: k.nomi, rang: k.rang, hammaga: k.hammaga, ruxsat: k.xodimlar.length > 0,
+      })),
       jurnal,
     })
   } catch (e) {
@@ -143,8 +162,9 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const a = adminOl(await auth())
-    if (!a) return xato("Ruxsat yo'q", 403)
+    const session = await auth()
+    const a = adminOl(session)
+    if (!a || !session) return xato("Ruxsat yo'q", 403)
 
     let tana: { foydalanuvchiId?: unknown; amal?: unknown; ozgarishlar?: unknown; manbaId?: unknown }
     try {
@@ -164,10 +184,12 @@ export async function PUT(req: NextRequest) {
 
       // So'ralgan qiymatlar
       let soralgan: Record<string, unknown>
+      let nusxaManbaId: string | null = null
       if (amal === 'NUSXA') {
         const manbaId = typeof tana.manbaId === 'string' ? tana.manbaId : ''
         const manba = manbaId ? await tx.foydalanuvchi.findFirst({ where: { AND: [{ id: manbaId }, doira(a)] }, select: XODIM_SELECT }) : null
         if (!manba) return { xato: 'Nusxa olinadigan xodim topilmadi', holat: 404 } as const
+        nusxaManbaId = manba.id
         if (manba.id === x.id) return { xato: 'Xodimning o‘zidan nusxa olib bo‘lmaydi', holat: 400 } as const
         if (manba.rol === 'ADMIN' && !huquq.faqatMaydon) return { xato: 'Administratordan nusxa olib bo‘lmaydi — u cheklanmagan', holat: 400 } as const
         soralgan = nusxaSorovi(holatiniHisobla(manba))
@@ -193,6 +215,39 @@ export async function PUT(req: NextRequest) {
         bayroqJurnal.push({ kalit, eski: x[ustun], yangi })
       }
 
+      // Mijoz kategoriyalari — dinamik kalitlar (`mijoz-kategoriya.<id>`), alohida
+      // jadvalda. Administrator hammasini ko'radi — unga qo'llanmaydi
+      const katJurnal: JurnalQatori[] = []
+      if (x.rol !== 'ADMIN') {
+        const katlar = await tx.mijozKategoriya.findMany({
+          where: mijozTenant(session),
+          select: { id: true, xodimlar: { where: { foydalanuvchiId: x.id }, select: { foydalanuvchiId: true } } },
+        })
+        const hozir = new Map(katlar.map(k => [k.id, k.xodimlar.length > 0]))
+        const kerak = new Map<string, boolean>()
+        if (amal === 'NUSXA' && nusxaManbaId) {
+          const manbada = new Set((await tx.mijozKategoriyaXodim.findMany({
+            where: { foydalanuvchiId: nusxaManbaId }, select: { kategoriyaId: true },
+          })).map(g => g.kategoriyaId))
+          for (const k of katlar) kerak.set(k.id, manbada.has(k.id))
+        } else if (amal === 'STANDART') {
+          // Rol standartida xodimga hech qanday kategoriya ochilmagan
+          for (const k of katlar) kerak.set(k.id, false)
+        } else {
+          for (const [kalit, v] of Object.entries(soralgan)) {
+            const id = kalit.startsWith(KATEGORIYA_KALIT) ? kalit.slice(KATEGORIYA_KALIT.length) : null
+            if (id && typeof v === 'boolean' && hozir.has(id)) kerak.set(id, v)
+          }
+        }
+        for (const [id, v] of kerak) {
+          if (hozir.get(id) === v) continue
+          if (v) await tx.mijozKategoriyaXodim.create({ data: { kategoriyaId: id, foydalanuvchiId: x.id } })
+          else await tx.mijozKategoriyaXodim.delete({ where: { kategoriyaId_foydalanuvchiId: { kategoriyaId: id, foydalanuvchiId: x.id } } })
+          katJurnal.push({ kalit: KATEGORIYA_KALIT + id, eski: !v, yangi: v })
+        }
+      }
+      for (const k of Object.keys(soralgan)) if (k.startsWith(KATEGORIYA_KALIT)) delete soralgan[k]
+
       const reja = ozgarishRejasi(
         x.rol,
         new Map(x.ruxsatlar.map(r => [r.bolim, r.korinadi])),
@@ -200,7 +255,7 @@ export async function PUT(req: NextRequest) {
         soralgan,
         huquq.faqatMaydon,
       )
-      const jurnal = [...reja.jurnal, ...bayroqJurnal]
+      const jurnal = [...reja.jurnal, ...bayroqJurnal, ...katJurnal]
 
       if (reja.ochirish.length) {
         await tx.ruxsat.deleteMany({ where: { foydalanuvchiId: x.id, bolim: { in: reja.ochirish } } })

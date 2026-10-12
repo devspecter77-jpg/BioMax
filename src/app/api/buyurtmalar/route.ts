@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi, mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 
 // Saqlab qo'yilgan savat ("zakaz"). Kassir mijoz uchun mahsulot yig'ib
 // qo'yadi, keyin qaytarib yuklab savdoni davom ettiradi.
@@ -29,7 +30,8 @@ export async function GET(req: NextRequest) {
       : holatMi(holatiParam) ? holatiParam : 'KUTILMOQDA'
 
     const buyurtmalar = await prisma.buyurtma.findMany({
-      where: { ...egaFilialWhere(session), ...(holati ? { holati } : {}) },
+      // Boshqa xodimning mijoziga saqlangan zakaz ko'rinmaydi
+      where: { ...egaFilialWhere(session), ...(holati ? { holati } : {}), ...mijozliYozuvSharti(await mijozKorinishi(session)) },
       include: {
         sotuvchi: { select: { id: true, ism: true } },
         mijoz: { select: { id: true, ism: true, telefon: true } },
@@ -63,7 +65,7 @@ export async function POST(req: NextRequest) {
     // Mijoz ko'rsatilgan bo'lsa — shu do'konning mijozi ekanini tekshiramiz
     if (mijozId) {
       const mijoz = await prisma.mijoz.findFirst({
-        where: { id: mijozId, ...doira },
+        where: { AND: [{ id: mijozId }, await mijozDoirasi(session)] },
         select: { id: true },
       })
       if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })

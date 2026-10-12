@@ -5,6 +5,7 @@ import { sessionFilialId, sessionIsRealEga, sessionEgaId } from '@/lib/filial-sc
 import { getReportDateRange, type ReportTur } from '@/lib/hisobotlar'
 import { KANAL_USULLARI, KANAL_MAYDONI, type KanalUsuli } from '@/lib/tolov-usullari'
 import { bolimRuxsatiBormi } from '@/lib/ruxsat-server'
+import { mijozKorinishi } from '@/lib/mijoz-doirasi'
 
 // To'lovlar bo'limi — do'konga KIRGAN va do'kondan CHIQQAN pul,
 // to'lov usuli va filial kesimida.
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true, chekRaqami: true, sana: true, filialId: true, tolovUsuli: true,
           naqdTolangan: true, kartaTolangan: true, clickTolangan: true, bankTolangan: true,
+          mijozId: true,
           mijoz: { select: { ism: true } },
           kassir: { select: { ism: true } },
         },
@@ -99,7 +101,7 @@ export async function GET(req: NextRequest) {
         where: { sana: { gte: dan, lt: gacha }, ...nasiyaDoira },
         select: {
           id: true, summa: true, tolovUsuli: true, sana: true,
-          nasiya: { select: { mijoz: { select: { ism: true, filialId: true } } } },
+          nasiya: { select: { mijozId: true, mijoz: { select: { ism: true, filialId: true } } } },
           qabulQiluvchi: { select: { ism: true } },
         },
         orderBy: { sana: 'desc' },
@@ -242,6 +244,21 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.jami - a.jami)
 
+    // Pul oqimi to'liq qoladi (summalar), lekin boshqa xodim mijozining ismi
+    // yashiriladi — xodim bir-birining mijozini ko'rmasin
+    const korinish = await mijozKorinishi(session)
+    let korinadigan: Set<string> | null = null
+    if (korinish) {
+      const idlar = [...new Set([...sotuvlar.map(s => s.mijozId), ...nasiyaTolovlar.map(n => n.nasiya.mijozId)]
+        .filter((x): x is string => !!x))]
+      const bor = idlar.length === 0 ? [] : await prisma.mijoz.findMany({
+        where: { AND: [{ id: { in: idlar } }, korinish] }, select: { id: true },
+      })
+      korinadigan = new Set(bor.map(m => m.id))
+    }
+    const mijozIsmi = (id: string | null, ism: string | null | undefined) =>
+      !id ? null : korinadigan && !korinadigan.has(id) ? 'Mijoz (yopiq)' : ism ?? null
+
     // ── Tranzaksiyalar ro'yxati (aralash, sana bo'yicha) ──
     const tranzaksiyalar = [
       ...sotuvlar.map(s => ({
@@ -249,7 +266,7 @@ export async function GET(req: NextRequest) {
         turi: 'sotuv' as const,
         sana: s.sana,
         nomi: s.chekRaqami,
-        kim: s.mijoz?.ism ?? null,
+        kim: mijozIsmi(s.mijozId, s.mijoz?.ism),
         xodim: s.kassir?.ism ?? null,
         filialId: s.filialId,
         kanallar: KANAL_USULLARI
@@ -262,7 +279,7 @@ export async function GET(req: NextRequest) {
         turi: 'nasiya' as const,
         sana: n.sana,
         nomi: 'Nasiya to‘lovi',
-        kim: n.nasiya.mijoz.ism,
+        kim: mijozIsmi(n.nasiya.mijozId, n.nasiya.mijoz.ism),
         xodim: n.qabulQiluvchi?.ism ?? null,
         filialId: n.nasiya.mijoz.filialId,
         kanallar: [{ usul: n.tolovUsuli as KanalUsuli, summa: Number(n.summa) }],

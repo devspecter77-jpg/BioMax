@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 
 const HOLATLAR = ['KUTILMOQDA', 'TASDIQLANGAN', 'BEKOR_QILINGAN'] as const
 type Holat = (typeof HOLATLAR)[number]
@@ -13,7 +14,7 @@ function holatMi(v: unknown): v is Holat {
 /** Zakaz shu foydalanuvchining ko'rish doirasidami. */
 async function egalikTekshir(id: string, session: Parameters<typeof egaFilialWhere>[0]) {
   return prisma.buyurtma.findFirst({
-    where: { id, ...egaFilialWhere(session) },
+    where: { id, ...egaFilialWhere(session), ...mijozliYozuvSharti(await mijozKorinishi(session!)) },
     select: { id: true },
   })
 }

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 import { tolovQilindiXabar } from '@/lib/telegram'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 import { kanalUsuliMi } from '@/lib/tolov-usullari'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const data = await req.json()
     const foydalanuvchiId = session.user.id
 
-    const egalik = await prisma.nasiya.findFirst({ where: { id, mijoz: egaFilialWhere(session) }, select: { id: true } })
+    const egalik = await prisma.nasiya.findFirst({ where: { id, mijoz: await mijozDoirasi(session) }, select: { id: true } })
     if (!egalik) return NextResponse.json({ xato: 'Nasiya topilmadi' }, { status: 404 })
 
     // tolovUsuli validatsiya — faqat haqiqiy pul kanallari

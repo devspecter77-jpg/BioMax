@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { generateChekRaqami } from '@/lib/utils'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozKorinadimi, mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 import { tolovTaqsimoti, tolovUsuliMi, aralashTekshir, type AralashKiritma } from '@/lib/tolov-usullari'
 import { sarflashniHisobla, sotuvdanToplanadi, ballSomda } from '@/lib/sodiqlik'
 import { sodiqlikSozlamasi, balansOzgartir } from '@/lib/sodiqlik-server'
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
     // Chek raqami bo'yicha qidirish (qaytarish uchun)
     if (chekRaqami) {
       const sotuv = await prisma.sotuv.findFirst({
-        where: { chekRaqami, ...egaFilialWhere(session) },
+        where: { chekRaqami, ...egaFilialWhere(session), ...mijozliYozuvSharti(await mijozKorinishi(session)) },
         include: {
           mijoz: { select: { ism: true, telefon: true } },
           kassir: { select: { ism: true } },
@@ -45,7 +46,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(sotuv ? { sotuvlar: [sotuv], jami: 1 } : { sotuvlar: [], jami: 0 })
     }
 
-    const where: Prisma.SotuvWhereInput = { ...egaFilialWhere(session) }
+    // Boshqa xodimning mijoziga qilingan sotuvlar ko'rinmaydi (mijozsizlari — ko'rinadi).
+    // AND ichida: pastdagi qidiruv `where.OR` ni o'zi belgilaydi va buni bosib ketmasin
+    const where: Prisma.SotuvWhereInput = { ...egaFilialWhere(session), AND: [mijozliYozuvSharti(await mijozKorinishi(session))] }
     if (dan || gacha) {
       const sana: Prisma.DateTimeFilter = {}
       if (dan) sana.gte = new Date(dan)
@@ -123,6 +126,11 @@ export async function POST(req: NextRequest) {
     const yakuniySumma = parseFloat(data.yakuniySumma)
     if (!Number.isFinite(yakuniySumma) || yakuniySumma < 0) {
       return NextResponse.json({ xato: "Noto'g'ri yakuniy summa" }, { status: 400 })
+    }
+
+    // Faqat ko'radigan mijozga sotiladi — boshqa xodimning mijozi tanlanmaydi
+    if (data.mijozId && !(await mijozKorinadimi(session, String(data.mijozId)))) {
+      return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
     }
 
     // ── Amal ruxsatlari: chegirma/bonus/narx pasaytirish va nasiya ──

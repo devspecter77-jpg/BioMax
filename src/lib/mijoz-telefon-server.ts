@@ -16,3 +16,15 @@ export async function qoshimchaTelefonBoyichaIdlar(qidiruv: string): Promise<str
     LIMIT 500`)
   return qatorlar.map(q => q.id)
 }
+
+/**
+ * Raqam bo'yicha mijoz sharti — istalgan yozilishda (+998 bilan yoki 9 raqam):
+ * asosiy, 2-raqam va qo'shimchalar oxirgi 9 raqam bo'yicha solishtiriladi.
+ * Mijozlar bo'limi raqamni 9 raqam ko'rinishida, nasiya esa "+998…" bilan
+ * saqlaydi — aniq tenglik bilan qidirilsa bir mijoz ikki marta yaratilardi.
+ */
+export function telefonBoyichaSharti(raqam: string | null | undefined): Prisma.MijozWhereInput | null {
+  const r = String(raqam ?? '').replace(/\D/g, '').slice(-9)
+  if (r.length !== 9) return null
+  return { OR: [{ telefon: { endsWith: r } }, { telefon2: { endsWith: r } }, { qoshimchaTelefonlar: { has: r } }] }
+}

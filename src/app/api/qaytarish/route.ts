@@ -3,6 +3,8 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { balansOzgartir } from '@/lib/sodiqlik-server'
+import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,6 +54,12 @@ export async function POST(req: NextRequest) {
     if (!aslSotuvId || !tarkiblar || tarkiblar.length === 0) {
       return NextResponse.json({ xato: "Ma'lumotlar to'liq emas" }, { status: 400 })
     }
+
+    // Sotuv shu do'konniki va xodim uni ko'ra oladi (boshqa xodimning mijozi emas)
+    const korinadi = await prisma.sotuv.count({
+      where: { id: String(aslSotuvId), ...egaFilialWhere(session), ...mijozliYozuvSharti(await mijozKorinishi(session)) },
+    })
+    if (!korinadi) return NextResponse.json({ xato: 'Sotuv topilmadi' }, { status: 404 })
 
     // Sotuv tarkibi va oldingi qaytarishlar — narx va miqdorni server'da tekshirish uchun
     const aslSotuv = await prisma.sotuv.findUnique({

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 
 // Harakatlar jurnali — qachon, kimga, qancha ball/keshbek qo'shilgani
 // yoki sarflangani. Mijoz, hisob turi va sabab bo'yicha filtrlanadi.
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')))
 
-    const where: Record<string, unknown> = { mijoz: egaFilialWhere(session) }
+    const where: Record<string, unknown> = { mijoz: await mijozDoirasi(session) }
     if (mijozId) where.mijozId = mijozId
     if (hisob === 'BALL' || hisob === 'KESHBEK') where.hisob = hisob
     if (sabab && SABABLAR.includes(sabab)) where.sabab = sabab

@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi, yangiMijozEgaligi } from '@/lib/mijoz-doirasi'
+import { telefonBoyichaSharti } from '@/lib/mijoz-telefon-server'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,6 +23,9 @@ export async function POST(req: NextRequest) {
     const normalizeManzil = (m: string) => m.trim().toLowerCase().replace(/\s+/g, ' ')
 
     let qoshildi = 0, xatolar = 0
+    // Faqat import qiluvchi ko'radigan mijozlarga yoziladi; yangilari unga biriktiriladi
+    const doira = await mijozDoirasi(session)
+    const egalik = yangiMijozEgaligi(session)
 
     for (const row of rows) {
       const ism = String(row['Mijoz'] || '').trim()
@@ -35,15 +40,21 @@ export async function POST(req: NextRequest) {
         let mijoz = null
         if (manzil) {
           const nomzodlar = await prisma.mijoz.findMany({
-            where: { ism: { equals: ism, mode: 'insensitive' }, ...egaFilialWhere(session) },
+            where: { AND: [{ ism: { equals: ism, mode: 'insensitive' } }, doira] },
           })
           mijoz = nomzodlar.find(c => c.manzil && normalizeManzil(c.manzil) === normalizeManzil(manzil)) || null
         }
-        if (!mijoz && finalPhone) {
-          mijoz = await prisma.mijoz.findFirst({ where: { telefon: finalPhone, ...egaFilialWhere(session) } })
+        const tel = telefonBoyichaSharti(finalPhone)
+        if (!mijoz && tel) {
+          mijoz = await prisma.mijoz.findFirst({ where: { AND: [tel, doira] } })
+          // Raqam boshqa xodimning mijozida — qator o'tkazib yuboriladi
+          if (!mijoz && await prisma.mijoz.count({ where: { AND: [tel, egaFilialWhere(session)] } })) {
+            xatolar++
+            continue
+          }
         }
         if (!mijoz) {
-          mijoz = await prisma.mijoz.create({ data: { ism, manzil, telefon: finalPhone, ...egaFilialWhere(session) } })
+          mijoz = await prisma.mijoz.create({ data: { ism, manzil, telefon: finalPhone, ...egaFilialWhere(session), ...egalik } })
         }
 
         const muddatQiymati = row['Muddat'] ? new Date(row['Muddat'] as string | number) : null

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
-import { egaFilialWhere } from '@/lib/filial-scope'
+import { mijozDoirasi } from '@/lib/mijoz-doirasi'
 import { balansOzgartir } from '@/lib/sodiqlik-server'
 
 // Admin qo'lda tuzatishi — masalan aksiya uchun ball berish yoki xato
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     // Mijoz shu foydalanuvchining ko'rish doirasidami
     const mijoz = await prisma.mijoz.findFirst({
-      where: { id: mijozId, ...egaFilialWhere(session) },
+      where: { AND: [{ id: String(mijozId) }, await mijozDoirasi(session)] },
       select: { id: true },
     })
     if (!mijoz) return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
