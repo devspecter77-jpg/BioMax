@@ -1531,7 +1531,8 @@ model OnlaynYetkazish {
   lat            Float?
   lng            Float?
   jamiSumma      Decimal?        @db.Decimal(12, 2)
-  tayinlaganId   String
+  /// Kim biriktirdi; null — kuryerlar navbati avtomatik biriktirgan
+  tayinlaganId   String?
   tayinlangan    DateTime        @default(now())
   yolgaChiqdi    DateTime?
   yetibKeldi     DateTime?
@@ -1539,11 +1540,31 @@ model OnlaynYetkazish {
   yangilangan    DateTime        @updatedAt
 
   dostavchik Foydalanuvchi @relation("DostavchikYetkazishlari", fields: [dostavchikId], references: [id])
-  tayinlagan Foydalanuvchi @relation("YetkazishTayinlagan", fields: [tayinlaganId], references: [id])
+  tayinlagan Foydalanuvchi? @relation("YetkazishTayinlagan", fields: [tayinlaganId], references: [id], onDelete: Restrict)
 
   @@index([dostavchikId, holati])
   @@index([yangilangan])
   @@map("onlayn_yetkazishlar")
+}
+
+// Kuryerlar navbati: yangi yetkazish buyurtmalari ishdagi kuryerlarga
+// navbat bilan (1 → 2 → 3 → 1 …) avtomatik beriladi.
+//
+// Har buyurtma navbatdan BIR MARTA o'tadi — shu yerda yozuvi bo'lsa, qayta
+// taqsimlanmaydi (administrator keyin kuryerni almashtirsa yoki olib
+// tashlasa ham). Oxirgi yozuv — navbat ko'rsatkichi: keyingi buyurtma undan
+// keyingi kuryerga tushadi. Kuryer ma'lumoti emas, jurnal — shuning uchun
+// foydalanuvchilarga bog'lanmagan.
+model KuryerNavbat {
+  id                 Int      @id @default(autoincrement())
+  buyurtmaRaqami     String   @unique
+  dostavchikId       String
+  /// Buyurtma saytda qachon tushgan: ishdan tashqari yig'ilganlarini ajratish uchun
+  buyurtmaYaratilgan DateTime
+  yaratilgan         DateTime @default(now())
+
+  @@index([yaratilgan])
+  @@map("kuryer_navbat")
 }
 
 enum NamunaHolati {

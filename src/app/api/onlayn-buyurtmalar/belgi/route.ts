@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { buyurtmaBelgisi } from '@/lib/marketplace-baza'
 import { onlaynRuxsat } from '@/lib/onlayn-buyurtma-server'
 import { yetkazishBelgisi } from '@/lib/dostavchik-server'
+import { navbatniTurt } from '@/lib/kuryer-navbat'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,8 @@ export async function GET() {
   if (!r.ok) return r.javob
   const u = r.session.user as unknown as { id: string; rol?: string }
   const dostavchik = u.rol === 'DOSTAVCHIK'
+  // Yangi buyurtma tushgan bo'lsa — navbatdagi kuryerga (javobdan keyin)
+  navbatniTurt()
 
   const [mp, erp] = await Promise.all([
     buyurtmaBelgisi(),

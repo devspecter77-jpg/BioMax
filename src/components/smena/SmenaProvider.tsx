@@ -2,7 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { signalBer } from '@/lib/signal'
 import {
   OvozYozgich, mikrofonXatosi, mikrofonlar as mikrofonlarniOl, mikrofonniOch, yozishQollanadimi, type Mikrofon,
 } from '@/lib/ovoz-yozgich'
@@ -118,6 +120,7 @@ const navbatChegarasi = () => sinovOraligi('ovoz-navbat-max', NAVBAT_MAX_BAYT)
 
 export default function SmenaProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession()
+  const router = useRouter()
   const kuryer = status === 'authenticated' && smenaRolimi((session?.user as { rol?: string } | undefined)?.rol)
 
   const [server, setServer] = useState<SmenaServerHolati | null>(null)
@@ -137,6 +140,8 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
   const yozgichRef = useRef<OvozYozgich | null>(null)
   /** Jonli tinglash — yozgich bo'lak uzunligini shundan o'qiydi */
   const jonliRef = useRef(false)
+  /** Oxirgi ko'rilgan biriktirish vaqti (null — hali bilinmaydi): yangisi kelsa bildiriladi */
+  const buyurtmaRef = useRef<number | null>(null)
   const holatRef = useRef<YozuvKorinishi>('toxtatilgan')
   const offsetRef = useRef(0)
   const yuborishRef = useRef(false)
@@ -331,8 +336,23 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
       const r = await fetch('/api/smena', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amal: 'jonli' }),
       }).catch(() => null)
-      const j = r?.ok ? await r.json().catch(() => null) as { jonli?: boolean } | null : null
+      const j = r?.ok
+        ? await r.json().catch(() => null) as { jonli?: boolean; oxirgiBuyurtma?: { raqam: string; vaqt: number } | null } | null
+        : null
       if (toxtadi || !j) return
+      // Navbat bilan yangi buyurtma tushdi — qaysi sahifada bo'lmasin bildiriladi
+      // (buyurtmalar sahifasi o'zi bildiradi, u yerda takrorlanmaydi)
+      const ob = j.oxirgiBuyurtma ?? null
+      const oldingi = buyurtmaRef.current
+      buyurtmaRef.current = Math.max(oldingi ?? 0, ob?.vaqt ?? 0)
+      if (ob && oldingi !== null && ob.vaqt > oldingi && !window.location.pathname.startsWith('/onlayn-buyurtmalar')) {
+        signalBer()
+        navigator.vibrate?.([200, 100, 200])
+        toast.info(`Sizga yangi buyurtma: ${ob.raqam}`, {
+          action: { label: 'Ochish', onClick: () => router.push(`/onlayn-buyurtmalar?raqam=${encodeURIComponent(ob.raqam)}`) },
+          duration: 15_000,
+        })
+      }
       const yangi = !!j.jonli
       if (yangi === jonliRef.current) return
       jonliRef.current = yangi
@@ -342,7 +362,7 @@ export default function SmenaProvider({ children }: { children: ReactNode }) {
     const i = setInterval(() => { void tekshir() }, sinovOraligi('ovoz-jonli-ms', JONLI_TEKSHIR_MS))
     void tekshir()
     return () => { toxtadi = true; clearInterval(i) }
-  }, [kuryer, smenaId])
+  }, [kuryer, smenaId, router])
 
   useEffect(() => {
     if (!kuryer) return

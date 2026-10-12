@@ -7,8 +7,10 @@ import Modal from '@/components/ui/modal'
 import {
   AlertTriangle, Banknote, Bike, Info, Receipt, Lock, CreditCard, Globe, Loader2, MessageSquare,
   Phone, RefreshCw, Search, Settings, Store, User, X, Clock, Package, Truck, MapPinCheck, Navigation, CheckCircle2,
+  Hourglass, Repeat2,
 } from 'lucide-react'
 import { formatSanaVaVaqt } from '@/lib/utils'
+import { signalBer } from '@/lib/signal'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useRuxsat } from '@/hooks/useRuxsat'
 import { useJonli, type JonliJavob } from '@/hooks/useJonli'
@@ -18,7 +20,7 @@ import { ManzilTugma } from '@/components/ManzilXarita'
 import { googleYonalish, manzilKorinishi, manzilQidiruvMatni, yandexNavigator } from '@/lib/xarita-havola'
 import {
   FAOL_HOLATLAR, HOLAT_RANGI, amalNomi, holatNomi, tolovNomi,
-  type OnlaynBuyurtma, type OnlaynHolat, type OnlaynRoyxat,
+  type NavbatHolati, type NavbatKuryerHolati, type OnlaynBuyurtma, type OnlaynHolat, type OnlaynRoyxat,
 } from '@/lib/onlayn-buyurtma'
 
 // Onlayn do'kon buyurtmalari — qabul qilish va yetkazishgacha kuzatish.
@@ -48,31 +50,6 @@ interface OnlaynBelgi extends JonliJavob {
   faolYetkazish: number
 }
 
-/** Qisqa ikki tonli signal — fayl yuklamasdan (brauzer ruxsat bermasa jim o'tadi). */
-function signalBer() {
-  try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
-    ;[880, 1175].forEach((chastota, i) => {
-      const o = ctx.createOscillator()
-      const g = ctx.createGain()
-      const boshi = ctx.currentTime + i * 0.18
-      o.type = 'sine'
-      o.frequency.value = chastota
-      g.gain.setValueAtTime(0.0001, boshi)
-      g.gain.exponentialRampToValueAtTime(0.18, boshi + 0.02)
-      g.gain.exponentialRampToValueAtTime(0.0001, boshi + 0.3)
-      o.connect(g).connect(ctx.destination)
-      o.start(boshi)
-      o.stop(boshi + 0.32)
-    })
-    setTimeout(() => void ctx.close(), 900)
-  } catch {
-    // Ovoz ixtiyoriy
-  }
-}
-
 const som = (n: number) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`
 const telMatni = (t: string) => {
   const r = t.replace(/\D/g, '').slice(-9)
@@ -98,7 +75,9 @@ export default function OnlaynBuyurtmalarPage() {
   const [xato, setXato] = useState<string | null>(null)
   const [tanlangan, setTanlangan] = useState<string | null>(null)
   const [sozlamaOchiq, setSozlamaOchiq] = useState(false)
+  const [navbatOchiq, setNavbatOchiq] = useState(false)
   const [yangilanish, setYangilanish] = useState(0)
+  const ruxsat = useRuxsat()
 
   // `?raqam=MP-...` — boshqa sahifadan (masalan Mijozlar › Onlayn) to'g'ridan-to'g'ri buyurtmani ochish
   useEffect(() => {
@@ -152,6 +131,9 @@ export default function OnlaynBuyurtmalarPage() {
   const sonlar = royxat?.sonlar ?? {}
   const faolSoni = FAOL_HOLATLAR.reduce((s, h) => s + (sonlar[h] ?? 0), 0)
   const dostavchikRejimi = royxat?.dostavchikRejimi ?? (session?.user as { rol?: string } | undefined)?.rol === 'DOSTAVCHIK'
+  const navbat = dostavchikRejimi ? null : royxat?.navbat ?? null
+  const navbatdagilar = new Set(navbat?.yoqilgan ? navbat.kutayotgan : [])
+  const navbatBoshqara = !dostavchikRejimi && ruxsat.bor('onlayn-buyurtmalar.kuryer')
 
   return (
     <div className="space-y-4">
@@ -179,12 +161,27 @@ export default function OnlaynBuyurtmalarPage() {
           >
             <RefreshCw size={16} className={yuklanmoqda ? 'animate-spin' : ''} />
           </button>
+          {navbatBoshqara && (
+            <button
+              onClick={() => setNavbatOchiq(true)}
+              title={navbat?.yoqilgan === false ? 'Avtomatik taqsimlash o‘chiq' : 'Buyurtmalar kuryerlarga navbat bilan beriladi'}
+              className="flex items-center gap-2 px-3.5 py-2.5 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition"
+            >
+              <Repeat2 size={16} />
+              <span className="whitespace-nowrap"><span className="sm:hidden">Navbat</span><span className="hidden sm:inline">Kuryerlar navbati</span></span>
+              {navbat && (navbatdagilar.size > 0 ? (
+                <span className="min-w-5 px-1.5 rounded-full text-xs font-semibold tabular-nums bg-amber-500 text-white">{navbatdagilar.size}</span>
+              ) : (
+                <span className={`h-2 w-2 rounded-full ${navbat.yoqilgan ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-neutral-600'}`} aria-hidden />
+              ))}
+            </button>
+          )}
           {admin && (
             <button
               onClick={() => setSozlamaOchiq(true)}
               className="flex items-center gap-2 px-3.5 py-2.5 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition"
             >
-              <Settings size={16} /> Sayt sozlamalari
+              <Settings size={16} /> <span className="whitespace-nowrap">Sayt sozlamalari</span>
             </button>
           )}
         </div>
@@ -196,6 +193,18 @@ export default function OnlaynBuyurtmalarPage() {
           <span>
             <b>Tasdiqlash</b> mahsulotni omborda band qiladi — saytda boshqa xaridor uni ololmaydi.{' '}
             <b>Topshirildi</b> bosilganda ERP’da avtomatik sotuv yoziladi: chek, ombor chiqimi, mijoz kartasi va ballar.
+          </span>
+        </div>
+      )}
+
+      {navbat?.yoqilgan && navbatdagilar.size > 0 && navbat.ishdagilar === 0 && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/15 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-300 flex gap-2">
+          <Hourglass size={17} className="shrink-0 mt-0.5" />
+          <span className="min-w-0">
+            <b>{navbatdagilar.size} ta buyurtma navbatda yig‘ilmoqda</b> — hozir ishda kuryer yo‘q. Kuryerlar ishni boshlashi bilan ularga teng taqsimlanadi.
+            {navbatBoshqara && (
+              <button onClick={() => setNavbatOchiq(true)} className="ml-1 font-semibold underline underline-offset-2">Navbatni ko‘rish</button>
+            )}
           </span>
         </div>
       )}
@@ -263,6 +272,11 @@ export default function OnlaynBuyurtmalarPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono font-semibold text-gray-900 dark:text-gray-100">{b.raqam}</span>
                     <HolatBelgisi b={b} />
+                    {navbatdagilar.has(b.raqam) && (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                        <Hourglass size={12} /> Navbatda
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatSanaVaVaqt(b.yaratilgan)}</p>
                 </div>
@@ -300,19 +314,28 @@ export default function OnlaynBuyurtmalarPage() {
       {tanlangan && (
         <BuyurtmaModal
           raqam={tanlangan}
+          navbatda={navbatdagilar.has(tanlangan)}
           yangilanish={yangilanish}
           onYopish={() => setTanlangan(null)}
           onOzgardi={() => void yukla(true)}
         />
       )}
       {sozlamaOchiq && <SozlamaModal onYopish={() => setSozlamaOchiq(false)} />}
+      {navbatOchiq && <NavbatModal onYopish={() => setNavbatOchiq(false)} onOzgardi={() => void yukla(true)} />}
     </div>
   )
 }
 
 // ─── Buyurtma tafsiloti ──────────────────────────────────────────────────────
 
-function BuyurtmaModal({ raqam, yangilanish, onYopish, onOzgardi }: { raqam: string; yangilanish: number; onYopish: () => void; onOzgardi: () => void }) {
+function BuyurtmaModal({ raqam, navbatda, yangilanish, onYopish, onOzgardi }: {
+  raqam: string
+  /** Kuryerlar navbatida kutmoqda */
+  navbatda: boolean
+  yangilanish: number
+  onYopish: () => void
+  onOzgardi: () => void
+}) {
   useBodyScrollLock(true)
   const { data: session } = useSession()
   const meId = (session?.user as { id?: string } | undefined)?.id
@@ -455,7 +478,7 @@ function BuyurtmaModal({ raqam, yangilanish, onYopish, onOzgardi }: { raqam: str
             </div>
 
             {b.yetkazish === 'KURYER' && (
-              <DostavchikBlok b={b} boshqara={ruxsat.bor('onlayn-buyurtmalar.kuryer')} onOzgardi={d => { setB(x => x && { ...x, dostavchik: d }); onOzgardi() }} />
+              <DostavchikBlok b={b} navbatda={navbatda} boshqara={ruxsat.bor('onlayn-buyurtmalar.kuryer')} onOzgardi={d => { setB(x => x && { ...x, dostavchik: d }); onOzgardi() }} />
             )}
 
             {b.izoh && (
@@ -622,8 +645,9 @@ interface DostavchikTanlov {
 }
 
 /** Buyurtmani kim olib boryapti; ruxsati borga — biriktirish, almashtirish, olib tashlash. */
-function DostavchikBlok({ b, boshqara, onOzgardi }: {
+function DostavchikBlok({ b, navbatda, boshqara, onOzgardi }: {
   b: OnlaynBuyurtma
+  navbatda: boolean
   boshqara: boolean
   onOzgardi: (d: OnlaynBuyurtma['dostavchik']) => void
 }) {
@@ -678,6 +702,11 @@ function DostavchikBlok({ b, boshqara, onOzgardi }: {
                 <Phone size={13} />{telMatni(d.telefon)}
               </a>
             )}
+            {d.avtomatik && (
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
+                <Repeat2 size={12} className="shrink-0" /> Navbat bo‘yicha avtomatik biriktirildi
+              </p>
+            )}
             {(d.yolgaChiqdi || d.yetibKeldi) && (
               <p className="text-xs text-gray-500 mt-0.5">
                 {d.yolgaChiqdi && <>Yo‘lga chiqdi {formatSanaVaVaqt(d.yolgaChiqdi)}</>}
@@ -690,10 +719,18 @@ function DostavchikBlok({ b, boshqara, onOzgardi }: {
           )}
         </div>
       ) : !tanlash && (
+        <>
+        {navbatda && (
+          <p className="mb-2 flex gap-1.5 text-sm text-amber-800 dark:text-amber-400">
+            <Hourglass size={15} className="shrink-0 mt-0.5" />
+            <span>Navbatda — ishdagi kuryerga avtomatik beriladi. Xohlasangiz, hozir qo‘lda biriktiring.</span>
+          </p>
+        )}
         <button onClick={() => setTanlash(true)}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-gray-300 dark:border-neutral-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:border-primary hover:text-primary">
           <Truck size={16} /> Dostavchik biriktirish
         </button>
+        </>
       )}
 
       {tanlash && (
@@ -802,6 +839,147 @@ function SozlamaModal({ onYopish }: { onYopish: () => void }) {
           </>
         )}
       </div>
+    </Modal>
+  )
+}
+
+// ─── Kuryerlar navbati ───────────────────────────────────────────────────────
+
+const NAVBAT_HOLATI: Record<NavbatKuryerHolati, { nomi: string; rang: string }> = {
+  ishda: { nomi: 'Ishda', rang: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' },
+  aloqa_yoq: { nomi: 'Aloqa yo‘q', rang: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' },
+  ishda_emas: { nomi: 'Ishda emas', rang: 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-400' },
+}
+
+const soatMatni = (iso: string) => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' })
+
+/** Navbat qoidasi, kim ishda va keyingi buyurtma kimga — yoqish/o'chirish bilan. */
+function NavbatModal({ onYopish, onOzgardi }: { onYopish: () => void; onOzgardi: () => void }) {
+  const [h, setH] = useState<NavbatHolati | null>(null)
+  const [band, setBand] = useState(false)
+
+  const yukla = useCallback(async (jim: boolean) => {
+    try {
+      const r = await fetch('/api/onlayn-buyurtmalar/navbat', { cache: 'no-store' })
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setH(j as NavbatHolati)
+      else if (!jim) toast.error(j.xato ?? 'Navbat yuklanmadi')
+    } catch {
+      if (!jim) toast.error('Internet aloqasini tekshiring')
+    }
+  }, [])
+
+  // Kuryer ishni boshlasa yoki buyurtma tushsa — oyna ochiq turganda ham yangilanadi
+  useEffect(() => {
+    void yukla(false)
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void yukla(true) }, 10_000)
+    return () => clearInterval(t)
+  }, [yukla])
+
+  async function almashtir() {
+    if (!h) return
+    setBand(true)
+    try {
+      const r = await fetch('/api/onlayn-buyurtmalar/navbat', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ yoqilgan: !h.yoqilgan }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.xato ?? 'Saqlanmadi'); return }
+      setH(j as NavbatHolati)
+      toast.success(j.yoqilgan ? 'Avtomatik taqsimlash yoqildi' : 'Avtomatik taqsimlash o‘chirildi — kuryerni qo‘lda biriktirasiz')
+      onOzgardi()
+    } catch {
+      toast.error('Internet aloqasini tekshiring')
+    } finally {
+      setBand(false)
+    }
+  }
+
+  const ishdagilar = h?.kuryerlar.filter(k => k.holat === 'ishda').length ?? 0
+
+  return (
+    <Modal
+      sarlavha="Kuryerlar navbati"
+      belgi={<Repeat2 size={18} />}
+      tavsif="Yangi yetkazish buyurtmalari ishdagi kuryerlarga navbat bilan beriladi: 1 → 2 → 3 → 1 …"
+      onYopish={onYopish}
+      tashqaridanYopish
+      yopishMumkin={!band}
+    >
+      {!h ? (
+        <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary" /></div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 dark:border-neutral-800 p-3.5">
+            <div className="min-w-0">
+              <p className="font-medium text-gray-900 dark:text-gray-100">Avtomatik taqsimlash</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {h.yoqilgan ? 'Har yangi buyurtma navbatdagi kuryerga o‘zi tushadi' : 'O‘chiq — kuryerni har buyurtmaga qo‘lda biriktirasiz'}
+              </p>
+            </div>
+            <button
+              role="switch" aria-checked={h.yoqilgan} aria-label="Avtomatik taqsimlash" disabled={band}
+              onClick={() => void almashtir()}
+              className={`relative shrink-0 w-12 h-7 rounded-full transition disabled:opacity-60 ${h.yoqilgan ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-neutral-700'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition ${h.yoqilgan ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+
+          {h.yoqilgan && h.kutayotgan.length > 0 && (
+            <div className="flex gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-300">
+              <Hourglass size={16} className="shrink-0 mt-0.5" />
+              <span>
+                <b>{h.kutayotgan.length} ta buyurtma navbatda</b> —{' '}
+                {ishdagilar === 0
+                  ? 'hozir ishda kuryer yo‘q. Kuryerlar ishni boshlashi bilan ularga teng taqsimlanadi.'
+                  : h.ulushTugashi
+                    ? `ishdan oldin yig‘ilganlar. Har kuryerga teng ulush ajratilgan: hali kelmaganlar ${soatMatni(h.ulushTugashi)} gacha o‘z ulushini oladi, keyin qolgani ishdagilarga beriladi.`
+                    : 'bir necha soniyada navbatdagi kuryerga beriladi.'}
+              </span>
+            </div>
+          )}
+
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Navbat tartibi</p>
+            {h.kuryerlar.length === 0 ? (
+              <p className="text-sm text-gray-500">Faol kuryer yo‘q. «Namuna tovar» bo‘limida qo‘shing.</p>
+            ) : (
+              <ol className="divide-y divide-gray-100 dark:divide-neutral-800 rounded-xl border border-gray-200 dark:border-neutral-800">
+                {h.kuryerlar.map((k, i) => {
+                  const keyingi = h.yoqilgan && h.keyingiId === k.id
+                  return (
+                    <li key={k.id} className={`flex items-center gap-3 px-3 py-2.5 ${keyingi ? 'bg-primary/5' : ''}`}>
+                      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums ${keyingi ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300'}`}>
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                          <span className="truncate">{k.ism}</span>
+                          {keyingi && <span className="shrink-0 text-xs font-semibold text-primary">keyingi buyurtma</span>}
+                        </p>
+                        <p className="text-xs text-gray-500 tabular-nums">
+                          Bugun navbatdan {k.bugun} ta · qo‘lida {k.band} ta
+                          {k.holat !== 'ishda_emas' && k.smenaBoshi && <> · ish {soatMatni(k.smenaBoshi)} dan</>}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${NAVBAT_HOLATI[k.holat].rang}`}>
+                        {NAVBAT_HOLATI[k.holat].nomi}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+          </div>
+
+          <ul className="list-disc space-y-1.5 pl-4 text-xs text-gray-500">
+            <li>Navbatda faqat <b>ishdagi</b> kuryerlar — smenasi ochiq va ilovasi aloqada. 10 daqiqa aloqa bo‘lmasa, kuryer vaqtincha navbatdan chetda turadi.</li>
+            <li>Ishda hech kim bo‘lmasa buyurtmalar yig‘ilib turadi. Ish boshlanganda ular kuryerlar soniga qarab <b>teng</b> bo‘linadi — 30 daqiqagacha kechikib kelgan kuryer ham o‘z ulushini oladi.</li>
+            <li>Kuryerni qo‘lda almashtirish mumkin — navbat bunga aralashmaydi va o‘sha buyurtmani qayta bermaydi.</li>
+          </ul>
+        </div>
+      )}
     </Modal>
   )
 }

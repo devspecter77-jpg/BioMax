@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import {
   faolSmena, jonliKuzatuvdami, kuryerHolati, pulsYoz, smenaXodimi, smenaniBoshla, smenaniTugat, texnikXizmat,
 } from '@/lib/smena-server'
+import { navbatniTurt } from '@/lib/kuryer-navbat'
 
 // Kuryerning o'z ish smenasi: holat, rozilik, ishni boshlash/tugallash va
 // ilova yuboradigan "tirikman" belgisi. Faqat o'zi uchun — boshqa xodimning
@@ -22,6 +23,7 @@ export async function GET() {
     const xodim = smenaXodimi(session)
     if (!xodim) return NextResponse.json({ mavjud: false })
     texnikni()
+    navbatniTurt()
     return NextResponse.json(await kuryerHolati(xodim.id))
   } catch (e) {
     console.error('[smena GET]', e)
@@ -55,6 +57,8 @@ export async function POST(req: NextRequest) {
       await smenaniBoshla(session, xodim.id, {
         lat: data.lat, lng: data.lng, qurilma: req.headers.get('user-agent'),
       })
+      // Ish boshlandi — yig'ilib turgan buyurtmalar kutmasdan taqsimlanadi
+      navbatniTurt(true)
       return NextResponse.json(await kuryerHolati(xodim.id))
     }
 
@@ -65,17 +69,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(await kuryerHolati(xodim.id))
     }
 
-    // Yengil tekshiruv: "meni hozir jonli tinglashyaptimi?". Ilova buni
-    // tez-tez so'raydi, shuning uchun to'liq holat emas — bitta ustun.
+    // Yengil tekshiruv: "meni hozir jonli tinglashyaptimi?" va "menga yangi
+    // buyurtma tushdimi?". Ilova buni tez-tez so'raydi, shuning uchun to'liq
+    // holat emas — ikkita indeksli so'rov.
     if (amal === 'jonli') {
-      const s = await prisma.smena.findFirst({
-        where: { xodimId: xodim.id, tugadi: null },
-        select: { jonliKuzatilgan: true },
+      const [s, oxirgi] = await Promise.all([
+        prisma.smena.findFirst({
+          where: { xodimId: xodim.id, tugadi: null },
+          select: { jonliKuzatilgan: true },
+        }),
+        prisma.onlaynYetkazish.findFirst({
+          where: { dostavchikId: xodim.id, holati: 'TAYINLANGAN' },
+          orderBy: { tayinlangan: 'desc' },
+          select: { buyurtmaRaqami: true, tayinlangan: true },
+        }),
+      ])
+      navbatniTurt()
+      return NextResponse.json({
+        jonli: jonliKuzatuvdami(s?.jonliKuzatilgan),
+        /** Eng so'nggi biriktirilgan (hali yo'lga chiqilmagan) buyurtma — ilova yangisini bildiradi */
+        oxirgiBuyurtma: oxirgi ? { raqam: oxirgi.buyurtmaRaqami, vaqt: oxirgi.tayinlangan.getTime() } : null,
       })
-      return NextResponse.json({ jonli: jonliKuzatuvdami(s?.jonliKuzatilgan) })
     }
 
     if (amal === 'puls') {
+      navbatniTurt()
       const s = await faolSmena(xodim.id)
       if (s) await pulsYoz(s.id, data.yozuvHolati)
       return NextResponse.json(await kuryerHolati(xodim.id))

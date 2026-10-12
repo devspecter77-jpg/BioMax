@@ -91,7 +91,7 @@ function lokatsiya(f: FoydalanuvchiXom): Lokatsiya | null {
 }
 
 /** Toshkent vaqti bo'yicha bugunning boshi. */
-function bugunBoshi(): Date {
+export function bugunBoshi(): Date {
   const sana = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tashkent' })
   return new Date(`${sana}T00:00:00+05:00`)
 }
@@ -339,7 +339,7 @@ export async function buyurtmaDostavchiklari(raqamlar: string[]): Promise<Map<st
   const qatorlar = await prisma.onlaynYetkazish.findMany({
     where: { buyurtmaRaqami: { in: raqamlar } },
     select: {
-      buyurtmaRaqami: true, holati: true, yolgaChiqdi: true, yetibKeldi: true,
+      buyurtmaRaqami: true, holati: true, yolgaChiqdi: true, yetibKeldi: true, tayinlaganId: true,
       dostavchik: { select: { id: true, ism: true, telefon: true } },
     },
   })
@@ -350,6 +350,7 @@ export async function buyurtmaDostavchiklari(raqamlar: string[]): Promise<Map<st
     holati: q.holati,
     yolgaChiqdi: iso(q.yolgaChiqdi),
     yetibKeldi: iso(q.yetibKeldi),
+    avtomatik: q.tayinlaganId === null,
   }]))
 }
 

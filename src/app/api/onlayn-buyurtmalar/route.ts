@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { buyurtmalarRoyxati } from '@/lib/marketplace-baza'
 import { onlaynRuxsat } from '@/lib/onlayn-buyurtma-server'
 import { buyurtmaDostavchiklari, dostavchikRaqamlari, saytHolatlariBilanMoslash } from '@/lib/dostavchik-server'
+import { navbatQisqa, navbatniTurt } from '@/lib/kuryer-navbat'
 import type { OnlaynRoyxat } from '@/lib/onlayn-buyurtma'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
   // mijozlarning telefoni va manzili unga kerak emas
   const u = r.session.user as unknown as { id: string; rol?: string }
   const dostavchikRejimi = u.rol === 'DOSTAVCHIK'
+  navbatniTurt()
   if (dostavchikRejimi) {
     raqamlar = await dostavchikRaqamlari(u.id)
     if (raqamlar.length === 0) {
@@ -38,11 +40,16 @@ export async function GET(req: NextRequest) {
   })
 
   await saytHolatlariBilanMoslash(royxat.buyurtmalar)
-  const dostavchiklar = await buyurtmaDostavchiklari(royxat.buyurtmalar.map(b => b.raqam))
+  const [dostavchiklar, navbat] = await Promise.all([
+    buyurtmaDostavchiklari(royxat.buyurtmalar.map(b => b.raqam)),
+    // Navbat holati — kuryerlarni boshqaradiganga (dostavchikka boshqalarning buyurtmasi ko'rinmaydi)
+    dostavchikRejimi ? null : navbatQisqa().catch(e => { console.error('[navbat qisqa]', e); return null }),
+  ])
   const natija: OnlaynRoyxat = {
     ...royxat,
     buyurtmalar: royxat.buyurtmalar.map(b => ({ ...b, dostavchik: dostavchiklar.get(b.raqam) ?? null })),
     dostavchikRejimi,
+    navbat,
   }
   return NextResponse.json(natija)
 }

@@ -16,6 +16,8 @@ export interface BuyurtmaDostavchigi {
   holati: YetkazishHolati
   yolgaChiqdi: string | null
   yetibKeldi: string | null
+  /** Kuryerlar navbati avtomatik biriktirgan (qo'lda emas) */
+  avtomatik: boolean
 }
 
 export interface OnlaynBuyurtma {
@@ -61,6 +63,51 @@ export interface OnlaynRoyxat {
   sonlar: Partial<Record<OnlaynHolat, number>>
   /** Dostavchik o'z buyurtmalarinigina ko'ryapti */
   dostavchikRejimi?: boolean
+  /** Kuryerlar navbati qisqacha — faqat boshqaruvchiga */
+  navbat?: NavbatQisqa | null
+}
+
+// ─── Kuryerlar navbati ───────────────────────────────────────────────────────
+
+/** Ro'yxat sahifasi uchun: navbatda kutayotgan buyurtmalar va ishdagilar soni. */
+export interface NavbatQisqa {
+  yoqilgan: boolean
+  /** Hali kuryerga berilmagan, navbatdagi buyurtma raqamlari (eskisi birinchi) */
+  kutayotgan: string[]
+  /** Hozir navbatda turgan (smenasi ochiq) kuryerlar soni */
+  ishdagilar: number
+}
+
+/** Kuryerning navbatdagi holati: ishda — buyurtma oladi. */
+export type NavbatKuryerHolati = 'ishda' | 'aloqa_yoq' | 'ishda_emas'
+
+export interface NavbatKuryeri {
+  id: string
+  ism: string
+  holat: NavbatKuryerHolati
+  /** Ochiq smena boshlangan vaqt */
+  smenaBoshi: string | null
+  /** Bugun navbat bilan olgan buyurtmalari */
+  bugun: number
+  /** Hozir qo'lidagi tugallanmagan buyurtmalari */
+  band: number
+}
+
+/** Kuryerlar navbati oynasi uchun to'liq holat. */
+export interface NavbatHolati {
+  yoqilgan: boolean
+  /** Shu paytdan keyin tushgan buyurtmalar taqsimlanadi */
+  boshi: string
+  kutayotgan: string[]
+  /** Navbat tartibida (birinchi qo'shilgan — 1-kuryer) */
+  kuryerlar: NavbatKuryeri[]
+  /** Keyingi yangi buyurtma kimga tushadi */
+  keyingiId: string | null
+  /**
+   * Ish boshlangach yig'ilgan buyurtmalar teng ulushda berilayotgan davr
+   * tugaydigan vaqt (kechikkan kuryer ham o'z ulushini olishi uchun)
+   */
+  ulushTugashi: string | null
 }
 
 export const FAOL_HOLATLAR: OnlaynHolat[] = ['YANGI', 'TASDIQLANGAN', 'YIGILMOQDA', 'YOLDA']
