@@ -53,6 +53,8 @@ export interface OnlaynBuyurtma {
   }
   /** Kim olib boryapti — faqat ERP panel marshrutlari qo'shadi */
   dostavchik?: BuyurtmaDostavchigi | null
+  /** Buyurtma bergan sayt hisobi — saytga kirishi ochiqmi (buyurtma oynasidan chiqarish uchun) */
+  xaridor?: { hisobId: string; faol: boolean; ism: string | null; telefon: string } | null
 }
 
 export interface OnlaynRoyxat {

@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import Modal from '@/components/ui/modal'
 import {
-  AlertTriangle, Banknote, Bike, Info, Receipt, Lock, CreditCard, Globe, Loader2, MessageSquare,
+  AlertTriangle, Ban, Banknote, Bike, Info, Receipt, Lock, LogOut, CreditCard, Globe, Loader2, MessageSquare, RotateCcw,
   Phone, RefreshCw, Search, Settings, Store, User, X, Clock, Package, Truck, MapPinCheck, Navigation, CheckCircle2,
   Hourglass, Repeat2,
 } from 'lucide-react'
@@ -17,6 +17,8 @@ import { useJonli, type JonliJavob } from '@/hooks/useJonli'
 import { transportNomi, type TransportTuri } from '@/lib/dostavchik'
 import { YetkazishBelgisi } from '@/components/dostavchik/DostavchikOynasi'
 import { ManzilTugma } from '@/components/ManzilXarita'
+import { useConfirm } from '@/components/ConfirmProvider'
+import SaytdanChiqarishOynasi, { qaytaRuxsatBer } from '@/components/onlayn/SaytdanChiqarish'
 import { googleYonalish, manzilKorinishi, manzilQidiruvMatni, yandexNavigator } from '@/lib/xarita-havola'
 import {
   FAOL_HOLATLAR, HOLAT_RANGI, amalNomi, holatNomi, tolovNomi,
@@ -344,6 +346,10 @@ function BuyurtmaModal({ raqam, navbatda, yangilanish, onYopish, onOzgardi }: {
   const [band, setBand] = useState<OnlaynHolat | null>(null)
   const [bekorOchiq, setBekorOchiq] = useState(false)
   const [sabab, setSabab] = useState('')
+  // Xaridorni saytdan chiqarish (Mijozlar › Onlayn dagi bilan bir xil oyna)
+  const confirm = useConfirm()
+  const [chiqarishOynasi, setChiqarishOynasi] = useState(false)
+  const [ruxsatBerilmoqda, setRuxsatBerilmoqda] = useState(false)
 
   // Ochilganda va jonli belgi o'zgarganda (boshqa xodim yoki dostavchik holatni o'zgartirdi)
   useEffect(() => {
@@ -360,7 +366,8 @@ function BuyurtmaModal({ raqam, navbatda, yangilanish, onYopish, onOzgardi }: {
   }, [raqam, yangilanish])
 
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !band) onYopish() }
+    // Ustidagi oyna (Modal, tasdiq) Esc'ni o'zi yopsa — defaultPrevented; bu oyna ochiq qoladi
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !band) onYopish() }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onYopish, band])
@@ -400,6 +407,23 @@ function BuyurtmaModal({ raqam, navbatda, yangilanish, onYopish, onOzgardi }: {
   const bekorMumkin = ruxsat.bor('onlayn-buyurtmalar.bekor') && (b?.keyingiHolatlar?.includes('BEKOR') ?? false)
   // Buyurtma shu foydalanuvchiga biriktirilgan — dostavchik tugmalari
   const menikimi = !!meId && b?.dostavchik?.id === meId && ruxsat.bor('onlayn-buyurtmalar.yetkazish')
+  const bloklashMumkin = ruxsat.bor('mijozlar.onlayn-bloklash')
+
+  async function xaridorgaQaytaRuxsat() {
+    const x = b?.xaridor
+    if (!x) return
+    const ok = await confirm({
+      title: 'Saytga qayta ruxsat berilsinmi?',
+      message: `${x.ism?.trim() || b?.aloqaIsm || 'Xaridor'} yana kirib, buyurtma bera oladi.`,
+      confirmText: 'Ruxsat berish',
+      danger: false,
+    })
+    if (!ok) return
+    setRuxsatBerilmoqda(true)
+    const n = await qaytaRuxsatBer({ id: x.hisobId, ism: x.ism, telefon: x.telefon })
+    setRuxsatBerilmoqda(false)
+    if (n) setB(v => v && v.xaridor ? { ...v, xaridor: { ...v.xaridor, faol: n.faol } } : v)
+  }
 
   async function yetibKeldim() {
     setBand('YOLDA')
@@ -441,6 +465,37 @@ function BuyurtmaModal({ raqam, navbatda, yangilanish, onYopish, onOzgardi }: {
               <Blok sarlavha="Mijoz">
                 <p className="font-medium text-gray-900 dark:text-gray-100">{b.aloqaIsm ?? '—'}</p>
                 <a href={`tel:${b.aloqaTel}`} className="mt-1 inline-flex items-center gap-1.5 font-mono text-primary font-semibold"><Phone size={14} />{telMatni(b.aloqaTel)}</a>
+                {/* Sayt hisobi: chiqarilgan bo'lsa ko'rinadi; ruxsat bo'lsa — chiqarish/qaytarish */}
+                {b.xaridor && (!b.xaridor.faol || bloklashMumkin) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {!b.xaridor.faol && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 dark:text-red-400">
+                        <Ban size={11} aria-hidden /> Saytdan chiqarilgan
+                      </span>
+                    )}
+                    {bloklashMumkin && (b.xaridor.faol ? (
+                      <button type="button" onClick={() => setChiqarishOynasi(true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-900/60 px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition">
+                        <LogOut size={13} aria-hidden /> Saytdan chiqarish
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => void xaridorgaQaytaRuxsat()} disabled={ruxsatBerilmoqda}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white transition disabled:opacity-60">
+                        {ruxsatBerilmoqda ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <RotateCcw size={13} aria-hidden />} Qayta ruxsat berish
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {chiqarishOynasi && b.xaridor && (
+                  <SaytdanChiqarishOynasi
+                    xaridor={{ id: b.xaridor.hisobId, ism: b.xaridor.ism ?? b.aloqaIsm, telefon: b.xaridor.telefon }}
+                    onYopish={() => setChiqarishOynasi(false)}
+                    onBajarildi={n => {
+                      setChiqarishOynasi(false)
+                      setB(v => v && v.xaridor ? { ...v, xaridor: { ...v.xaridor, faol: n.faol } } : v)
+                    }}
+                  />
+                )}
               </Blok>
               <Blok sarlavha={b.yetkazish === 'KURYER' ? 'Yetkazish' : 'Olib ketish'}>
                 {b.yetkazish === 'KURYER' ? (

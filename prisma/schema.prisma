@@ -1838,3 +1838,32 @@ model OvozFayl {
 
   @@map("ovoz_fayllar")
 }
+
+// ========================
+// ONLAYN XARIDORNI SAYTDAN CHIQARISH
+// ========================
+// Admin onlayn do'kon xaridorini saytdan chiqaradi (bloklaydi) yoki qayta
+// ruxsat beradi — shu jurnal: kim, qachon, nima sababdan. Holatning O'ZI
+// marketplace'da: `marketplace.mp_hisoblar.faol`. Sayt uni har so'rovda
+// tekshiradi — seans darhol tugaydi, qayta kirish va buyurtma berish yopiladi.
+model OnlaynHisobBloki {
+  id               String          @id @default(cuid())
+  /// marketplace.mp_hisoblar.id
+  hisobId          String
+  telefon          String
+  ism              String?
+  amal             OnlaynBlokAmali
+  sabab            String?
+  foydalanuvchiId  String?
+  /// Kim qilgani — xodim hisobi keyin o'chirilsa ham jurnalda qoladi
+  foydalanuvchiIsm String?
+  yaratilgan       DateTime        @default(now())
+
+  @@index([hisobId, yaratilgan])
+  @@map("onlayn_hisob_bloklari")
+}
+
+enum OnlaynBlokAmali {
+  CHIQARILDI
+  QAYTARILDI
+}

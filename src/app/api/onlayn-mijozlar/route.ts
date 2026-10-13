@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { mpSorov } from '@/lib/marketplace-mijoz'
 import { onlaynRuxsat } from '@/lib/onlayn-buyurtma-server'
 import { erpKartalari } from '@/lib/onlayn-mijoz-server'
+import { bloklanganSoni, oxirgiChiqarishlar } from '@/lib/onlayn-blok-server'
 import type { OnlaynMijozRoyxat } from '@/lib/onlayn-mijoz'
 
 export const dynamic = 'force-dynamic'
@@ -29,9 +30,20 @@ export async function GET(req: NextRequest) {
   const n = await mpSorov<OnlaynMijozRoyxat>('GET', `/api/erp/mijozlar${s ? `?${s}` : ''}`)
   if (!n.ok) return NextResponse.json({ kod: n.kod, xato: n.xato }, { status: n.holat >= 500 ? 502 : n.holat })
 
-  const kartalar = await erpKartalari(r.session, n.qiymat.mijozlar.map(m => m.telefon))
+  // Saytdan chiqarilganlarning sababi va soni — ERP jurnalidan
+  const bloklanganlar = n.qiymat.mijozlar.filter(m => !m.faol).map(m => m.id)
+  const [kartalar, chiqarishlar, chiqarilganSoni] = await Promise.all([
+    erpKartalari(r.session, n.qiymat.mijozlar.map(m => m.telefon)),
+    oxirgiChiqarishlar(bloklanganlar),
+    bloklanganSoni(),
+  ])
   return NextResponse.json({
     ...n.qiymat,
-    mijozlar: n.qiymat.mijozlar.map(m => ({ ...m, erpKarta: kartalar.get(m.telefon) ?? null })),
+    bloklanganSoni: chiqarilganSoni,
+    mijozlar: n.qiymat.mijozlar.map(m => ({
+      ...m,
+      erpKarta: kartalar.get(m.telefon) ?? null,
+      blok: m.faol ? null : chiqarishlar.get(m.id) ?? null,
+    })),
   })
 }

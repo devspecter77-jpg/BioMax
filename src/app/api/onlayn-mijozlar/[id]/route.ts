@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { mpSorov } from '@/lib/marketplace-mijoz'
 import { onlaynRuxsat } from '@/lib/onlayn-buyurtma-server'
 import { erpKartalari, onlaynCheklar } from '@/lib/onlayn-mijoz-server'
+import { blokTarixi } from '@/lib/onlayn-blok-server'
 import { mijozIdmi, type OnlaynMijozTafsilot } from '@/lib/onlayn-mijoz'
 
 export const dynamic = 'force-dynamic'
@@ -18,13 +19,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!n.ok) return NextResponse.json({ kod: n.kod, xato: n.xato }, { status: n.holat >= 500 ? 502 : n.holat })
 
   const m = n.qiymat
-  const [kartalar, cheklar] = await Promise.all([
+  const [kartalar, cheklar, bloklar] = await Promise.all([
     erpKartalari(r.session, [m.telefon]),
     onlaynCheklar(m.buyurtmalar.map(b => b.raqam)),
+    blokTarixi(m.id),
   ])
   return NextResponse.json({
     ...m,
     erpKarta: kartalar.get(m.telefon) ?? null,
+    bloklar,
     buyurtmalar: m.buyurtmalar.map(b => ({ ...b, erp: { sotuv: cheklar.get(b.raqam) ?? null, rezerv: 'YOQ' as const } })),
   })
 }

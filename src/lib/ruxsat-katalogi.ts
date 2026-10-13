@@ -103,6 +103,7 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
       { kalit: 'mijozlar.import', label: 'Excel’dan import', xavfli: true },
       { kalit: 'mijozlar.export', label: 'Excel’ga eksport', izoh: 'Barcha mijozlar telefonlari bilan' },
       { kalit: 'mijozlar.onlayn', label: 'Onlayn do‘kon mijozlarini ko‘rish', izoh: 'Saytda ro‘yxatdan o‘tganlar, ularning buyurtmalari va cheklari' },
+      { kalit: 'mijozlar.onlayn-bloklash', label: 'Onlayn xaridorni saytdan chiqarish', izoh: 'Seansi darhol tugaydi, qayta kira olmaydi va buyurtma bera olmaydi. Qayta ruxsat berish ham shu', xavfli: true },
     ],
   },
   {
@@ -222,7 +223,7 @@ const STANDART_YOPIQ = new Set([
   'tovarlar.ochirish', 'tovarlar.import', 'mijozlar.ochirish', 'mijozlar.import', 'mijozlar.export',
   // Xodim boshqalarning mijozini ko'rmaydi — faqat Ega ochib beradi. Onlayn
   // do'kon mijozlarini ham (ularni xodim kiritmagan — do'konning umumiy bazasi)
-  'mijoz-doirasi.hammasi', 'mijozlar.onlayn',
+  'mijoz-doirasi.hammasi', 'mijozlar.onlayn', 'mijozlar.onlayn-bloklash',
   'nasiyalar.ochirish', 'nasiyalar.import', 'nasiyalar.xarajat',
   'taminotchilar.ochirish', 'taminotchilar.qarz', 'ballar.qolda', 'ballar.sozlama', 'xodimlar.qoshish', 'xodimlar.oylik', 'xodimlar.mulk', 'xodimlar.sotuvlar', 'xodimlar.smena',
   'kunlik-hisobot.sozlama', 'ombor.sozlash', 'onlayn-vitrina.tahrirlash',

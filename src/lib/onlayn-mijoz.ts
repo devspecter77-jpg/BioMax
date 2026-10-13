@@ -15,6 +15,25 @@ export interface ErpKarta {
   sotuvSoni: number
 }
 
+/** Saytdan chiqarish / qayta ruxsat berish jurnalining yozuvi (ERP'da saqlanadi) */
+export interface OnlaynBlokYozuvi {
+  id: string
+  amal: 'CHIQARILDI' | 'QAYTARILDI'
+  sabab: string | null
+  /** Kim qilgani */
+  foydalanuvchiIsm: string | null
+  yaratilgan: string
+}
+
+/** Saytdan chiqarish sababi — tez tanlash uchun tayyorlari (o'zi yozishi ham mumkin) */
+export const BLOK_SABABLARI = [
+  'Soxta buyurtmalar',
+  'Buyurtmani qabul qilmadi',
+  'Qo‘pol muomala',
+  'Firibgarlik shubhasi',
+]
+export const BLOK_SABAB_CHEGARA = 200
+
 export interface OnlaynMijozQatori {
   id: string
   telefon: string
@@ -28,6 +47,8 @@ export interface OnlaynMijozQatori {
   xaridSumma: number
   oxirgiBuyurtma: string | null
   erpKarta?: ErpKarta | null
+  /** Saytdan chiqarilgan bo'lsa — oxirgi chiqarish (sababi, kim, qachon) */
+  blok?: OnlaynBlokYozuvi | null
 }
 
 export interface OnlaynMijozRoyxat {
@@ -36,6 +57,8 @@ export interface OnlaynMijozRoyxat {
   sahifa: number
   sahifaHajmi: number
   statistika: { jami: number; buyurtmali: number; yangi7: number; faolBuyurtmali: number }
+  /** Saytdan chiqarilganlar soni (ERP bazadan o'qiydi) */
+  bloklanganSoni?: number
 }
 
 export interface OnlaynMijozManzil {
@@ -59,6 +82,8 @@ export interface OnlaynMijozTafsilot {
     xaridSumma: number; ortachaChek: number
   }
   erpKarta?: ErpKarta | null
+  /** Saytdan chiqarish / qayta ruxsat tarixi — eng yangisi tepada */
+  bloklar?: OnlaynBlokYozuvi[]
 }
 
 /** Marketplace hisob identifikatori (cuid) — boshqa narsani yo'lga qo'ymaslik uchun */

@@ -178,6 +178,7 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/namuna-tovar/dostavchiklar/*', YOZISH, ['namuna-tovar.dostavchik'], 'Dostavchikni o‘zgartirish'),
   Q('/api/namuna-tovar/*', OQISH, ['namuna-tovar'], 'Namuna tovar'),
   Q('/api/onlayn-mijozlar/:id/manzil/:manzilId', ['POST'], ['mijozlar.tahrirlash'], 'Mijoz manziliga nuqta qo‘yish'),
+  Q('/api/onlayn-mijozlar/:id/bloklash', ['POST', 'DELETE'], ['mijozlar.onlayn-bloklash'], 'Onlayn xaridorni saytdan chiqarish'),
   Q('/api/onlayn-mijozlar/*', OQISH, ['mijozlar.onlayn'], 'Onlayn do‘kon mijozlari'),
   Q('/api/onlayn-vitrina/:id/aksiya', '*', 'ADMIN', 'Aksiya belgilash'),
   Q('/api/onlayn-vitrina/*', YOZISH, ['onlayn-vitrina.tahrirlash'], 'Kartochkani tahrirlash'),

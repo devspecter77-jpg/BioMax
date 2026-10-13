@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  AlertTriangle, Banknote, Bike, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, ExternalLink, Globe, History,
-  Loader2, MessageSquare, Package, Phone, Receipt, RefreshCw, ShieldCheck, Store, UserRound, X,
+  AlertTriangle, Ban, Banknote, Bike, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, ExternalLink, Globe, History,
+  Loader2, LogOut, MessageSquare, Package, Phone, Receipt, RefreshCw, RotateCcw, ShieldCheck, Store, UserRound, X,
 } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
 import { ManzilTugma } from '@/components/ManzilXarita'
@@ -12,10 +12,12 @@ import { manzilKorinishi, manzilQidiruvMatni } from '@/lib/xarita-havola'
 import { toast } from 'sonner'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { useRuxsat } from '@/hooks/useRuxsat'
+import { useConfirm } from '@/components/ConfirmProvider'
+import SaytdanChiqarishOynasi, { qaytaRuxsatBer } from '@/components/onlayn/SaytdanChiqarish'
 import { formatPhone, formatSana, formatSanaVaVaqt, formatSum } from '@/lib/utils'
 import { FAOL_HOLATLAR, HOLAT_RANGI, holatNomi, tolovNomi, type OnlaynBuyurtma } from '@/lib/onlayn-buyurtma'
 import type {
-  ErpKarta, OnlaynMijozFiltri, OnlaynMijozQatori, OnlaynMijozRoyxat, OnlaynMijozTafsilot, OnlaynMijozTartibi,
+  ErpKarta, OnlaynBlokYozuvi, OnlaynMijozFiltri, OnlaynMijozQatori, OnlaynMijozRoyxat, OnlaynMijozTafsilot, OnlaynMijozTartibi,
 } from '@/lib/onlayn-mijoz'
 
 // Mijozlar › Onlayn mijozlar — onlayn do'konda ro'yxatdan o'tgan xaridorlar.
@@ -43,6 +45,16 @@ function HolatBelgisi({ b }: { b: Pick<OnlaynBuyurtma, 'holati' | 'yetkazish'> }
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${HOLAT_RANGI[b.holati]}`}>
       {holatNomi(b.holati, b.yetkazish)}
+    </span>
+  )
+}
+
+/** "Saytdan chiqarilgan" — sababi, kim va qachon sichqoncha ostida */
+function ChiqarilganBelgisi({ blok }: { blok: OnlaynBlokYozuvi | null | undefined }) {
+  const izoh = blok ? `${blok.sabab ?? 'Sababsiz'} · ${formatSanaVaVaqt(blok.yaratilgan)}${blok.foydalanuvchiIsm ? ` · ${blok.foydalanuvchiIsm}` : ''}` : undefined
+  return (
+    <span title={izoh} className="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 dark:text-red-400">
+      <Ban size={11} aria-hidden /> saytdan chiqarilgan
     </span>
   )
 }
@@ -102,7 +114,7 @@ export default function OnlaynMijozlarPanel({ onErpKarta }: { onErpKarta?: (mijo
       {/* Ko'rsatkichlar */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
-          { nomi: 'Ro‘yxatdan o‘tgan', qiymat: st?.jami, izoh: st ? `7 kunda +${st.yangi7}` : '' },
+          { nomi: 'Ro‘yxatdan o‘tgan', qiymat: st?.jami, izoh: st ? `7 kunda +${st.yangi7}${data?.bloklanganSoni ? ` · ${data.bloklanganSoni} chiqarilgan` : ''}` : '' },
           { nomi: 'Buyurtma berganlar', qiymat: st?.buyurtmali, izoh: st && st.jami ? `${Math.round((st.buyurtmali / st.jami) * 100)}% i` : '' },
           { nomi: 'Faol buyurtmasi bor', qiymat: st?.faolBuyurtmali, izoh: 'hozir yo‘lda yoki yig‘ilmoqda' },
         ].map(k => (
@@ -192,7 +204,7 @@ export default function OnlaynMijozlarPanel({ onErpKarta }: { onErpKarta?: (mijo
                             <span className="mt-0.5 flex flex-wrap gap-1">
                               <ErpKartaBelgisi karta={m.erpKarta} />
                               {!m.tasdiqlangan && <span className="rounded-md bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">tasdiqlanmagan</span>}
-                              {!m.faol && <span className="rounded-md bg-gray-100 dark:bg-neutral-800 px-1.5 py-0.5 text-[11px] font-medium text-gray-600 dark:text-gray-400">bloklangan</span>}
+                              {!m.faol && <ChiqarilganBelgisi blok={m.blok} />}
                             </span>
                           </span>
                         </button>
@@ -232,7 +244,12 @@ export default function OnlaynMijozlarPanel({ onErpKarta }: { onErpKarta?: (mijo
                       {m.xaridSumma > 0 && <span className="tabular-nums font-semibold text-gray-800 dark:text-gray-200">{formatSum(m.xaridSumma)}</span>}
                       <span>{formatSana(m.yaratilgan)} dan</span>
                     </span>
-                    {m.erpKarta && <span className="mt-1.5 block"><ErpKartaBelgisi karta={m.erpKarta} /></span>}
+                    {(m.erpKarta || !m.faol) && (
+                      <span className="mt-1.5 flex flex-wrap gap-1">
+                        {!m.faol && <ChiqarilganBelgisi blok={m.blok} />}
+                        <ErpKartaBelgisi karta={m.erpKarta} />
+                      </span>
+                    )}
                   </span>
                 </span>
               </button>
@@ -261,6 +278,7 @@ export default function OnlaynMijozlarPanel({ onErpKarta }: { onErpKarta?: (mijo
         <MijozOynasi
           id={tanlangan}
           onYopish={() => setTanlangan(null)}
+          onOzgardi={() => void yukla()}
           onErpKarta={onErpKarta ? id => { setTanlangan(null); onErpKarta(id) } : undefined}
         />
       )}
@@ -281,9 +299,17 @@ function MijozAvatar({ m }: { m: Pick<OnlaynMijozQatori, 'ism'> }) {
 
 type BuyurtmaFiltri = 'hammasi' | 'faol' | 'bajarilgan' | 'bekor'
 
-function MijozOynasi({ id, onYopish, onErpKarta }: { id: string; onYopish: () => void; onErpKarta?: (id: string) => void }) {
+function MijozOynasi({ id, onYopish, onErpKarta, onOzgardi }: {
+  id: string; onYopish: () => void; onErpKarta?: (id: string) => void
+  /** Saytdan chiqarilganda / qayta ruxsat berilganda — ro'yxat yangilansin */
+  onOzgardi?: () => void
+}) {
   useBodyScrollLock(true)
   const ruxsat = useRuxsat()
+  const confirm = useConfirm()
+  const [chiqarishOynasi, setChiqarishOynasi] = useState(false)
+  const [ruxsatBerilmoqda, setRuxsatBerilmoqda] = useState(false)
+  const bloklashMumkin = ruxsat.bor('mijozlar.onlayn-bloklash')
   const [m, setM] = useState<OnlaynMijozTafsilot | null>(null)
   const [xato, setXato] = useState<string | null>(null)
   const [ochiq, setOchiq] = useState<Set<string>>(new Set())
@@ -305,10 +331,28 @@ function MijozOynasi({ id, onYopish, onErpKarta }: { id: string; onYopish: () =>
   }, [id])
 
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onYopish() }
+    // Ustidagi oyna (saytdan chiqarish, tasdiq) Esc'ni o'zi yopsa — defaultPrevented; bu oyna ochiq qoladi
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onYopish() }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onYopish])
+
+  async function qaytaRuxsat() {
+    if (!m) return
+    const ok = await confirm({
+      title: 'Saytga qayta ruxsat berilsinmi?',
+      message: `${ismi(m)} yana kirib, buyurtma bera oladi.`,
+      confirmText: 'Ruxsat berish',
+      danger: false,
+    })
+    if (!ok) return
+    setRuxsatBerilmoqda(true)
+    const n = await qaytaRuxsatBer({ id: m.id, ism: m.ism, telefon: m.telefon })
+    setRuxsatBerilmoqda(false)
+    if (!n) return
+    setM(x => x && { ...x, faol: n.faol, bloklar: [n.yozuv, ...(x.bloklar ?? [])] })
+    onOzgardi?.()
+  }
 
   // Aniq nuqtani saqlash — marketplace'ga yoziladi, oynadagi ma'lumot ham darhol yangilanadi
   async function nuqtaYubor(url: string, lat: number, lng: number): Promise<{ lat: number; lng: number } | null> {
@@ -371,6 +415,18 @@ function MijozOynasi({ id, onYopish, onErpKarta }: { id: string; onYopish: () =>
           <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-primary" /></div>
         ) : (
           <div className="p-4 sm:p-5 space-y-4">
+            {chiqarishOynasi && (
+              <SaytdanChiqarishOynasi
+                xaridor={{ id: m.id, ism: m.ism, telefon: m.telefon }}
+                faolBuyurtmalar={m.xulosa.faolSoni}
+                onYopish={() => setChiqarishOynasi(false)}
+                onBajarildi={n => {
+                  setChiqarishOynasi(false)
+                  setM(x => x && { ...x, faol: n.faol, bloklar: [n.yozuv, ...(x.bloklar ?? [])] })
+                  onOzgardi?.()
+                }}
+              />
+            )}
             {/* Xulosa */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
@@ -396,7 +452,52 @@ function MijozOynasi({ id, onYopish, onErpKarta }: { id: string; onYopish: () =>
                   <ShieldCheck size={14} className={m.tasdiqlangan ? 'text-emerald-600' : 'text-amber-500'} aria-hidden />
                   {m.tasdiqlangan ? 'Telefon SMS kod bilan tasdiqlangan' : 'Telefon hali tasdiqlanmagan'}
                 </p>
-                {!m.faol && <p className="text-red-600 dark:text-red-400 font-medium">Hisob bloklangan</p>}
+                {m.faol ? (
+                  <p className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden /> Saytga kira oladi
+                  </p>
+                ) : (
+                  <div className="rounded-xl bg-red-50 dark:bg-red-950/30 px-3 py-2 text-red-700 dark:text-red-400">
+                    <p className="flex items-center gap-1.5 font-semibold"><Ban size={14} aria-hidden /> Saytdan chiqarilgan</p>
+                    {m.bloklar?.[0]?.amal === 'CHIQARILDI' && (
+                      <p className="mt-0.5 text-xs">
+                        {formatSanaVaVaqt(m.bloklar[0].yaratilgan)}{m.bloklar[0].foydalanuvchiIsm ? ` · ${m.bloklar[0].foydalanuvchiIsm}` : ''}
+                        {m.bloklar[0].sabab && <> · «{m.bloklar[0].sabab}»</>}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {bloklashMumkin && (
+                  m.faol ? (
+                    <button type="button" onClick={() => setChiqarishOynasi(true)}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900/60 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition">
+                      <LogOut size={14} aria-hidden /> Saytdan chiqarish
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => void qaytaRuxsat()} disabled={ruxsatBerilmoqda}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition disabled:opacity-60">
+                      {ruxsatBerilmoqda ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />} Qayta ruxsat berish
+                    </button>
+                  )
+                )}
+                {(m.bloklar?.length ?? 0) > 0 && (
+                  <details className="mt-2 text-xs">
+                    <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+                      Saytdan chiqarish tarixi ({m.bloklar!.length})
+                    </summary>
+                    <ul className="mt-1.5 space-y-1">
+                      {m.bloklar!.map(y => (
+                        <li key={y.id} className="text-gray-600 dark:text-gray-400">
+                          <b className={y.amal === 'CHIQARILDI' ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}>
+                            {y.amal === 'CHIQARILDI' ? 'Chiqarildi' : 'Qayta ruxsat'}
+                          </b>
+                          {' · '}{formatSanaVaVaqt(y.yaratilgan)}{y.foydalanuvchiIsm ? ` · ${y.foydalanuvchiIsm}` : ''}
+                          {y.sabab && <> · «{y.sabab}»</>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </div>
               <div className="rounded-2xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 p-3.5 text-sm">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Do‘kondagi kartasi</p>
