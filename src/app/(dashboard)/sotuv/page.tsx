@@ -22,6 +22,7 @@ import {
   SODIQLIK_STANDART, sarflashniHisobla, ballSarflanadimi, formatBall, sotuvdanToplanadi,
   type SodiqlikSozlama, type SodiqlikQoida,
 } from '@/lib/sodiqlik'
+import { birlikKasrlimi, birlikMatni, miqdorMatni as oramdaYoz, oramlarniOqi, oramlarTartibda } from '@/lib/birlik'
 import {
   POS_TOLOV_USULLARI, KANAL_USULLARI, TOLOV_MALUMOTI,
   tolovLabel, tolovQisqa, tolovBadge, tolovTaqsimoti, tolovKanallari,
@@ -34,6 +35,8 @@ interface Tovar {
   optomNarxi?: number | null; bolishNarxi?: number | null
   birlik: string; qoldiq: number; shtrixKod: string | null
   rasmlar?: string[]; valyuta?: string; kategoriya?: { id: string; nomi: string }
+  /** Qo'shimcha birliklar (karobka = 24 dona) — JSON */
+  oramlar?: unknown
 }
 interface Kategoriya { id: string; nomi: string; ombor?: { id: string; nomi: string; faol: boolean } | null }
 
@@ -157,8 +160,8 @@ function MiqdorInput({ miqdor, max, onChange }: { miqdor: number; max: number; o
 
 // Kasr miqdor faqat o'lchanadigan birliklarda (1.5 kg); dona, pachka va
 // quti — butun son.
-const KASRLI_BIRLIKLAR = new Set(['KG', 'LITR', 'METR'])
-const kasrliBirlikmi = (birlik: string) => KASRLI_BIRLIKLAR.has(birlik.toUpperCase())
+// Kasrli birlik (kg, litr, metr) — lib/birlik.ts; o'zi qo'shilgan birliklar butun son
+const kasrliBirlikmi = birlikKasrlimi
 // 0.1 + 0.2 kabi suzuvchi nuqta qoldiqlari savatga tushmasin — bazada
 // miqdor 3 xonali kasr bilan saqlanadi.
 const miqdorYaxlitla = (n: number) => Math.round(n * 1000) / 1000
@@ -218,8 +221,10 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, narxYorligi, savatda, boshlangic
   const inputRef = useRef<HTMLInputElement>(null)
   const tezYozuv = useRef({ oldingi: '', kod: '', boshi: 0, vaqt: 0 })
   const kasrli = kasrliBirlikmi(tovar.birlik)
-  const birlik = tovar.birlik.toLowerCase()
+  const birlik = birlikMatni(tovar.birlik)
   const qolgan = miqdorYaxlitla(tovar.qoldiq - savatda)
+  // Qo'shimcha birliklar: "1 karobka" bosilsa — 24 dona
+  const oramlar = oramlarTartibda(oramlarniOqi(tovar.oramlar))
   const miqdor = miqdorniOqi(matn)
   const xato = skanMiqdorXatosi(miqdor, tovar, savatda)
   const tezTanlov = kasrli ? [0.5, 1, 2, 5] : [1, 2, 5, 10]
@@ -362,8 +367,29 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, narxYorligi, savatda, boshlangic
             ))}
           </div>
 
+          {oramlar.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {oramlar.map(o => (
+                <button
+                  key={o.nomi}
+                  type="button"
+                  onMouseDown={fokusniSaqla}
+                  onClick={() => setMatn(String(o.miqdor))}
+                  disabled={o.miqdor > qolgan}
+                  aria-pressed={miqdor === o.miqdor}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium tabular-nums transition disabled:opacity-40 ${miqdor === o.miqdor ? 'bg-pos text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
+                >
+                  1 {o.nomi} <span className="opacity-75">· {o.miqdor} {birlik}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <p className={`min-h-5 text-sm ${xato && matn ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`} aria-live="polite">
-            {xato ? (matn ? xato : '') : bonus ? '' : `Jami: ${formatSum(Math.round(narx * miqdor))}`}
+            {xato ? (matn ? xato : '') : [
+              bonus ? '' : `Jami: ${formatSum(Math.round(narx * miqdor))}`,
+              oramlar.length > 0 && miqdor > 0 && oramdaYoz(miqdor, tovar.birlik, oramlar) !== `${miqdor} ${birlik}` ? oramdaYoz(miqdor, tovar.birlik, oramlar) : '',
+            ].filter(Boolean).join(' · ')}
           </p>
         </div>
 

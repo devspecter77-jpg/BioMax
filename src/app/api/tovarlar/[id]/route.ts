@@ -8,6 +8,7 @@ import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
+import { birlikTozala, oramlarniTekshir } from '@/lib/birlik'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -81,7 +82,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (bor('nomi')) updateData.nomi = data.nomi
     if (bor('shtrixKod')) updateData.shtrixKod = data.shtrixKod || null
     if (bor('valyuta')) updateData.valyuta = data.valyuta === 'USD' ? 'USD' : 'UZS'
-    if (bor('birlik')) updateData.birlik = data.birlik
+    if (bor('birlik')) {
+      const birlik = birlikTozala(data.birlik)
+      if (!birlik) return NextResponse.json({ xato: "O'lchov birligi noto'g'ri — 20 belgigacha nom yozing" }, { status: 400 })
+      updateData.birlik = birlik
+    }
+    if (bor('oramlar')) {
+      // Asosiy birlik shu so'rovda o'zgargan bo'lsa — yangisiga nisbatan tekshiriladi
+      const asosiy = typeof updateData.birlik === 'string'
+        ? updateData.birlik
+        : (await prisma.tovar.findUnique({ where: { id }, select: { birlik: true } }))?.birlik ?? 'DONA'
+      const o = oramlarniTekshir(data.oramlar, asosiy)
+      if (!o.ok) return NextResponse.json({ xato: o.xato }, { status: 400 })
+      updateData.oramlar = o.oramlar
+    }
     if (bor('minimalQoldiq')) updateData.minimalQoldiq = parseInt(data.minimalQoldiq)
     if (bor('keltirilganManzil')) updateData.keltirilganManzil = manzilTozala(data.keltirilganManzil)
     if (bor('qulflangan')) updateData.qulflangan = !!data.qulflangan

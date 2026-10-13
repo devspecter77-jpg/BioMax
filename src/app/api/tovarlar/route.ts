@@ -12,6 +12,7 @@ import { joriyUsdKursi } from '@/lib/kurs'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
+import { birlikTozala, oramlarniTekshir } from '@/lib/birlik'
 
 export async function GET(req: NextRequest) {
   try {
@@ -153,6 +154,12 @@ export async function POST(req: NextRequest) {
       taminotchiId = tam.id
     }
 
+    // O'lchov birligi (tayyor yoki o'zi yozgani) va qo'shimcha birliklar (karobka, qop…)
+    const birlik = data.birlik === undefined || data.birlik === '' ? 'DONA' : birlikTozala(data.birlik)
+    if (!birlik) return NextResponse.json({ xato: "O'lchov birligi noto'g'ri — 20 belgigacha nom yozing" }, { status: 400 })
+    const oramTekshiruv = oramlarniTekshir(data.oramlar, birlik)
+    if (!oramTekshiruv.ok) return NextResponse.json({ xato: oramTekshiruv.xato }, { status: 400 })
+
     const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod(filialId)
     const rasmlar = await rasmlarniSiqish(data.rasmlar)
 
@@ -184,7 +191,8 @@ export async function POST(req: NextRequest) {
           optomNarxi: data.optomNarxi ? parseFloat(data.optomNarxi) : null,
           bolishNarxi: data.bolishNarxi ? parseFloat(data.bolishNarxi) : null,
           valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
-          birlik: data.birlik || 'DONA',
+          birlik,
+          oramlar: oramTekshiruv.oramlar,
           minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
           taminotchiId,
           keltirilganManzil: manzilTozala(data.keltirilganManzil),

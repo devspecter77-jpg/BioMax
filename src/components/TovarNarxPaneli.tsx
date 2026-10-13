@@ -1,6 +1,7 @@
 'use client'
 
 import { formatNarx } from '@/lib/utils'
+import { birlikMatni, miqdorMatni, type Oram } from '@/lib/birlik'
 
 // Mahsulot kartasidagi "Miqdori / Kelish / Sotish / Optom / Bo'lish" paneli.
 // Katalogda (Tovarlar) va kassada ishlatiladi.
@@ -21,6 +22,8 @@ import { formatNarx } from '@/lib/utils'
 interface Props {
   qoldiq: number | null
   birlik: string
+  /** Qo'shimcha birliklar — miqdor sarlavhasida "5 karobka 3 dona" bo'lib ko'rinadi */
+  oramlar?: Oram[]
   /** Qoldiq kam — miqdor rangi bilan ogohlantiriladi. */
   kamQoldi?: boolean
   kelishNarxi: number | string | null
@@ -107,7 +110,7 @@ const BOLISH_RANGI = 'text-amber-600 dark:text-amber-400'
 const XIRA_RANG = 'text-gray-500 dark:text-gray-400'
 
 export default function TovarNarxPaneli({
-  qoldiq, birlik, kamQoldi = false,
+  qoldiq, birlik, oramlar, kamQoldi = false,
   kelishNarxi, sotishNarxi, optomNarxi, bolishNarxi, valyuta,
   sotishRangi = 'text-green-600 dark:text-green-500',
   olcham = 'ixcham',
@@ -115,7 +118,9 @@ export default function TovarNarxPaneli({
   aktivNarx,
   sotishYorligi = 'Sotish',
 }: Props) {
-  const birlikMatni = birlik.toLowerCase()
+  const birlikYozuvi = birlikMatni(birlik)
+  // Karobka/qop bo'yicha yoyilgani — sichqoncha bilan ustiga borilganda
+  const yoyilgan = qoldiq !== null && qoldiq > 0 && oramlar && oramlar.length > 0 ? ` (${miqdorMatni(qoldiq, birlik, oramlar)})` : ''
   const kelish = narxMatni(kelishNarxi, valyuta)
   const sotish = narxMatni(sotishNarxi, valyuta)
   const optom = narxMatni(optomNarxi, valyuta)
@@ -134,12 +139,12 @@ export default function TovarNarxPaneli({
       <Qator
         yorliq="Miqdori"
         olcham={olcham}
-        sarlavha={qoldiq === null ? '—' : `${qoldiq} ${birlikMatni}`}
+        sarlavha={qoldiq === null ? '—' : `${qoldiq} ${birlikYozuvi}${yoyilgan}`}
         qiymatCls={`font-bold ${kamQoldi ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}
         qiymat={qoldiq === null ? '—' : (
           <>
             {qoldiq}{' '}
-            <span className="font-normal text-gray-500 dark:text-gray-400 text-[11px]">{birlikMatni}</span>
+            <span className="font-normal text-gray-500 dark:text-gray-400 text-[11px]">{birlikYozuvi}</span>
           </>
         )}
       />

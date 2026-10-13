@@ -10,6 +10,10 @@ import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
 import { normalizeUzbek } from '@/lib/utils'
 import { asosiyNom, markaziyNomimi, omborKategoriyasi, type MaqsadOmbor } from '@/lib/tovar-ombori'
+import { birlikMatni, miqdorMatni, oramlarniOqi, oramlarniTekshir, qismlardanJami, type Oram } from '@/lib/birlik'
+import BirlikTanlash, { birlikTakliflariniOl } from '@/components/tovar/BirlikTanlash'
+import OramlarMaydoni, { type OramQatori } from '@/components/tovar/OramlarMaydoni'
+import MiqdorKiritish from '@/components/tovar/MiqdorKiritish'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -39,6 +43,8 @@ interface Tovar {
   kelishNarxi: number | null; sotishNarxi: number | null
   optomNarxi: number | null; bolishNarxi: number | null; valyuta: string
   birlik: string; minimalQoldiq: number; shtrixKod: string | null
+  /** Qo'shimcha birliklar: [{ nomi: 'karobka', miqdor: 24 }] (JSON) */
+  oramlar?: unknown
   holati: string; qoldiq: number | null; rasmlar: string[]
   yaroqlilikMuddati: string | null
   taminotchi: { id: string; nomi: string } | null
@@ -60,16 +66,6 @@ const NARX_YORLIQLARI: { turi: NarxTuri; yorliq: string; maydon: 'sotishNarxi' |
 // Server bilan bir xil (lib/rasm.ts): onlayn vitrina galereyasi 10 tagacha rasm saqlaydi —
 // tovar formasi ularni qirqib tashlamasligi kerak.
 const MAX_RASM = 10
-const BIRLIKLAR = ['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI']
-const QOLDIQ_LABEL: Record<string, string> = {
-  DONA: 'Necha dona bor?', KG: 'Necha kg bor?', LITR: 'Necha litr bor?',
-  METR: 'Necha metr bor?', PACHKA: 'Necha pachka bor?', QUTI: 'Necha quti bor?',
-}
-const QOLDIQ_QOSHISH_LABEL: Record<string, string> = {
-  DONA: "Yana necha dona qo'shmoqchisiz?", KG: "Yana necha kg qo'shmoqchisiz?", LITR: "Yana necha litr qo'shmoqchisiz?",
-  METR: "Yana necha metr qo'shmoqchisiz?", PACHKA: "Yana necha pachka qo'shmoqchisiz?", QUTI: "Yana necha quti qo'shmoqchisiz?",
-}
-
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition'
 
 // Ega tomonidan yashirilgan maydon uchun server null qaytaradi — "0 UZS" deb
@@ -215,7 +211,10 @@ export default function TovarlarPage() {
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
     sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
     rasmlar: [] as string[], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '',
+    oramlar: [] as OramQatori[],
   })
+  // Pastdagi miqdor qo'shimcha birliklarda: { karobka: '5', '': '3' } (lib/birlik.ts)
+  const [qoldiqQismlari, setQoldiqQismlari] = useState<Record<string, string>>({})
 
   // Kelish narxi / ustama foiz / sotish narxi — uchtasi bir-biriga bog'liq.
   // Kelish yoki foiz o'zgarsa -> sotish avtomatik hisoblanadi.
@@ -433,6 +432,7 @@ export default function TovarlarPage() {
         yaroqlilikMuddati: tovar.yaroqlilikMuddati ? tovar.yaroqlilikMuddati.slice(0, 10) : '',
         taminotchiId: tovar.taminotchi?.id || '',
         keltirilganManzil: tovar.keltirilganManzil || '',
+        oramlar: oramlarniOqi(tovar.oramlar).map(o => ({ nomi: o.nomi, miqdor: String(o.miqdor) })),
       })
       // Mahsulotning kategoriyasi qaysi omborga tegishli bo'lsa o'sha tanlanadi
       const k = kategoriyalar.find(x => x.id === tovar.kategoriya.id)
@@ -448,8 +448,9 @@ export default function TovarlarPage() {
       setFormaOmbor(k ? (k.ombor?.id ?? (omborMaydoni ? MARKAZIY_QIYMAT : '')) : '')
       setForm({ nomi: '', kategoriyaId: k?.id ?? '', shtrixKod: '',
         kelishNarxi: '', sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
-        rasmlar: [], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '' })
+        rasmlar: [], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '', oramlar: [] })
     }
+    setQoldiqQismlari({})
     setYangiOmbor('')
     setYangiKategoriya('')
     setModal(true)
@@ -587,6 +588,10 @@ export default function TovarlarPage() {
   async function saqlash(e: React.FormEvent) {
     e.preventDefault()
     if (!form.kategoriyaId && !yangiKategoriya) { toast.error('Kategoriyani tanlang yoki yangisini yozing'); return }
+    // Qo'shimcha birliklar — server bilan bir xil tekshiruv; miqdor ulardan jamlanadi
+    const oramTekshiruv = oramlarniTekshir(form.oramlar, form.birlik)
+    if (!oramTekshiruv.ok) { toast.error(oramTekshiruv.xato); return }
+    const kiritilganMiqdor = String(qismlardanJami(qoldiqQismlari, oramTekshiruv.oramlar))
     setSaqlanmoqda(true)
     try {
       const url = tahrirlash ? `/api/tovarlar/${tahrirlash.id}` : '/api/tovarlar'
@@ -596,6 +601,8 @@ export default function TovarlarPage() {
       const yangiNarsa = !!(yangiOmbor || yangiKategoriya)
       const tana = {
         ...form,
+        oramlar: oramTekshiruv.oramlar,
+        ...(tahrirlash ? { qoldiqQoshish: kiritilganMiqdor } : { boshlangichQoldiq: kiritilganMiqdor }),
         kategoriyaId: yangiKategoriya ? '' : form.kategoriyaId,
         ...(yangiKategoriya ? { yangiKategoriya } : {}),
         ...(yangiOmbor
@@ -606,6 +613,8 @@ export default function TovarlarPage() {
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tana) })
       if (res.ok) {
         const natija = await res.json()
+        // Yangi birlik yoki o'ram nomi keyingi formada taklif bo'lib chiqsin
+        void birlikTakliflariniOl(true)
         const joyi = natija.kategoriya
           ? ` — ${natija.kategoriya.ombor ? `«${natija.kategoriya.ombor.nomi}» ombori` : 'Markaziy ombor'}, «${natija.kategoriya.nomi}»`
           : ''
@@ -630,7 +639,7 @@ export default function TovarlarPage() {
         }
         if (tahrirlash && !yangiNarsa) {
           const tahrirId = tahrirlash.id
-          const qoshiladigan = parseFloat(form.qoldiqQoshish) || 0
+          const qoshiladigan = parseFloat(kiritilganMiqdor) || 0
           setTovarlar(prev => prev
             .map(t => t.id !== tahrirId ? t : {
               ...t,
@@ -639,6 +648,7 @@ export default function TovarlarPage() {
               shtrixKod: natija.shtrixKod,
               valyuta: natija.valyuta,
               birlik: natija.birlik,
+              oramlar: natija.oramlar,
               minimalQoldiq: natija.minimalQoldiq,
               rasmlar: natija.rasmlar,
               yaroqlilikMuddati: natija.yaroqlilikMuddati,
@@ -796,6 +806,12 @@ export default function TovarlarPage() {
       setImportYuklanmoqda(false)
     }
   }
+
+  // Formadagi yaroqli qo'shimcha birliklar — pastdagi miqdor shu bo'yicha kiritiladi
+  const formaOramlari: Oram[] = (() => {
+    const t = oramlarniTekshir(form.oramlar.filter(q => q.nomi.trim() && q.miqdor.trim()), form.birlik)
+    return t.ok ? t.oramlar : oramlarniOqi(form.oramlar.map(q => ({ nomi: q.nomi.trim().toLowerCase(), miqdor: Number(q.miqdor.replace(',', '.')) })))
+  })()
 
   // Formadagi ombor ro'yxati: "Markaziy ombor" va FAOL omborlar. Istisno:
   // tahrirlanayotgan tovar nofaol omborda tursa, o'sha ombor ro'yxatda
@@ -1235,9 +1251,14 @@ export default function TovarlarPage() {
                       {t.qoldiq === null ? (
                         <span className="text-sm text-gray-500 dark:text-gray-400">—</span>
                       ) : (
-                        <span className={`text-sm font-medium ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
-                          {t.qoldiq} {t.birlik.toLowerCase()}
-                        </span>
+                        <>
+                          <span className={`text-sm font-medium ${t.qoldiq <= t.minimalQoldiq ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                            {t.qoldiq} {birlikMatni(t.birlik)}
+                          </span>
+                          {t.qoldiq > 0 && oramlarniOqi(t.oramlar).length > 0 && (
+                            <span className="block text-[11px] text-gray-500 dark:text-gray-400">{miqdorMatni(t.qoldiq, t.birlik, oramlarniOqi(t.oramlar))}</span>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-3 py-3 text-right text-gray-500 dark:text-gray-400 text-sm whitespace-nowrap">
@@ -1390,6 +1411,7 @@ export default function TovarlarPage() {
                 <TovarNarxPaneli
                   qoldiq={t.qoldiq}
                   birlik={t.birlik}
+                  oramlar={oramlarniOqi(t.oramlar)}
                   kamQoldi={t.qoldiq !== null && t.qoldiq <= t.minimalQoldiq}
                   kelishNarxi={t.kelishNarxi}
                   sotishNarxi={t.sotishNarxi}
@@ -1734,11 +1756,21 @@ export default function TovarlarPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
-                <select value={form.birlik} onChange={e => setForm(f => ({...f, birlik: e.target.value}))} className={inputCls}>
-                  {BIRLIKLAR.map(b => <option key={b} value={b}>{b.toLowerCase()}</option>)}
-                </select>
+              {/* ── O'lchov birligi: asosiysi va qo'shimchalari (karobka, qop…) ── */}
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="tovar-birlik" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">O‘lchov birligi</label>
+                  <BirlikTanlash id="tovar-birlik" value={form.birlik} onChange={v => setForm(f => ({ ...f, birlik: v }))} />
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                    Qoldiq va sotuv shu birlikda sanaladi. Ro‘yxatda yo‘q bo‘lsa — yozib qo‘shing (masalan, juft, rulon).
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-700 dark:text-gray-300 text-sm mb-1.5 font-medium">
+                    Qo‘shimcha birliklar <span className="text-gray-400 font-normal">(ixtiyoriy — karobka, qop…)</span>
+                  </p>
+                  <OramlarMaydoni asosiy={form.birlik} qatorlar={form.oramlar} onChange={o => setForm(f => ({ ...f, oramlar: o }))} />
+                </div>
               </div>
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
@@ -1778,34 +1810,28 @@ export default function TovarlarPage() {
                   className={inputCls}
                 />
               </div>
-              {!tahrirlash ? (
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">{QOLDIQ_LABEL[form.birlik] || 'Necha dona bor?'}</label>
-                  {/* MoneyInput for initial stock quantity */}
-                  <MoneyInput
-                    value={form.boshlangichQoldiq}
-                    onChange={v => setForm(f => ({ ...f, boshlangichQoldiq: v }))}
-                    placeholder="0"
-                    suffix=""
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
-                    {QOLDIQ_QOSHISH_LABEL[form.birlik] || "Yana necha dona qo'shmoqchisiz?"}
-                    <span className="text-gray-500 dark:text-gray-400 font-normal"> (ixtiyoriy)</span>
-                  </label>
+              {/* ── Miqdor: dona, karobka, qop… bo'yicha — jami asosiy birlikda saqlanadi ── */}
+              <div>
+                <p className="text-gray-700 dark:text-gray-300 text-sm mb-1.5 font-medium">
+                  {tahrirlash
+                    ? <>Yana qancha qo‘shiladi <span className="text-gray-500 dark:text-gray-400 font-normal">(ixtiyoriy)</span></>
+                    : formaOramlari.length > 0 ? 'Qancha bor' : `Necha ${birlikMatni(form.birlik)} bor`}
+                </p>
+                {tahrirlash && (
                   <p className="text-gray-500 dark:text-gray-400 text-xs mb-1.5">
-                    Hozirgi qoldiq: <span className="font-medium text-gray-600 dark:text-gray-400">{tahrirlash.qoldiq} {form.birlik.toLowerCase()}</span> — kiritilgan miqdor shunga qo&apos;shiladi.
+                    Hozirgi qoldiq: <span className="font-medium text-gray-600 dark:text-gray-400">{tahrirlash.qoldiq ?? 0} {birlikMatni(form.birlik)}</span>
+                    {(tahrirlash.qoldiq ?? 0) > 0 && formaOramlari.length > 0 && ` (${miqdorMatni(tahrirlash.qoldiq ?? 0, form.birlik, formaOramlari)})`}
+                    {' '}— kiritilgani shunga qo&apos;shiladi.
                   </p>
-                  <MoneyInput
-                    value={form.qoldiqQoshish}
-                    onChange={v => setForm(f => ({ ...f, qoldiqQoshish: v }))}
-                    placeholder="0"
-                    suffix=""
-                  />
-                </div>
-              )}
+                )}
+                <MiqdorKiritish
+                  idPrefiks="tovar-miqdor"
+                  asosiy={form.birlik}
+                  oramlar={formaOramlari}
+                  qismlar={qoldiqQismlari}
+                  onChange={setQoldiqQismlari}
+                />
+              </div>
           </div>
         </Modal>
       )}

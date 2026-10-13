@@ -12,6 +12,7 @@ import { yorliqlarHtml, yorliqSozlamasi, YORLIQ_OLCHAMLARI, type Yorliq } from '
 import { chekChopEtish } from '@/lib/chek-print'
 import { useSaqlanganQiymat } from '@/hooks/useSaqlanganQiymat'
 import YorliqNamuna from '@/components/YorliqNamuna'
+import { birlikMatni, miqdorMatni as oramdaYoz, oramlarniOqi } from '@/lib/birlik'
 
 // Mahsulot ustiga bosilganda ochiladigan to'liq karta:
 // qayerda turgani (ombor/do'kon), qachon va kimdan kelgani, butun tarixi.
@@ -42,6 +43,8 @@ interface Tafsilot {
     taminotchi: { id: string; nomi: string; telefon: string | null } | null
     filial: { id: string; nomi: string } | null
     shtrixKod: string | null; birlik: string; valyuta: string; holati: string
+    /** Qo'shimcha birliklar (karobka, qop…) — JSON */
+    oramlar?: unknown
     keltirilganManzil: string | null
     yaratilganKursi: number | string | null
     qulflangan: boolean
@@ -116,7 +119,10 @@ export default function TovarTafsilot({
   }, [tovarId])
 
   const t = data?.tovar
-  const birlik = t ? t.birlik.toLowerCase() : ''
+  const birlik = t ? birlikMatni(t.birlik) : ''
+  const oramlar = t ? oramlarniOqi(t.oramlar) : []
+  /** "5 karobka 3 dona" — qo'shimcha birlik bo'lsa va miqdor bor bo'lsa */
+  const yoyilgan = (n: number) => (t && oramlar.length > 0 && n > 0 ? oramdaYoz(n, t.birlik, oramlar) : undefined)
   const yorliq = useMemo<Yorliq | null>(() => t ? {
     nomi: t.nomi, shtrixKod: t.shtrixKod, narx: narxMatni(t.sotishNarxi, t.valyuta), tartibRaqami: t.tartibRaqami,
   } : null, [t])
@@ -255,18 +261,21 @@ export default function TovarTafsilot({
                     belgi={<Warehouse size={13} />}
                     sarlavha="Omborda"
                     qiymat={`${miqdorMatni(data.qoldiq.ombor)} ${birlik}`}
+                    izoh={yoyilgan(data.qoldiq.ombor)}
                     kuchli={data.qoldiq.ombor > 0}
                   />
                   <JoyKarta
                     belgi={<Store size={13} />}
                     sarlavha="Do'konda"
                     qiymat={`${miqdorMatni(data.qoldiq.dokon)} ${birlik}`}
+                    izoh={yoyilgan(data.qoldiq.dokon)}
                     kuchli={data.qoldiq.dokon > 0}
                   />
                   <JoyKarta
                     belgi={<Boxes size={13} />}
                     sarlavha="Jami"
                     qiymat={`${miqdorMatni(data.qoldiq.jami)} ${birlik}`}
+                    izoh={yoyilgan(data.qoldiq.jami)}
                     kuchli
                     rang={data.qoldiq.kamQolgan ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}
                   />
@@ -353,7 +362,12 @@ export default function TovarTafsilot({
                   )}
                   <Qator belgi={<Barcode size={11} />} label="Shtrix-kod" qiymat={t.shtrixKod || '—'} />
                   <Qator belgi={<Tag size={11} />} label="Tartib raqami" qiymat={t.tartibRaqami !== null ? `№ ${t.tartibRaqami}` : '—'} />
-                  <Qator belgi={<Boxes size={11} />} label="O'lchov birligi" qiymat={t.birlik} />
+                  <Qator
+                    belgi={<Boxes size={11} />}
+                    label="O'lchov birligi"
+                    qiymat={birlik}
+                    izoh={oramlar.length > 0 ? oramlar.map(o => `1 ${o.nomi} = ${o.miqdor} ${birlik}`).join(' · ') : undefined}
+                  />
                   <Qator belgi={<AlertTriangle size={11} />} label="Minimal qoldiq" qiymat={`${t.minimalQoldiq} ${birlik}`} />
                   {t.yaroqlilikMuddati && (
                     <Qator belgi={<Calendar size={11} />} label="Yaroqlilik muddati" qiymat={formatSana(t.yaroqlilikMuddati)} />
@@ -504,8 +518,10 @@ export default function TovarTafsilot({
   )
 }
 
-function JoyKarta({ belgi, sarlavha, qiymat, kuchli, rang }: {
+function JoyKarta({ belgi, sarlavha, qiymat, izoh, kuchli, rang }: {
   belgi: React.ReactNode; sarlavha: string; qiymat: string; kuchli?: boolean; rang?: string
+  /** Qiymat ostida — masalan "5 karobka 3 dona" */
+  izoh?: string
 }) {
   return (
     <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-3">
@@ -515,6 +531,7 @@ function JoyKarta({ belgi, sarlavha, qiymat, kuchli, rang }: {
       }`}>
         {qiymat}
       </p>
+      {izoh && <p className="text-gray-500 dark:text-gray-400 text-[11px] mt-0.5 truncate" title={izoh}>{izoh}</p>}
     </div>
   )
 }

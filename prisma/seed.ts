@@ -1,5 +1,8 @@
 import 'dotenv/config'
-import { PrismaClient, Rol, Birlik, TolovUsuli, NasiyaHolati, XarajatKategoriya } from '@prisma/client'
+import { PrismaClient, Rol, TolovUsuli, NasiyaHolati, XarajatKategoriya } from '@prisma/client'
+
+// O'lchov birligi endi erkin matn (Tovar.birlik) — tayyor kodlar shu yerda
+const Birlik = { DONA: 'DONA', KG: 'KG', LITR: 'LITR', METR: 'METR', PACHKA: 'PACHKA', QUTI: 'QUTI' } as const
 import type { Foydalanuvchi, Kategoriya, Mijoz, Prisma, Taminotchi, Tovar } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'

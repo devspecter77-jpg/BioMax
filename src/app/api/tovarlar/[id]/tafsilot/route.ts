@@ -131,6 +131,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         yaratilganKursi: tovar.yaratilganKursi,
         qulflangan: tovar.qulflangan,
         birlik: tovar.birlik,
+        oramlar: tovar.oramlar,
         valyuta: tovar.valyuta,
         holati: tovar.holati,
         kelishNarxi: narxYashirin ? null : tovar.kelishNarxi,

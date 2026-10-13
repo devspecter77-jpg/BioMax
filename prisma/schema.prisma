@@ -235,7 +235,14 @@ model Tovar {
   // Ikkalasi ham ixtiyoriy — kiritilmasa oddiy sotish narxi ishlatiladi.
   optomNarxi    Decimal?  @db.Decimal(12, 2)
   bolishNarxi   Decimal?  @db.Decimal(12, 2)
-  birlik        Birlik    @default(DONA)
+  /// Asosiy o'lchov birligi — qoldiq va sotuv shu birlikda sanaladi. Tayyorlari:
+  /// DONA, KG, LITR, METR, PACHKA, QUTI (KG/LITR/METR — kasrli); qolgani
+  /// foydalanuvchi o'zi yozgan nom ("juft", "rulon") — butun sonda sanaladi.
+  birlik        String    @default("DONA")
+  /// Qo'shimcha birliklar (o'ram): [{ "nomi": "karobka", "miqdor": 24 }] —
+  /// "1 karobka = 24 dona". Miqdor har doim asosiy birlikda saqlanadi, o'ram
+  /// faqat kiritish va ko'rsatish uchun (lib/birlik.ts).
+  oramlar       Json      @default("[]")
   minimalQoldiq Int       @default(5)
   // Mahsulotni yetkazib beruvchi. Ixtiyoriy: "bu tovar kimdan keladi"
   // degan savolga javob beradi va qayta buyurtma berishda ishlatiladi.
@@ -310,14 +317,7 @@ model MaydonYashirish {
   @@map("maydon_yashirish")
 }
 
-enum Birlik {
-  DONA
-  KG
-  LITR
-  METR
-  PACHKA
-  QUTI
-}
+// Birlik — endi erkin matn (Tovar.birlik), tayyor nomlar lib/birlik.ts da
 
 enum TovarHolati {
   FAOL

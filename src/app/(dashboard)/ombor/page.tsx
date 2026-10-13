@@ -10,6 +10,7 @@ import TovarTafsilot from '@/components/TovarTafsilot'
 import { harakatMalumoti } from '@/lib/harakat-turlari'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
+import BirlikTanlash from '@/components/tovar/BirlikTanlash'
 import MoneyInput from '@/components/ui/money-input'
 import SearchBar from '@/components/ui/search-bar'
 import { useConfirm } from '@/components/ConfirmProvider'
@@ -612,15 +613,9 @@ export default function OmborPage() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
-                  <select value={tahrirForm.birlik} onChange={e => setTahrirForm(f => ({ ...f, birlik: e.target.value }))} className={inputCls}>
-                    <option value="DONA">Dona</option>
-                    <option value="KG">Kg</option>
-                    <option value="LITR">Litr</option>
-                    <option value="METR">Metr</option>
-                    <option value="PACHKA">Pachka</option>
-                    <option value="QUTI">Quti</option>
-                  </select>
+                  <label htmlFor="ombor-tahrir-birlik" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Birlik</label>
+                  {/* Tayyor yoki o'zi qo'shgan birlik ("juft", "rulon") */}
+                  <BirlikTanlash id="ombor-tahrir-birlik" value={tahrirForm.birlik} onChange={v => setTahrirForm(f => ({ ...f, birlik: v }))} />
                 </div>
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Min qoldiq</label>

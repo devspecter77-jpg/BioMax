@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { Birlik, TovarHolati } from '@prisma/client'
+import type { TovarHolati } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
@@ -7,8 +7,8 @@ import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-sc
 import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, JoyXatosi, type KatalogDoirasi } from '@/lib/tovar-ombori-server'
+import { birlikTozala, oramlarniMatndan, oramlarniTekshir } from '@/lib/birlik'
 
-const BIRLIKLAR = new Set(['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI'])
 const HOLATLAR = new Set(['FAOL', 'ARXIVLANGAN'])
 
 export async function POST(req: NextRequest) {
@@ -91,8 +91,13 @@ export async function POST(req: NextRequest) {
         const valyuta = String(row['Valyuta'] || 'UZS').trim().toUpperCase() === 'USD' ? 'USD' : 'UZS'
         const kelishNarxi = parseFloat(String(row['Kelish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
         const sotishNarxi = parseFloat(String(row['Sotish narxi'] || '0').replace(/[^\d.]/g, '')) || 0
-        const birlikRaw = String(row['Birlik'] || 'DONA').trim().toUpperCase()
-        const birlik = (BIRLIKLAR.has(birlikRaw) ? birlikRaw : 'DONA') as Birlik
+        // Birlik — tayyor (dona, kg…) yoki o'zi yozgani ("juft"); noto'g'ri bo'lsa dona
+        const birlik = birlikTozala(row['Birlik']) ?? 'DONA'
+        // "O'ramlar": "karobka=24; qop=240" (ixtiyoriy ustun)
+        const oramYacheyka = row["O'ramlar"] ?? row['O‘ramlar']
+        const oramTekshiruv = oramlarniTekshir(oramYacheyka === undefined ? undefined : oramlarniMatndan(oramYacheyka), birlik)
+        if (!oramTekshiruv.ok) throw new JoyXatosi(400, oramTekshiruv.xato)
+        const oramlar = oramYacheyka === undefined ? undefined : oramTekshiruv.oramlar
         const holatiRaw = String(row['Holati'] || 'FAOL').trim().toUpperCase()
         const holati = (HOLATLAR.has(holatiRaw) ? holatiRaw : 'FAOL') as TovarHolati
         const qoldiq = parseFloat(String(row['Miqdori'] || '0').replace(/[^\d.]/g, '')) || 0
@@ -112,7 +117,7 @@ export async function POST(req: NextRequest) {
         if (mavjud) {
           await prisma.tovar.update({
             where: { id: mavjud.id },
-            data: { kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, yaroqlilikMuddati },
+            data: { kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, yaroqlilikMuddati, ...(oramlar ? { oramlar } : {}) },
           })
 
           // Miqdorini faylga moslash — farqni ombor harakati bilan tuzatish (do'kon zaxirasi)
@@ -136,7 +141,7 @@ export async function POST(req: NextRequest) {
           yangilandi++
         } else {
           const yangiTovar = await prisma.tovar.create({
-            data: { nomi, kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, filialId, egaId, yaroqlilikMuddati },
+            data: { nomi, kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, filialId, egaId, yaroqlilikMuddati, oramlar: oramlar ?? [] },
           })
           if (qoldiq > 0) {
             await prisma.omborHarakati.create({

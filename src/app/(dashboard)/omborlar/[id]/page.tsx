@@ -16,6 +16,7 @@ import { harakatUchunKerak } from '@/lib/ruxsat-amallar'
 import TovarTafsilot from '@/components/TovarTafsilot'
 import SearchBar from '@/components/ui/search-bar'
 import MoneyInput from '@/components/ui/money-input'
+import BirlikTanlash from '@/components/tovar/BirlikTanlash'
 import Combobox from '@/components/ui/combobox'
 import { formatSum } from '@/lib/utils'
 import { QOLDA_TURLARI } from '@/lib/qolda-harakat'
@@ -520,13 +521,9 @@ export default function OmborIchiPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Birlik</label>
-                  <select value={forma.birlik} onChange={e => setForma(f => ({ ...f, birlik: e.target.value }))}
-                    className={inputCls}>
-                    {['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI'].map(b => (
-                      <option key={b} value={b}>{b.toLowerCase()}</option>
-                    ))}
-                  </select>
+                  <label htmlFor="ombor-tovar-birlik" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Birlik</label>
+                  {/* Tayyor yoki o'zi qo'shgan birlik ("juft", "rulon") */}
+                  <BirlikTanlash id="ombor-tovar-birlik" value={forma.birlik} onChange={v => setForma(f => ({ ...f, birlik: v }))} />
                 </div>
               </div>
 
