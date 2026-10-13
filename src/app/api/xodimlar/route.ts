@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
         // Kartadagi "Xaritada" tugmasi shu koordinataga tayanadi —
         // alohida so'rov yubormaslik uchun shu yerda qaytariladi.
         lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
-        filial: { select: { id: true, nomi: true } },
+        filial: { select: { id: true, nomi: true, faol: true } },
       },
       orderBy: [{ faol: 'desc' }, { yaratilgan: 'asc' }],
     })
@@ -53,10 +53,12 @@ export async function GET(req: NextRequest) {
       boyicha.set(t.xodimId, r)
     }
 
-    const filiallar = await prisma.filial.findMany({
-      select: { id: true, nomi: true },
+    // Formada: faolmi va nechta mahsuloti bor — xodim bo'sh/nofaol filialga
+    // adashib qo'shilmasin (filial — alohida do'kon, o'z katalogi bilan)
+    const filiallar = (await prisma.filial.findMany({
+      select: { id: true, nomi: true, faol: true, _count: { select: { tovarlar: true } } },
       orderBy: { yaratilgan: 'asc' },
-    })
+    })).map(f => ({ id: f.id, nomi: f.nomi, faol: f.faol, tovarSoni: f._count.tovarlar }))
 
     const [boshqaraOladi, oylikBeraOladi, mulkBoshqaraOladi, sotuvlarKoraOladi, smenaKoraOladi] = await Promise.all([
       amalRuxsatiBormi(session, 'xodimlar.qoshish'),
@@ -151,6 +153,13 @@ export async function POST(req: NextRequest) {
 
     // Filial egasi faqat o'z filialiga xodim qo'sha oladi
     const filialId = ownFilialId || data.filialId || null
+    // Filial — alohida do'kon (o'z mahsulot, mijoz, sotuvlari). Nofaol filialga
+    // qo'shilgan xodim bo'sh do'konni ko'rardi — bunga yo'l qo'yilmaydi.
+    if (filialId && !ownFilialId) {
+      const f = await prisma.filial.findUnique({ where: { id: String(filialId) }, select: { nomi: true, faol: true } })
+      if (!f) return NextResponse.json({ xato: 'Filial topilmadi' }, { status: 400 })
+      if (!f.faol) return NextResponse.json({ xato: `«${f.nomi}» filiali nofaol — xodimni asosiy do‘konga qo‘shing yoki avval filialni faollashtiring` }, { status: 400 })
+    }
 
     // Filialsiz xodim — do'konda hali filial ochilmagan holat (eng keng
     // tarqalgan). Bunday xodim Eganing katalogini ko'rishi uchun

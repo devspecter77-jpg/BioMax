@@ -22,7 +22,13 @@ import {
   type DavrYigindisi, type TolovTuri,
 } from '@/lib/xodim-oylik'
 
-interface Filial { id: string; nomi: string }
+interface Filial {
+  id: string
+  nomi: string
+  faol?: boolean
+  /** Filialning o'z mahsulotlari soni (filial — alohida do'kon) */
+  tovarSoni?: number
+}
 
 interface Xodim {
   id: string
@@ -95,6 +101,19 @@ const ROL_RANG: Record<string, string> = {
 
 const inputCls =
   'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500'
+
+/** Filial tanlanganda: bu alohida do'kon ekani va ma'lumoti bormi */
+function FilialIzohi({ filial }: { filial: Filial | undefined }) {
+  if (!filial) return null
+  return (
+    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+      Filial — alohida do‘kon: xodim faqat «{filial.nomi}»ning mahsulot, mijoz va sotuvlarini ko‘radi.
+      {filial.faol === false
+        ? ' Filial nofaol — asosiy do‘konni tanlang.'
+        : (filial.tovarSoni ?? 0) === 0 ? ' Bu filialda hali mahsulot yo‘q.' : ''}
+    </p>
+  )
+}
 
 const boshForma = {
   ism: '', login: '', parol: '', rol: 'KASSIR', telefon: '', filialId: '', oylikMaosh: '',
@@ -513,6 +532,11 @@ export default function XodimlarPage() {
                               <span>@{x.login}</span>
                               {x.telefon && <span className="flex items-center gap-1"><Phone size={9} />{formatPhone(x.telefon)}</span>}
                               {x.filial && <span className="flex items-center gap-1"><Building size={9} />{x.filial.nomi}</span>}
+                              {x.filial?.faol === false && (
+                                <span className="text-amber-600 dark:text-amber-400 font-medium" title="Filial nofaol — xodim asosiy do‘kon ma’lumotlarini ko‘rmaydi. Tahrirlab «Asosiy do‘kon»ga o‘tkazing">
+                                  nofaol filial
+                                </span>
+                              )}
                               {!x.faol && <span className="text-red-500">nofaol</span>}
                               {x.smena && (
                                 <button type="button" onClick={e => { e.stopPropagation(); void xodimOch(x, 'smena') }}
@@ -641,12 +665,18 @@ export default function XodimlarPage() {
                     inputMode="numeric" placeholder="901234567" className={inputCls} />
                 </Maydon>
               </div>
-              {filiallar.length > 0 && (
-                <Maydon label="Filial" izoh={forma.rol === 'ADMIN' ? 'ADMIN uchun ixtiyoriy' : 'majburiy'}>
+              {/* Qaysi do'konda ishlaydi: asosiy do'kon (standart) yoki filial —
+                  filial alohida do'kon, xodim faqat uning ma'lumotlarini ko'radi.
+                  Nofaol filial taklif qilinmaydi (server ham rad etadi). */}
+              {filiallar.some(f => f.faol !== false) && (
+                <Maydon label="Qaysi do‘konda ishlaydi" izoh="ixtiyoriy">
                   <select value={forma.filialId} onChange={e => setForma(f => ({ ...f, filialId: e.target.value }))} className={inputCls}>
-                    <option value="">Tanlanmagan</option>
-                    {filiallar.map(f => <option key={f.id} value={f.id}>{f.nomi}</option>)}
+                    <option value="">Asosiy do‘kon — mahsulot va mijozlar umumiy</option>
+                    {filiallar.filter(f => f.faol !== false).map(f => (
+                      <option key={f.id} value={f.id}>{f.nomi} — filial ({f.tovarSoni ?? 0} ta mahsulot)</option>
+                    ))}
                   </select>
+                  <FilialIzohi filial={filiallar.find(f => f.id === forma.filialId)} />
                 </Maydon>
               )}
               {oylikBeraOladi && (
@@ -711,11 +741,15 @@ export default function XodimlarPage() {
                 </Maydon>
               </div>
               {filiallar.length > 0 && !ozi && (
-                <Maydon label="Filial">
+                <Maydon label="Qaysi do‘konda ishlaydi">
                   <select value={f.filialId} onChange={e => ozgartir({ filialId: e.target.value })} className={inputCls}>
-                    <option value="">Markaziy (filialsiz)</option>
-                    {filiallar.map(fl => <option key={fl.id} value={fl.id}>{fl.nomi}</option>)}
+                    <option value="">Asosiy do‘kon (filialsiz)</option>
+                    {/* Nofaol filial — faqat xodim hozir unda bo'lsa (tanlov ko'rinib tursin) */}
+                    {filiallar.filter(fl => fl.faol !== false || fl.id === f.filialId).map(fl => (
+                      <option key={fl.id} value={fl.id}>{fl.nomi} — filial{fl.faol === false ? ' (nofaol)' : ` (${fl.tovarSoni ?? 0} ta mahsulot)`}</option>
+                    ))}
                   </select>
+                  <FilialIzohi filial={filiallar.find(fl => fl.id === f.filialId)} />
                 </Maydon>
               )}
               {oylikBeraOladi && (

@@ -156,8 +156,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (bor('filialId') && !sessionFilialId(session)) {
       const filialId = data.filialId ? String(data.filialId) : null
       if (filialId) {
-        const f = await prisma.filial.findUnique({ where: { id: filialId }, select: { id: true } })
+        const f = await prisma.filial.findUnique({ where: { id: filialId }, select: { id: true, nomi: true, faol: true } })
         if (!f) return NextResponse.json({ xato: 'Filial topilmadi' }, { status: 400 })
+        // Nofaol filialga ko'chirilgan xodim bo'sh do'konni ko'rardi
+        if (!f.faol && filialId !== mavjud.filialId) {
+          return NextResponse.json({ xato: `«${f.nomi}» filiali nofaol — xodimni asosiy do‘konga qo‘shing yoki avval filialni faollashtiring` }, { status: 400 })
+        }
       }
       if (filialId !== mavjud.filialId) {
         yangi.filialId = filialId
