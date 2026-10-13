@@ -1,13 +1,18 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Globe, Loader2, Package, Receipt, RotateCcw, UserRound, Users, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Globe, Loader2, Package, Receipt, RotateCcw, Search, UserRound, Users, X } from 'lucide-react'
 import { formatPhone, formatSana, formatSanaVaVaqt, formatSum } from '@/lib/utils'
+import SearchBar from '@/components/ui/search-bar'
 import { tolovBadge, tolovQisqa } from '@/lib/tolov-usullari'
 import { birlikQisqa } from '@/lib/kunlik-hisobot'
 
 // Xodim sotuvlari — kimga nima sotgani. Uch ko'rinish: cheklar (bosilsa tarkibi),
 // mijozlar bo'yicha va mahsulotlar bo'yicha. Kelish narxi va foyda chiqmaydi.
+//
+// Chekni topish: davr (tayyor yoki aniq sana/oraliq) va qidiruv — chek raqami,
+// mijoz ismi yoki telefoni, mahsulot nomi, summa. Qidiruv faqat cheklar
+// ro'yxatini toraytiradi; yuqoridagi ko'rsatkichlar butun davr bo'yicha qoladi.
 
 interface SotuvQatori {
   id: string
@@ -29,6 +34,7 @@ interface SotuvQatori {
 
 interface Javob {
   davr: string
+  qidiruv: string | null
   xulosa: {
     sotuvSoni: number; jamiSumma: number; ortachaChek: number; chegirma: number
     mijozlarSoni: number; mahsulotlarSoni: number; qaytarishSoni: number; qaytarishSumma: number; bekorSoni: number
@@ -46,6 +52,17 @@ interface Javob {
 type Korinish = 'cheklar' | 'mijozlar' | 'mahsulotlar'
 
 const miqdorMatni = (n: number) => String(Math.round(n * 1000) / 1000)
+
+/** Toshkent bo'yicha bugungi sana — "2026-10-13" */
+const bugunSana = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tashkent' })
+/** "2026-10-13" → "13.10.2026" */
+const sanaMatni = (s: string) => s.split('-').reverse().join('.')
+
+/** Chek QR kodi skanerlansa — manzildagi chek raqami olinadi */
+function skanQiymati(kod: string): string {
+  const m = /\/chek\/([^/?#]+)/.exec(kod)
+  return m ? decodeURIComponent(m[1]) : kod.trim()
+}
 
 function davrNomi(d: string): string {
   if (d === 'bugun') return 'Bugun'
@@ -72,24 +89,44 @@ export default function XodimSotuvlarPanel({ xodimId, xodimIsmi, davrlar, boshla
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [xato, setXato] = useState<string | null>(null)
   const [ochiq, setOchiq] = useState<string | null>(null)
+  // Aniq sana yoki oraliq ("Sana tanlash…") — ikkalasi ham kiradi
+  const [sanaDan, setSanaDan] = useState('')
+  const [sanaGacha, setSanaGacha] = useState('')
+  // Chekni qidirish (SearchBar o'zi 300 ms kechiktiradi)
+  const [qidiruv, setQidiruv] = useState('')
+  // Sana yoki qidiruv tez almashsa bir nechta so'rov ketadi — faqat ENG
+  // OXIRGISINING javobi olinadi (kechikib kelgan eskisi yangisini bosmasin)
+  const sorovRef = useRef(0)
 
   const yukla = useCallback(async () => {
+    const raqam = ++sorovRef.current
     setYuklanmoqda(true)
     try {
-      const p = new URLSearchParams({ davr })
+      const p = new URLSearchParams()
+      if (davr === 'sana') {
+        if (sanaDan) p.set('dan', sanaDan)
+        if (sanaGacha) p.set('gacha', sanaGacha)
+        if (!sanaDan && !sanaGacha) p.set('davr', 'hammasi')
+      } else {
+        p.set('davr', davr)
+      }
       if (mijozId) p.set('mijozId', mijozId)
+      if (qidiruv.trim()) p.set('q', qidiruv.trim())
       if (sahifa > 1) p.set('sahifa', String(sahifa))
       const r = await fetch(`/api/xodimlar/${xodimId}/sotuvlar?${p}`, { cache: 'no-store' })
       const j = await r.json().catch(() => ({}))
+      if (raqam !== sorovRef.current) return
       if (!r.ok) { setXato(j.xato ?? 'Sotuvlar yuklanmadi'); return }
       setXato(null)
       setData(j)
+      // Qidiruv bitta chekka olib kelsa — darhol ochiladi
+      if (qidiruv.trim() && j.sotuvlar?.length === 1) setOchiq(j.sotuvlar[0].id)
     } catch {
-      setXato('Tarmoq xatosi')
+      if (raqam === sorovRef.current) setXato('Tarmoq xatosi')
     } finally {
-      setYuklanmoqda(false)
+      if (raqam === sorovRef.current) setYuklanmoqda(false)
     }
-  }, [xodimId, davr, mijozId, sahifa])
+  }, [xodimId, davr, sanaDan, sanaGacha, mijozId, qidiruv, sahifa])
 
   useEffect(() => { void yukla() }, [yukla])
 
@@ -99,6 +136,29 @@ export default function XodimSotuvlarPanel({ xodimId, xodimIsmi, davrlar, boshla
     setOchiq(null)
     setKorinish('cheklar')
   }
+
+  function qidir(q: string) {
+    setQidiruv(q)
+    setSahifa(1)
+    setOchiq(null)
+    if (q.trim()) setKorinish('cheklar')
+  }
+
+  function davrniTanla(d: string) {
+    setDavr(d)
+    setSahifa(1)
+    setOchiq(null)
+    // Sana tanlashga o'tilganda — bugungi kun bilan boshlanadi
+    if (d === 'sana' && !sanaDan && !sanaGacha) {
+      const b = bugunSana()
+      setSanaDan(b)
+      setSanaGacha(b)
+    }
+  }
+
+  const sanaNomi = sanaDan && sanaGacha && sanaDan === sanaGacha
+    ? sanaMatni(sanaDan)
+    : [sanaDan && sanaMatni(sanaDan), sanaGacha && sanaMatni(sanaGacha)].filter(Boolean).join(' — ') || 'Sana tanlanmagan'
 
   if (xato) return <p className="py-10 text-center text-sm text-red-600">{xato}</p>
   if (!data) return <div className="flex justify-center py-12"><Loader2 size={22} className="animate-spin text-primary" /></div>
@@ -111,9 +171,9 @@ export default function XodimSotuvlarPanel({ xodimId, xodimIsmi, davrlar, boshla
   return (
     <div className={`space-y-4 transition-opacity ${yuklanmoqda ? 'opacity-60' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-gray-500 dark:text-gray-400">{xodimIsmi} — <b className="font-medium text-gray-900 dark:text-gray-100">{davrNomi(data.davr)}</b></p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{xodimIsmi} — <b className="font-medium text-gray-900 dark:text-gray-100">{davr === 'sana' ? sanaNomi : davrNomi(data.davr)}</b></p>
         <select
-          id="xodim-sotuv-davr" value={davr} onChange={e => { setDavr(e.target.value); setSahifa(1); setOchiq(null) }}
+          id="xodim-sotuv-davr" value={davr} onChange={e => davrniTanla(e.target.value)} aria-label="Davr"
           className="px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
         >
           <option value="bugun">Bugun</option>
@@ -121,8 +181,46 @@ export default function XodimSotuvlarPanel({ xodimId, xodimIsmi, davrlar, boshla
           <option value="30kun">Oxirgi 30 kun</option>
           {davrlar.map(d => <option key={d} value={d}>{davrNomi(d)}</option>)}
           <option value="hammasi">Butun davr</option>
+          <option value="sana">Sana tanlash…</option>
         </select>
       </div>
+
+      {/* Aniq kun yoki oraliq — bitta kun uchun ikkalasi bir xil */}
+      {davr === 'sana' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3 py-2.5">
+          <CalendarDays size={16} className="shrink-0 text-gray-400" aria-hidden />
+          <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+            <span>Dan</span>
+            <input
+              id="xodim-sotuv-dan" type="date" value={sanaDan} max={sanaGacha || bugunSana()}
+              onChange={e => { setSanaDan(e.target.value); setSahifa(1); setOchiq(null) }}
+              className="px-2.5 py-1.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+            <span>Gacha</span>
+            <input
+              id="xodim-sotuv-gacha" type="date" value={sanaGacha} min={sanaDan || undefined} max={bugunSana()}
+              onChange={e => { setSanaGacha(e.target.value); setSahifa(1); setOchiq(null) }}
+              className="px-2.5 py-1.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </label>
+          <div className="flex gap-1.5">
+            {[['Bugun', 0], ['Kecha', 1]].map(([nomi, oldin]) => (
+              <button
+                key={nomi} type="button"
+                onClick={() => {
+                  const d = new Date(Date.now() - Number(oldin) * 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tashkent' })
+                  setSanaDan(d); setSanaGacha(d); setSahifa(1); setOchiq(null)
+                }}
+                className="rounded-lg bg-gray-100 dark:bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700"
+              >
+                {nomi}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Ko'rsatkichlar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -155,6 +253,14 @@ export default function XodimSotuvlarPanel({ xodimId, xodimIsmi, davrlar, boshla
         </div>
       )}
 
+      {/* Chekni qidirish: raqami, mijoz, telefon, mahsulot yoki summa. Chek QR kodini skanerlash ham mumkin */}
+      <SearchBar
+        value={qidiruv}
+        onChange={qidir}
+        onScan={kod => qidir(skanQiymati(kod))}
+        placeholder="Chek raqami, mijoz, telefon, mahsulot yoki summa…"
+      />
+
       {/* Ko'rinish tanlash */}
       <div className="flex rounded-xl bg-gray-100 dark:bg-neutral-800 p-1 gap-1" role="tablist" aria-label="Sotuvlar ko‘rinishi">
         {([['cheklar', 'Cheklar', 'Cheklar', Receipt], ['mijozlar', 'Mijozlar bo‘yicha', 'Mijozlar', Users], ['mahsulotlar', 'Mahsulotlar bo‘yicha', 'Mahsulotlar', Package]] as const).map(([k, nomi, qisqa, Belgi]) => (
@@ -178,8 +284,23 @@ export default function XodimSotuvlarPanel({ xodimId, xodimIsmi, davrlar, boshla
               <button type="button" onClick={() => mijozniTanla(null)} aria-label="Mijoz filtrini olib tashlash" className="p-1 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40"><X size={14} /></button>
             </div>
           )}
+          {data.qidiruv && (
+            <div className="flex items-center gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-900 dark:text-amber-300">
+              <Search size={14} className="shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">«{data.qidiruv}» — <b className="tabular-nums">{data.jami} ta chek</b> topildi</span>
+              <button type="button" onClick={() => qidir('')} aria-label="Qidiruvni tozalash" className="p-1 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40"><X size={14} /></button>
+            </div>
+          )}
           {data.sotuvlar.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-gray-300 dark:border-neutral-700 py-10 text-center text-sm text-gray-500 dark:text-gray-400">Bu davrda sotuv yo‘q</p>
+            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-neutral-700 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+              {data.qidiruv ? (
+                <>
+                  <p>«{data.qidiruv}» bo‘yicha bu davrda chek topilmadi</p>
+                  <p className="mt-1 text-xs">Davrni kengaytiring (masalan «Butun davr») yoki boshqacha yozib ko‘ring</p>
+                  <button type="button" onClick={() => qidir('')} className="mt-3 rounded-xl border border-gray-300 dark:border-neutral-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800">Qidiruvni tozalash</button>
+                </>
+              ) : 'Bu davrda sotuv yo‘q'}
+            </div>
           ) : (
             <ul className="space-y-1.5">
               {data.sotuvlar.map(s => {

@@ -474,7 +474,10 @@ export default function XodimlarPage() {
                 ) : null}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
+                {/* relative: jadval ichidagi absolute elementlar (sr-only yorliqlar) shu qobiqda
+                    qirqilsin — aks holda telefonda butun sahifa kengayib, xodim oynasidagi
+                    varaqlar ekrandan chiqib ketardi */}
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-neutral-800/60">
                     <tr>

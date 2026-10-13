@@ -132,6 +132,27 @@ export function sotuvDavriOraligi(davr: string | null, hozir = new Date()): { da
   return sotuvDavriOraligi(joriy, hozir)
 }
 
+/**
+ * Tanlangan kunlar oralig'i (Toshkent vaqti, ikkala chet ham kiradi):
+ * "2026-10-01" .. "2026-10-12" → [1-oktabr 00:00, 13-oktabr 00:00).
+ * Bittasi berilsa — shu tomondan ochiq. Teskari berilsa almashtiriladi.
+ * Ikkalasi ham noto'g'ri bo'lsa — null.
+ */
+export function sanaOraligi(danStr: string | null, gachaStr: string | null): { dan: Date | null; gacha: Date | null } | null {
+  const TZ = 5 * 3_600_000
+  const kun = (s: string | null): number | null => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s ?? '')
+    if (!m) return null
+    const [y, o, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
+    if (y < 2000 || y > 2100 || o < 1 || o > 12 || d < 1 || d > 31) return null
+    return Date.UTC(y, o - 1, d) - TZ
+  }
+  let a = kun(danStr), b = kun(gachaStr)
+  if (a === null && b === null) return null
+  if (a !== null && b !== null && a > b) [a, b] = [b, a]
+  return { dan: a === null ? null : new Date(a), gacha: b === null ? null : new Date(b + 86_400_000) }
+}
+
 /** Necha kundan beri qo'lida — kartada "45 kun" ko'rinishi uchun. */
 export function kunlarSoni(dan: Date | string, gacha: Date | string = new Date()): number {
   const a = new Date(dan).getTime(), b = new Date(gacha).getTime()

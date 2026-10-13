@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { xodimKontekst } from '@/lib/xodim-server'
-import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
+import { sanaOraligi, sotuvDavriOraligi } from '@/lib/xodim-mulk'
+import { toKirill, toLotin } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,9 @@ const TOP = 100
  * Xodim sotuvlari — kimga nima sotgani.
  *
  *   ?davr=2026-09 | bugun | 7kun | 30kun | hammasi
+ *   &dan=2026-10-01&gacha=2026-10-12 — aniq kun yoki oraliq (davr o'rniga)
  *   &mijozId=<id> | mijozsiz   — cheklar ro'yxatini bitta mijoz bo'yicha
+ *   &q=...      — chekni qidirish: raqami, mijoz ismi/telefoni, mahsulot, summa
  *   &sahifa=2
  *
  * Ko'rsatkichlar faqat YAKUNLANGAN sotuvlardan; ro'yxatda bekor qilinganlar ham
@@ -26,8 +29,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!r.ok) return r.javob
 
     const p = req.nextUrl.searchParams
-    const { dan, gacha, davr } = sotuvDavriOraligi(p.get('davr'))
+    // Aniq sana (yoki oraliq) tanlangan bo'lsa — u ustun, aks holda tayyor davr
+    const tanlangan = sanaOraligi(p.get('dan'), p.get('gacha'))
+    const { dan, gacha, davr } = tanlangan ? { ...tanlangan, davr: 'sana' } : sotuvDavriOraligi(p.get('davr'))
     const mijozParam = p.get('mijozId')
+    const qidiruv = p.get('q')?.trim().replace(/\s+/g, ' ').slice(0, 60) || null
     const sahifa = Math.max(1, Math.min(10_000, Math.floor(Number(p.get('sahifa')) || 1)))
 
     const vaqt: Prisma.SotuvWhereInput = dan || gacha
@@ -38,6 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const royxatWhere: Prisma.SotuvWhereInput = {
       ...asos,
       ...(mijozParam === 'mijozsiz' ? { mijozId: null } : mijozParam ? { mijozId: mijozParam } : {}),
+      ...(qidiruv ? { AND: [chekQidiruvi(qidiruv)] } : {}),
     }
 
     const [umumiy, tolovGuruh, mijozTop, mijozlarSoni, mahsulotTop, mahsulotlarSoni, qaytarish, bekorSoni, jami, sotuvlar] = await Promise.all([
@@ -97,6 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({
       davr,
       oraliq: { dan: dan?.toISOString() ?? null, gacha: gacha?.toISOString() ?? null },
+      qidiruv,
       xulosa: {
         sotuvSoni,
         jamiSumma,
@@ -156,5 +164,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (e) {
     console.error('[xodim sotuvlar]', e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
+  }
+}
+
+/**
+ * Chekni qidirish sharti: chek raqami, onlayn buyurtma raqami, mijoz ismi va
+ * telefoni, mahsulot nomi, yakuniy summa. Ism va mahsulot lotin/kirillda
+ * qanday yozilmasin topiladi (bazada ikkalasi ham bor).
+ */
+function chekQidiruvi(q: string): Prisma.SotuvWhereInput {
+  const yozuvlar = [...new Set([q, toKirill(q), toLotin(q)])]
+  const raqamlar = q.replace(/\D/g, '')
+  const summa = /^[\d\s.,]+$/.test(q) && raqamlar.length >= 3 ? Number(raqamlar) : null
+  return {
+    OR: [
+      { chekRaqami: { contains: q, mode: 'insensitive' } },
+      { onlaynRaqam: { contains: q, mode: 'insensitive' } },
+      ...yozuvlar.map(y => ({ mijoz: { ism: { contains: y, mode: 'insensitive' as const } } })),
+      ...yozuvlar.map(y => ({ tarkiblar: { some: { tovar: { nomi: { contains: y, mode: 'insensitive' as const } } } } })),
+      ...(raqamlar.length >= 4 ? [{ mijoz: { telefon: { contains: raqamlar.slice(-9) } } }] : []),
+      ...(summa !== null && Number.isFinite(summa) ? [{ yakuniySumma: summa }] : []),
+    ],
   }
 }
