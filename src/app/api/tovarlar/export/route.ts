@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
     const [tovarlar, yashirilganMaydonlar] = await Promise.all([
       prisma.tovar.findMany({
         where: { filialId, ...(filialId ? {} : { egaId: sessionEgaId(session) }) },
-        include: { kategoriya: true },
+        // Ombori bilan — fayl qayta import qilinsa mahsulot o'z omborida qoladi
+        include: { kategoriya: { include: { ombor: { select: { nomi: true } } } } },
         // Sahifadagi kabi — tartib raqami bo'yicha
         orderBy: [{ tartibRaqami: { sort: 'asc', nulls: 'last' } }, { nomi: 'asc' }],
       }),
@@ -36,6 +37,8 @@ export async function GET(req: NextRequest) {
         '№': t.tartibRaqami ?? '',
         'Nomi': t.nomi,
         'Kategoriya': t.kategoriya.nomi,
+        // Bo'sh — Markaziy ombor (omborga biriktirilmagan)
+        'Ombor': t.kategoriya.ombor?.nomi ?? '',
         'Shtrix-kod': t.shtrixKod || '',
         'Valyuta': t.valyuta,
         'Kelish narxi': kelishYashirin ? '' : Number(t.kelishNarxi),
@@ -49,7 +52,7 @@ export async function GET(req: NextRequest) {
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }]
+    ws['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Tovarlar')
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 

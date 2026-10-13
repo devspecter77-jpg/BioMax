@@ -9,6 +9,7 @@ import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
 import { normalizeUzbek } from '@/lib/utils'
+import { asosiyNom, markaziyNomimi, omborKategoriyasi, type MaqsadOmbor } from '@/lib/tovar-ombori'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
 import MoneyInput from '@/components/ui/money-input'
@@ -80,6 +81,15 @@ function narxKorsat(narx: number | string | null, valyuta?: string) {
 
 interface AdminHisob { id: string; ism: string; login: string; filialId: string | null }
 
+/** Formadagi ombor tanlovi uchun (Omborlar API'sidan) */
+interface OmborQisqa { id: string; nomi: string; faol: boolean; tovarSoni: number }
+/** "Markaziy ombor" — omborga biriktirilmagan mahsulotlar */
+const MARKAZIY_QIYMAT = '__markaziy__'
+/** Hali bazada yo'q (formada yozilgan) ombor — hech bir kategoriya unda emas */
+const YANGI_OMBOR_ID = '__yangi__'
+/** Yangi mahsulot formasi oxirgi kategoriyani (va uning omborini) eslab qoladi */
+const FORMA_JOY_KALITI = 'tovar-forma-joy'
+
 /** Ro'yxat tartibi — tanlov brauzerda eslab qolinadi */
 type Saralash = 'raqam' | 'yangi' | 'nomi'
 const SARALASHLAR: { qiymat: Saralash; nomi: string }[] = [
@@ -150,9 +160,16 @@ export default function TovarlarPage() {
   const [kategoriyaVarag, setKategoriyaVarag] = useState(false)
   const [kategoriyaQidiruv, setKategoriyaQidiruv] = useState('')
   const [qulflanmoqda, setQulflanmoqda] = useState<string | null>(null)
-  // Mahsulot formasida ombor tanlansa kategoriya ro'yxati shu ombor
-  // ichidagilar bilan cheklanadi (Ombor -> Kategoriya -> Tovar).
+  // Mahsulot formasidagi ombor (Ombor → Kategoriya → Tovar): mavjud ombor
+  // ID'si, MARKAZIY_QIYMAT yoki '' (tanlanmagan — kategoriya qayerda bo'lsa).
+  // Formada YOZILGAN yangi ombor/kategoriya nomi alohida turadi: saqlanganda
+  // server ularni mahsulot bilan bitta tranzaksiyada ochadi.
   const [formaOmbor, setFormaOmbor] = useState('')
+  const [yangiOmbor, setYangiOmbor] = useState('')
+  const [yangiKategoriya, setYangiKategoriya] = useState('')
+  // Barcha omborlar (kategoriyasi yo'qlari ham) va yangisini ochish huquqi
+  const [omborlar, setOmborlar] = useState<OmborQisqa[]>([])
+  const [omborOchishMumkin, setOmborOchishMumkin] = useState(false)
   // Faqat qulflanganlarni ko'rsatish — qulflangan tovarni topib ochish uchun
   const [faqatQulflangan, setFaqatQulflangan] = useState(false)
   // Yorliq chop etish — tanlangan mahsulotlar
@@ -255,6 +272,21 @@ export default function TovarlarPage() {
   }, [qidiruv, aktifKategoriya, tanlanganFilial])
 
   useEffect(() => { yuklash() }, [yuklash])
+
+  // Omborlar qidiruvga bog'liq emas — bir marta (va yangi ombor ochilgach) yuklanadi
+  const omborlarniYukla = useCallback(() => {
+    fetch('/api/omborlar')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!d) return
+        setOmborlar((Array.isArray(d.omborlar) ? d.omborlar : []).map((o: OmborQisqa) => ({
+          id: o.id, nomi: o.nomi, faol: o.faol, tovarSoni: o.tovarSoni ?? 0,
+        })))
+        setOmborOchishMumkin(!!d.boshqaraOladi)
+      })
+      .catch(() => {})
+  }, [])
+  useEffect(() => { omborlarniYukla() }, [omborlarniYukla])
 
   // Katalog sarlavhasi uchun do'kon nomi/aloqasi — chekdagi bilan bir xil sozlamalar
   useEffect(() => {
@@ -403,14 +435,23 @@ export default function TovarlarPage() {
         keltirilganManzil: tovar.keltirilganManzil || '',
       })
       // Mahsulotning kategoriyasi qaysi omborga tegishli bo'lsa o'sha tanlanadi
-      setFormaOmbor(kategoriyalar.find(k => k.id === tovar.kategoriya.id)?.ombor?.id ?? '')
+      const k = kategoriyalar.find(x => x.id === tovar.kategoriya.id)
+      setFormaOmbor(k?.ombor?.id ?? (omborMaydoni ? MARKAZIY_QIYMAT : ''))
     } else {
       setTahrirlash(null)
-      setForm({ nomi: '', kategoriyaId: kategoriyalar[0]?.id || '', shtrixKod: '',
+      // Ketma-ket kiritishda ombor va kategoriya har safar qayta tanlanmasin —
+      // oxirgi qo'shilgan mahsulotniki olinadi (hali bo'lmasa — bo'sh, jim
+      // "birinchi kategoriya"ga tushib qolmaydi)
+      let oxirgiKategoriya = ''
+      try { oxirgiKategoriya = JSON.parse(localStorage.getItem(FORMA_JOY_KALITI) || '{}')?.kategoriyaId ?? '' } catch { /* saqlash yopiq */ }
+      const k = kategoriyalar.find(x => x.id === oxirgiKategoriya)
+      setFormaOmbor(k ? (k.ombor?.id ?? (omborMaydoni ? MARKAZIY_QIYMAT : '')) : '')
+      setForm({ nomi: '', kategoriyaId: k?.id ?? '', shtrixKod: '',
         kelishNarxi: '', sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: [], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '' })
-      setFormaOmbor('')
     }
+    setYangiOmbor('')
+    setYangiKategoriya('')
     setModal(true)
   }
 
@@ -545,17 +586,49 @@ export default function TovarlarPage() {
 
   async function saqlash(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.kategoriyaId) { toast.error('Avval kategoriya tanlang yoki yarating'); return }
+    if (!form.kategoriyaId && !yangiKategoriya) { toast.error('Kategoriyani tanlang yoki yangisini yozing'); return }
     setSaqlanmoqda(true)
     try {
       const url = tahrirlash ? `/api/tovarlar/${tahrirlash.id}` : '/api/tovarlar'
       const method = tahrirlash ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      // Ombor: yangi nom, aniq ombor, Markaziy (null) — yoki umuman yo'q
+      // (tanlanmagan: mahsulot kategoriyasi turgan omborda qoladi)
+      const yangiNarsa = !!(yangiOmbor || yangiKategoriya)
+      const tana = {
+        ...form,
+        kategoriyaId: yangiKategoriya ? '' : form.kategoriyaId,
+        ...(yangiKategoriya ? { yangiKategoriya } : {}),
+        ...(yangiOmbor
+          ? { yangiOmbor }
+          : formaOmbor === MARKAZIY_QIYMAT ? { omborId: null }
+            : formaOmbor ? { omborId: formaOmbor } : {}),
+      }
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tana) })
       if (res.ok) {
         const natija = await res.json()
-        toast.success(tahrirlash ? 'Tovar yangilandi' : "Tovar qo'shildi")
+        const joyi = natija.kategoriya
+          ? ` — ${natija.kategoriya.ombor ? `«${natija.kategoriya.ombor.nomi}» ombori` : 'Markaziy ombor'}, «${natija.kategoriya.nomi}»`
+          : ''
+        toast.success((tahrirlash ? 'Tovar yangilandi' : "Tovar qo'shildi") + (yangiNarsa ? joyi : ''))
         setModal(false)
-        if (tahrirlash) {
+        if (!tahrirlash && natija.kategoriya?.id) {
+          try { localStorage.setItem(FORMA_JOY_KALITI, JSON.stringify({ kategoriyaId: natija.kategoriya.id })) } catch { /* saqlash yopiq */ }
+        }
+        // Yangi ombor yoki kategoriya ochilgan bo'lsa — ro'yxatlar qayta olinadi.
+        // Ungacha server qaytarganini darhol qo'shamiz: ketma-ket kiritishda
+        // keyingi forma qayta yuklash tugashini kutmasdan ularni tanlay oladi.
+        if (yangiNarsa) {
+          const k = natija.kategoriya as { id: string; nomi: string; ombor: { id: string; nomi: string } | null } | undefined
+          if (k) {
+            setKategoriyalar(prev => prev.some(x => x.id === k.id) ? prev : [...prev, {
+              id: k.id, nomi: k.nomi, ombor: k.ombor ? { ...k.ombor, faol: true } : null,
+            }])
+            const o = k.ombor
+            if (o) setOmborlar(prev => prev.some(x => x.id === o.id) ? prev : [...prev, { ...o, faol: true, tovarSoni: 1 }])
+          }
+          omborlarniYukla()
+        }
+        if (tahrirlash && !yangiNarsa) {
           const tahrirId = tahrirlash.id
           const qoshiladigan = parseFloat(form.qoldiqQoshish) || 0
           setTovarlar(prev => prev
@@ -706,7 +779,14 @@ export default function TovarlarPage() {
       const data = await res.json()
       if (res.ok) {
         toast.success(`Import tugadi: ${data.qoshildi} ta qo'shildi, ${data.yangilandi} ta yangilandi`)
+        if (data.xatolar > 0) {
+          toast.error(`${data.xatolar} ta qator saqlanmadi`, {
+            description: Array.isArray(data.xatoSabablari) ? data.xatoSabablari.join('\n') : undefined,
+          })
+        }
         yuklash()
+        // Fayldagi "Ombor" ustunidan yangi ombor ochilgan bo'lishi mumkin
+        omborlarniYukla()
       } else {
         toast.error(data.xato || 'Import xatoligi')
       }
@@ -717,26 +797,91 @@ export default function TovarlarPage() {
     }
   }
 
-  // Formadagi ombor ro'yxati — kategoriyalardan yig'iladi
-  // Tanlash uchun faqat FAOL omborlar. Istisno: tahrirlanayotgan
-  // tovar nofaol omborda tursa, o'sha ombor ro'yxatda qoladi —
-  // aks holda forma ochilganda tanlov o'z-o'zidan yo'qolardi.
-  const formaOmborlar = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const k of kategoriyalar) {
-      if (k.ombor && (k.ombor.faol || k.ombor.id === formaOmbor)) m.set(k.ombor.id, k.ombor.nomi)
-    }
-    return [...m].map(([id, nomi]) => ({ id, nomi }))
-  }, [kategoriyalar, formaOmbor])
+  // Formadagi ombor ro'yxati: "Markaziy ombor" va FAOL omborlar. Istisno:
+  // tahrirlanayotgan tovar nofaol omborda tursa, o'sha ombor ro'yxatda
+  // qoladi — aks holda forma ochilganda tanlov o'z-o'zidan yo'qolardi.
+  const formaOmborlari = useMemo(() => [
+    { value: MARKAZIY_QIYMAT, label: 'Markaziy ombor', izoh: 'omborsiz' },
+    ...omborlar
+      .filter(o => o.faol || o.id === formaOmbor)
+      .map(o => ({ value: o.id, label: o.nomi, izoh: `${o.tovarSoni} ta` })),
+  ], [omborlar, formaOmbor])
+  // Ombor maydoni: omborlar bor yoki yangisini ochish mumkin bo'lsa
+  const omborMaydoni = omborlar.length > 0 || omborOchishMumkin
+  const omborNomlari = useMemo(() => omborlar.map(o => o.nomi), [omborlar])
 
-  const formaKategoriyalari = useMemo(
-    () => formaOmbor ? kategoriyalar.filter(k => k.ombor?.id === formaOmbor) : kategoriyalar,
-    [kategoriyalar, formaOmbor],
+  // Tanlangan ombor (null — tanlanmagan): kategoriya ro'yxati shu bo'yicha
+  // toraytiriladi va yozilgan kategoriya nomi shu omborga moslanadi
+  const maqsadOmbor: MaqsadOmbor | null = yangiOmbor
+    ? { id: YANGI_OMBOR_ID, nomi: yangiOmbor }
+    : formaOmbor === MARKAZIY_QIYMAT
+      ? { id: null, nomi: null }
+      : formaOmbor ? { id: formaOmbor, nomi: omborlar.find(o => o.id === formaOmbor)?.nomi ?? null } : null
+  const maqsadOmborNomi = maqsadOmbor ? (maqsadOmbor.id === null ? 'Markaziy ombor' : maqsadOmbor.nomi) : null
+
+  const kategoriyaQisqa = useMemo(
+    () => kategoriyalar.map(k => ({ id: k.id, nomi: k.nomi, omborId: k.ombor?.id ?? null })),
+    [kategoriyalar],
   )
+  const formaKategoriyalari = maqsadOmbor
+    ? kategoriyalar.filter(k => (k.ombor?.id ?? null) === maqsadOmbor.id)
+    : kategoriyalar
+  // Yozilgan kategoriya qaysi nom bilan ochiladi: nomi boshqa omborda band
+  // bo'lsa — "Fenlar (Sklad 2)" (o'tkazmalardagi qoida bilan bir xil)
+  const yangiKategoriyaNomi = (() => {
+    if (!yangiKategoriya) return null
+    const n = omborKategoriyasi(yangiKategoriya, maqsadOmbor ?? { id: null, nomi: null }, kategoriyaQisqa, omborNomlari)
+    return n && 'yangi' in n ? n.yangi : yangiKategoriya
+  })()
+
+  /** Kategoriya nomini omborga moslaydi: shu omborda shu nomlisi bo'lsa o'sha
+   *  tanlanadi, bo'lmasa — yangi kategoriya (saqlanganda server ochadi). */
+  function kategoriyaniMosla(nomi: string, maqsad: MaqsadOmbor) {
+    const n = omborKategoriyasi(nomi, maqsad, kategoriyaQisqa, omborNomlari)
+    if (n && 'mavjud' in n) {
+      setForm(f => ({ ...f, kategoriyaId: n.mavjud.id }))
+      setYangiKategoriya('')
+    } else {
+      setForm(f => ({ ...f, kategoriyaId: '' }))
+      setYangiKategoriya(asosiyNom(nomi, omborNomlari))
+    }
+  }
+
+  function omborTanlandi(qiymat: string) {
+    if (!qiymat) { setFormaOmbor(''); setYangiOmbor(''); return }
+    // Combobox yozilgan yangi nomni ham shu yerga beradi. "Markaziy" deb
+    // yozilsa — bu omborsiz qism, shu nomli yangi ombor emas
+    const v = !omborlar.some(o => o.id === qiymat) && markaziyNomimi(qiymat) ? MARKAZIY_QIYMAT : qiymat
+    const mavjud = v === MARKAZIY_QIYMAT || omborlar.some(o => o.id === v)
+    const nom = v.trim().replace(/\s+/g, ' ')
+    const maqsad: MaqsadOmbor = !mavjud
+      ? { id: YANGI_OMBOR_ID, nomi: nom }
+      : v === MARKAZIY_QIYMAT ? { id: null, nomi: null } : { id: v, nomi: omborlar.find(o => o.id === v)?.nomi ?? null }
+    setFormaOmbor(mavjud ? v : '')
+    setYangiOmbor(mavjud ? '' : nom)
+    // Tanlangan kategoriya bu omborda bo'lmasa — nomi saqlanib, shu omborga
+    // moslanadi ("Fenlar" Sklad 2 da "Fenlar (Sklad 2)" bo'lib ochiladi)
+    const k = kategoriyalar.find(x => x.id === form.kategoriyaId)
+    const nomi = k?.nomi ?? yangiKategoriya
+    if (nomi && (!k || (k.ombor?.id ?? null) !== maqsad.id)) kategoriyaniMosla(nomi, maqsad)
+  }
+
+  function kategoriyaTanlandi(v: string) {
+    if (!v) { setForm(f => ({ ...f, kategoriyaId: '' })); setYangiKategoriya(''); return }
+    const k = kategoriyalar.find(x => x.id === v)
+    if (k) {
+      setForm(f => ({ ...f, kategoriyaId: k.id }))
+      setYangiKategoriya('')
+      // Ombor hali tanlanmagan bo'lsa — kategoriyaning ombori ko'rinib turadi
+      if (!formaOmbor && !yangiOmbor && omborMaydoni) setFormaOmbor(k.ombor?.id ?? MARKAZIY_QIYMAT)
+      return
+    }
+    // Yangi nom yozildi — ombor tanlanmagan bo'lsa Markaziy omborda ochiladi
+    kategoriyaniMosla(v.trim().replace(/\s+/g, ' '), maqsadOmbor ?? { id: null, nomi: null })
+    if (!formaOmbor && !yangiOmbor && omborMaydoni) setFormaOmbor(MARKAZIY_QIYMAT)
+  }
 
   const qulflanganSoni = tovarlar.filter(t => t.qulflangan).length
-  // Qulf filtri MIJOZ tomonda qo'llanadi: ro'yxat allaqachon to'liq
-  // yuklangan, shuning uchun serverga qayta murojaat qilish shart emas.
   // Tartib: № bo'yicha (standart) yoki yangilari avval. "Nomi" — server
   // qaytargan tartib (bazada nomi bo'yicha saralangan).
   const tartiblanganTovarlar = useMemo(() => {
@@ -746,6 +891,8 @@ export default function TovarlarPage() {
     const raqam = (t: Tovar) => t.tartibRaqami ?? (yangi ? -1 : Number.MAX_SAFE_INTEGER)
     return [...tovarlar].sort((a, b) => (yangi ? raqam(b) - raqam(a) : raqam(a) - raqam(b)))
   }, [tovarlar, saralash])
+  // Qulf filtri MIJOZ tomonda qo'llanadi: ro'yxat allaqachon to'liq
+  // yuklangan, shuning uchun serverga qayta murojaat qilish shart emas.
   const korinadiganTovarlar = faqatQulflangan ? tartiblanganTovarlar.filter(t => t.qulflangan) : tartiblanganTovarlar
 
   // Katalog oynasi uchun — faqat ochiq bo'lganda hisoblanadi
@@ -1131,12 +1278,12 @@ export default function TovarlarPage() {
                           </button>
                         )}
                         {tahrirRuxsat && (
-                          <button onClick={() => ochModal(t)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
+                          <button onClick={() => ochModal(t)} title="Tahrirlash" className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition">
                             <Pencil size={15} />
                           </button>
                         )}
                         {ochirishRuxsat && (
-                          <button onClick={() => ochirish(t.id)} className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
+                          <button onClick={() => ochirish(t.id)} title="O'chirish" className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition">
                             <Trash2 size={15} />
                           </button>
                         )}
@@ -1396,64 +1543,70 @@ export default function TovarlarPage() {
                   <BarcodeScanner onScan={kod => setForm(f => ({ ...f, shtrixKod: kod }))} title="Shtrix-kodni skanerlang" />
                 </div>
               </div>
-              {/* ── OMBOR (katta kategoriya) ──
-                  Tanlansa quyidagi kategoriya ro'yxati shu ombor
-                  ichidagilar bilan cheklanadi. Ixtiyoriy: omborsiz
-                  ishlashda davom etadi. */}
-              {formaOmborlar.length > 0 && (
+              {/* ── OMBOR (SKLAD) ──
+                  Mahsulot qaysi omborda turadi: ro'yxatdan tanlanadi yoki
+                  yangi nom yoziladi (mahsulot bilan birga ochiladi). Ombor
+                  tanlansa kategoriyalar shu ombornikilar bilan cheklanadi. */}
+              {omborMaydoni && (
                 <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
-                    Ombor <span className="text-gray-400 font-normal text-xs">(kategoriyani toraytiradi)</span>
+                  <label htmlFor="tovar-ombor" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
+                    Ombor (sklad) <span className="text-gray-400 font-normal text-xs">— qayerda saqlanadi</span>
                   </label>
-                  <select
-                    value={formaOmbor}
-                    onChange={e => {
-                      const id = e.target.value
-                      setFormaOmbor(id)
-                      // Tanlangan kategoriya yangi omborga tegishli
-                      // bo'lmasa tozalanadi — mos kelmagan juftlik
-                      // saqlanib qolmasin.
-                      if (id) {
-                        const k = kategoriyalar.find(x => x.id === form.kategoriyaId)
-                        if (k && k.ombor?.id !== id) setForm(f => ({ ...f, kategoriyaId: '' }))
-                      }
-                    }}
-                    className="w-full px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  >
-                    <option value="">Barcha omborlar</option>
-                    {formaOmborlar.map(o => (
-                      <option key={o.id} value={o.id}>{o.nomi}</option>
-                    ))}
-                  </select>
+                  <Combobox
+                    id="tovar-ombor"
+                    options={formaOmborlari}
+                    value={yangiOmbor || formaOmbor}
+                    onChange={omborTanlandi}
+                    placeholder={omborOchishMumkin ? 'Omborni tanlang yoki yangisini yozing' : 'Omborni tanlang'}
+                    searchPlaceholder={omborOchishMumkin ? 'Ombor nomi — tanlang yoki yozing' : 'Ombor qidirish...'}
+                    emptyMessage="Bunday ombor yo'q"
+                    allowCustom={omborOchishMumkin}
+                    customLabel={m => `«${m}» — yangi ombor qo'shish`}
+                  />
+                  {yangiOmbor && (
+                    <p className="mt-1 text-xs text-primary flex items-start gap-1">
+                      <Plus size={12} className="mt-0.5 shrink-0" />
+                      <span>Yangi ombor «{yangiOmbor}» — mahsulot saqlanganda ochiladi</span>
+                    </p>
+                  )}
                 </div>
               )}
 
               <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kategoriya *</label>
-                {kategoriyalar.length === 0 ? (
-                  <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl">
+                <label htmlFor="tovar-kategoriya" className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kategoriya *</label>
+                {kategoriyalar.length === 0 && !kategoriyaRuxsat ? (
+                  <div className="px-3 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl">
                     <span className="text-amber-700 dark:text-amber-500 text-sm">Hali kategoriya yo&apos;q</span>
-                    {kategoriyaRuxsat && <button
-                      type="button"
-                      onClick={() => { setKatNomi(''); setKatModal(true) }}
-                      className="shrink-0 px-3 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-medium rounded-lg transition"
-                    >
-                      + Kategoriya yaratish
-                    </button>}
                   </div>
                 ) : (
-                  /* Combobox replaces plain <select> for searchable category selection */
+                  /* Qidiriladigan ro'yxat; huquq bo'lsa yangi nom yozish ham mumkin */
                   <Combobox
+                    id="tovar-kategoriya"
                     options={formaKategoriyalari.map(k => ({
                       value: k.id,
-                      // Ombor ko'rsatilsa qaysi guruhdan ekani aniq bo'ladi
-                      label: k.ombor && !formaOmbor ? `${k.nomi} · ${k.ombor.nomi}` : k.nomi,
+                      label: k.nomi,
+                      // Ombor tanlanmagan bo'lsa qaysi omborda ekani ko'rinadi
+                      izoh: maqsadOmbor || !omborMaydoni ? undefined : (k.ombor?.nomi ?? 'Markaziy'),
                     }))}
-                    value={form.kategoriyaId}
-                    onChange={v => setForm(f => ({ ...f, kategoriyaId: v }))}
-                    placeholder="Kategoriya tanlang"
-                    searchPlaceholder="Kategoriya qidirish..."
+                    value={yangiKategoriya || form.kategoriyaId}
+                    onChange={kategoriyaTanlandi}
+                    placeholder={kategoriyaRuxsat ? 'Kategoriyani tanlang yoki yozing' : 'Kategoriya tanlang'}
+                    searchPlaceholder={kategoriyaRuxsat ? 'Kategoriya — tanlang yoki yozing' : 'Kategoriya qidirish...'}
+                    emptyMessage={maqsadOmborNomi ? `«${maqsadOmborNomi}» da hali kategoriya yo'q` : 'Topilmadi'}
+                    allowCustom={kategoriyaRuxsat}
+                    customLabel={m => `«${m}» — yangi kategoriya`}
                   />
+                )}
+                {yangiKategoriya && (
+                  <p className="mt-1 text-xs text-primary flex items-start gap-1">
+                    <Plus size={12} className="mt-0.5 shrink-0" />
+                    <span>
+                      Yangi kategoriya «{yangiKategoriyaNomi}»{maqsadOmborNomi ? ` — «${maqsadOmborNomi}» da` : ''}
+                      {yangiKategoriyaNomi !== yangiKategoriya && (
+                        <span className="text-gray-500 dark:text-gray-400"> («{yangiKategoriya}» nomi boshqa omborda band)</span>
+                      )}
+                    </span>
+                  </p>
                 )}
               </div>
 

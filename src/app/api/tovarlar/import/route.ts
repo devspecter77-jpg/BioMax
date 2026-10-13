@@ -5,6 +5,8 @@ import { auth } from '@/lib/auth'
 import * as XLSX from 'xlsx'
 import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
 import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
+import { tovarKategoriyasi, JoyXatosi, type KatalogDoirasi } from '@/lib/tovar-ombori-server'
 
 const BIRLIKLAR = new Set(['DONA', 'KG', 'LITR', 'METR', 'PACHKA', 'QUTI'])
 const HOLATLAR = new Set(['FAOL', 'ARXIVLANGAN'])
@@ -39,11 +41,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ xato: "Faylda mahsulot ma'lumoti topilmadi" }, { status: 400 })
     }
 
+    // Katalog doirasi: filial yoki Ega katalogi. Kategoriya FAQAT shu doirada
+    // qidiriladi va ochiladi — aks holda filialsiz importda boshqa Eganing
+    // shu nomli kategoriyasiga bog'lanib ketardi, yangisi esa egasiz qolardi.
+    const doira: KatalogDoirasi = filialId ? { filialId } : { filialId: null, egaId }
     const kategoriyaMap = new Map<string, string>()
-    const mavjudKategoriyalar = await prisma.kategoriya.findMany({ where: { filialId }, select: { id: true, nomi: true } })
+    const mavjudKategoriyalar = await prisma.kategoriya.findMany({ where: doira, select: { id: true, nomi: true } })
     for (const k of mavjudKategoriyalar) kategoriyaMap.set(k.nomi.toLowerCase().trim(), k.id)
 
+    // "Ombor" ustuni bo'lsa — yangi ombor ochish huquqi bir marta tekshiriladi
+    const omborUstuni = rows.some(r => String(r['Ombor'] ?? '').trim() !== '')
+    const omborYaratish = omborUstuni && await amalRuxsatiBormi(session, 'omborlar.boshqarish')
+
     let qoshildi = 0, yangilandi = 0, xatolar = 0
+    // Birinchi bir nechta xato sababi — foydalanuvchiga ko'rsatiladi
+    const xatoSabablari: string[] = []
 
     for (const row of rows) {
       const nomi = String(row['Nomi'] || '').trim()
@@ -51,12 +63,28 @@ export async function POST(req: NextRequest) {
 
       try {
         const kategoriyaNomi = String(row['Kategoriya'] || '').trim() || 'Umumiy'
-        const kategoriyaKalit = kategoriyaNomi.toLowerCase()
-        let kategoriyaId = kategoriyaMap.get(kategoriyaKalit)
-        if (!kategoriyaId) {
-          const yangiKat = await prisma.kategoriya.create({ data: { nomi: kategoriyaNomi, filialId } })
-          kategoriyaId = yangiKat.id
-          kategoriyaMap.set(kategoriyaKalit, kategoriyaId)
+        const omborNomi = String(row['Ombor'] ?? '').trim()
+        let kategoriyaId: string | undefined
+        if (omborNomi) {
+          // Ombor yozilgan — mahsulot shu omborda bo'ladi: ombor (kerak bo'lsa
+          // yangisi) va undagi kategoriya formadagi qoida bilan aniqlanadi
+          kategoriyaId = await prisma.$transaction(
+            tx => tovarKategoriyasi(tx, doira, { yangiOmbor: omborNomi, yangiKategoriya: kategoriyaNomi }, omborYaratish),
+            { maxWait: 10_000, timeout: 30_000 },
+          )
+        } else {
+          // Ombor yozilmagan — avvalgidek: kategoriya nomi bo'yicha (qaysi omborda bo'lsa)
+          const kategoriyaKalit = kategoriyaNomi.toLowerCase()
+          kategoriyaId = kategoriyaMap.get(kategoriyaKalit)
+          if (!kategoriyaId) {
+            // Oldingi qatorda ombor bilan ochilgan bo'lishi mumkin — avval bazadan
+            const bor = await prisma.kategoriya.findFirst({
+              where: { nomi: { equals: kategoriyaNomi, mode: 'insensitive' }, ...doira },
+              select: { id: true },
+            })
+            kategoriyaId = bor?.id ?? (await prisma.kategoriya.create({ data: { nomi: kategoriyaNomi, ...doira } })).id
+            kategoriyaMap.set(kategoriyaKalit, kategoriyaId)
+          }
         }
 
         const shtrixKod = String(row['Shtrix-kod'] || '').trim() || null
@@ -125,12 +153,15 @@ export async function POST(req: NextRequest) {
           }
           qoshildi++
         }
-      } catch {
+      } catch (e) {
         xatolar++
+        if (xatoSabablari.length < 3) {
+          xatoSabablari.push(`«${nomi}»: ${e instanceof JoyXatosi ? e.message : "saqlanmadi (shtrix-kod takror bo'lishi mumkin)"}`)
+        }
       }
     }
 
-    return NextResponse.json({ muvaffaqiyat: true, qoshildi, yangilandi, xatolar, jami: rows.length })
+    return NextResponse.json({ muvaffaqiyat: true, qoshildi, yangilandi, xatolar, xatoSabablari, jami: rows.length })
   } catch (e) {
     console.error('Import xatosi:', e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })

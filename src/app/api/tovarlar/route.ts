@@ -5,11 +5,13 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { normalizeUzbek, toKirill, toLotin } from '@/lib/utils'
 import { getStockMap } from '@/lib/stock'
-import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId, sessionIsRealEga, egaFilialWhere } from '@/lib/filial-scope'
 import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 import { rasmlarniSiqish } from '@/lib/rasm'
 import { joriyUsdKursi } from '@/lib/kurs'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
+import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
 
 export async function GET(req: NextRequest) {
   try {
@@ -163,53 +165,64 @@ export async function POST(req: NextRequest) {
       .then(k => k.kursi)
       .catch(() => null)
 
-    const tovar = await prisma.tovar.create({
-      data: {
-        nomi: data.nomi,
-        kategoriyaId: data.kategoriyaId,
-        shtrixKod: autoShtrixKod,
-        filialId,
-        egaId,
-        kelishNarxi: parseFloat(data.kelishNarxi),
-        sotishNarxi: parseFloat(data.sotishNarxi),
-        optomNarxi: data.optomNarxi ? parseFloat(data.optomNarxi) : null,
-        bolishNarxi: data.bolishNarxi ? parseFloat(data.bolishNarxi) : null,
-        valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
-        birlik: data.birlik || 'DONA',
-        minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
-        taminotchiId,
-        keltirilganManzil: manzilTozala(data.keltirilganManzil),
-        yaratilganKursi: kursQiymati,
-        rasmlar,
-        yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
-      },
-      include: { kategoriya: true },
-    })
+    // Formada yangi ombor yozilgan bo'lsa — ruxsat tranzaksiyadan oldin tekshiriladi
+    const omborYaratish = yangiOmborSoralgan(data) && await amalRuxsatiBormi(session, 'omborlar.boshqarish')
 
-    // Boshlang'ich qoldiq kiritilsa — to'g'ridan-to'g'ri do'konga (sotuvga tayyor)
-    if (data.boshlangichQoldiq && parseFloat(data.boshlangichQoldiq) > 0) {
-      await prisma.omborHarakati.create({
+    // Ombor va kategoriya (kerak bo'lsa yangisi), mahsulot va boshlang'ich
+    // kirim — bitta tranzaksiyada: biri saqlanmasa, hech biri qolmaydi.
+    const tovar = await prisma.$transaction(async tx => {
+      const kategoriyaId = await tovarKategoriyasi(tx, egaFilialWhere(session), data, omborYaratish)
+      const yangi = await tx.tovar.create({
         data: {
-          tovarId: tovar.id,
-          turi: 'KIRIM',
-          joy: 'DOKON',
-          miqdor: parseFloat(data.boshlangichQoldiq),
-          narx: parseFloat(data.kelishNarxi),
-          // Boshlang'ich kirim ham ta'minotchiga bog'lanadi: "bu partiya
-          // kimdan keldi" degan savolga ombor tarixi javob beradi.
+          nomi: data.nomi,
+          kategoriyaId,
+          shtrixKod: autoShtrixKod,
+          filialId,
+          egaId,
+          kelishNarxi: parseFloat(data.kelishNarxi),
+          sotishNarxi: parseFloat(data.sotishNarxi),
+          optomNarxi: data.optomNarxi ? parseFloat(data.optomNarxi) : null,
+          bolishNarxi: data.bolishNarxi ? parseFloat(data.bolishNarxi) : null,
+          valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
+          birlik: data.birlik || 'DONA',
+          minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
           taminotchiId,
-          // Manzil harakat izohiga ham yoziladi: mahsulot kartasidagi qiymat
-          // keyin o'zgartirilsa ham, shu PARTIYA qayerdan kelgani tarixda qoladi.
-          izoh: tovar.keltirilganManzil
-            ? `Boshlang'ich qoldiq · ${tovar.keltirilganManzil}`
-            : "Boshlang'ich qoldiq",
-          foydalanuvchiId: session.user.id,
+          keltirilganManzil: manzilTozala(data.keltirilganManzil),
+          yaratilganKursi: kursQiymati,
+          rasmlar,
+          yaroqlilikMuddati: data.yaroqlilikMuddati ? new Date(data.yaroqlilikMuddati) : null,
         },
+        // Ombori bilan — forma oxirgi tanlovni eslab qoladi
+        include: { kategoriya: { include: { ombor: { select: { id: true, nomi: true } } } } },
       })
-    }
+
+      // Boshlang'ich qoldiq kiritilsa — to'g'ridan-to'g'ri do'konga (sotuvga tayyor)
+      if (data.boshlangichQoldiq && parseFloat(data.boshlangichQoldiq) > 0) {
+        await tx.omborHarakati.create({
+          data: {
+            tovarId: yangi.id,
+            turi: 'KIRIM',
+            joy: 'DOKON',
+            miqdor: parseFloat(data.boshlangichQoldiq),
+            narx: parseFloat(data.kelishNarxi),
+            // Boshlang'ich kirim ham ta'minotchiga bog'lanadi: "bu partiya
+            // kimdan keldi" degan savolga ombor tarixi javob beradi.
+            taminotchiId,
+            // Manzil harakat izohiga ham yoziladi: mahsulot kartasidagi qiymat
+            // keyin o'zgartirilsa ham, shu PARTIYA qayerdan kelgani tarixda qoladi.
+            izoh: yangi.keltirilganManzil
+              ? `Boshlang'ich qoldiq · ${yangi.keltirilganManzil}`
+              : "Boshlang'ich qoldiq",
+            foydalanuvchiId: session.user.id,
+          },
+        })
+      }
+      return yangi
+    }, { maxWait: 10_000, timeout: 30_000 })
 
     return NextResponse.json(tovar, { status: 201 })
   } catch (e) {
+    if (e instanceof JoyXatosi) return NextResponse.json({ xato: e.message }, { status: e.status })
     if ((e as { code?: string })?.code === 'P2002') {
       return NextResponse.json({ xato: 'Bu shtrix-kod allaqachon mavjud' }, { status: 400 })
     }

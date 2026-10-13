@@ -100,6 +100,19 @@ export function toLotin(text: string): string {
   return r
 }
 
+/**
+ * Nomlarni yozuvidan qat'i nazar solishtirish kaliti: "Бункер лайлак" va
+ * "bunker laylak" bir xil kalit beradi. Ikkala tomon lotinga o'giriladi,
+ * "ye/e" (е), apostroflar va ortiqcha bo'shliqlar tekislanadi.
+ */
+export function nomKaliti(s: string): string {
+  return toLotin(normalizeUzbek(s.toLowerCase()))
+    .replace(/ye/g, 'e')
+    .replace(/['ъь]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /** Universal qidiruv — lotin yoki kirill yozilsa ham ikkalasini tekshiradi */
 export function uzSearch(haystack: string, needle: string): boolean {
   if (!needle) return true

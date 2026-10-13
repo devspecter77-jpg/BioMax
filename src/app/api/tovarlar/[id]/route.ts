@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
+import { sessionFilialId, sessionEgaId, egaFilialWhere } from '@/lib/filial-scope'
 import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
+import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
+import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -77,7 +79,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const updateData: Prisma.TovarUncheckedUpdateInput = {}
     if (bor('nomi')) updateData.nomi = data.nomi
-    if (bor('kategoriyaId')) updateData.kategoriyaId = data.kategoriyaId
     if (bor('shtrixKod')) updateData.shtrixKod = data.shtrixKod || null
     if (bor('valyuta')) updateData.valyuta = data.valyuta === 'USD' ? 'USD' : 'UZS'
     if (bor('birlik')) updateData.birlik = data.birlik
@@ -111,11 +112,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updateData.taminotchiId = taminotchiId
     }
 
-    const tovar = await prisma.tovar.update({
-      where: { id },
-      data: updateData,
-      include: { kategoriya: true, taminotchi: { select: { id: true, nomi: true } } },
-    })
+    // Ombor/kategoriya: forma yuborgan bo'lsagina o'zgaradi (Ombor sahifasidagi
+    // qisqa forma ularni yubormaydi). Kategoriya doirada tekshiriladi, kerak
+    // bo'lsa yangi ombor/kategoriya mahsulot bilan bitta tranzaksiyada ochiladi.
+    const joyBor = bor('kategoriyaId') || bor('yangiKategoriya') || bor('omborId') || bor('yangiOmbor')
+    const omborYaratish = joyBor && yangiOmborSoralgan(data) && await amalRuxsatiBormi(session, 'omborlar.boshqarish')
+
+    const tovar = await prisma.$transaction(async tx => {
+      if (joyBor) updateData.kategoriyaId = await tovarKategoriyasi(tx, egaFilialWhere(session), data, omborYaratish)
+      return tx.tovar.update({
+        where: { id },
+        data: updateData,
+        include: {
+          kategoriya: { include: { ombor: { select: { id: true, nomi: true } } } },
+          taminotchi: { select: { id: true, nomi: true } },
+        },
+      })
+    }, { maxWait: 10_000, timeout: 30_000 })
 
     // Qoldiqni oshirish (ixtiyoriy) — do'konga to'g'ridan-to'g'ri kirim
     const qoshiladigan = parseFloat(data.qoldiqQoshish)
@@ -136,7 +149,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     return NextResponse.json(tovar)
-  } catch {
+  } catch (e) {
+    if (e instanceof JoyXatosi) return NextResponse.json({ xato: e.message }, { status: e.status })
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
 }

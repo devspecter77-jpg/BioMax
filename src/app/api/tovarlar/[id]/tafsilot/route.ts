@@ -30,7 +30,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const tovar = await prisma.tovar.findFirst({
       where: { id, ...doira },
       include: {
-        kategoriya: { select: { id: true, nomi: true } },
+        // Ombori — mahsulot qaysi omborda (sklad) turishi kategoriyasi orqali
+        kategoriya: { select: { id: true, nomi: true, ombor: { select: { id: true, nomi: true } } } },
         taminotchi: { select: { id: true, nomi: true, telefon: true } },
         filial: { select: { id: true, nomi: true } },
       },

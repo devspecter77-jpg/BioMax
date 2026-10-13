@@ -1,16 +1,20 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Check, ChevronDown, X, Search, Plus } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, nomKaliti } from '@/lib/utils'
 
 export interface ComboboxOption {
   value: string
   label: string
+  /** Qo'shimcha izoh — qatorning o'ng tomonida xira (masalan, qaysi omborda) */
+  izoh?: string
 }
 
 interface ComboboxProps {
+  /** Tugma id'si — `<label htmlFor>` bilan bog'lash uchun */
+  id?: string
   options: ComboboxOption[]
   value: string
   onChange: (value: string) => void
@@ -29,7 +33,7 @@ interface ComboboxProps {
 }
 
 export default function Combobox({
-  options, value, onChange,
+  id, options, value, onChange,
   placeholder = "Tanlang...",
   searchPlaceholder = "Qidirish...",
   emptyMessage = "Topilmadi",
@@ -43,17 +47,23 @@ export default function Combobox({
   const searchRef = useRef<HTMLInputElement>(null)
 
   const selected = options.find(o => o.value === value)
-  const filtered = options.filter(o =>
-    o.label.toLowerCase().includes(search.toLowerCase())
+  // Lotin va kirill farqi yo'q: "bunker" yozilsa "Бункер" ham topiladi.
+  // Kalitlar faqat ro'yxat ochiqligida hisoblanadi — yopiq Combobox (masalan
+  // POS'dagi uzun mijozlar ro'yxati) ota sahifa har yangilanganda ishlamasin.
+  const kalitlar = useMemo(() => (open ? options.map(o => nomKaliti(o.label)) : []), [options, open])
+  const qidiruvKaliti = nomKaliti(search)
+  const filtered = options.filter((o, i) =>
+    o.label.toLowerCase().includes(search.toLowerCase()) || !!kalitlar[i]?.includes(qidiruvKaliti)
   )
   // Erkin yozilgan qiymat ro'yxatda yo'q — tugmada o'z holicha ko'rsatiladi,
   // aks holda tanlangan qiymat ko'rinmay, placeholder chiqib qolardi.
   const korsatiladiganMatn = selected?.label ?? (value || '')
   const tozaQidiruv = search.trim()
+  // Boshqa yozuvda bo'lsa ham bor nom qayta "qo'shilmasin" ("sklad" = "склад")
   const qoshishMumkin =
     allowCustom &&
     tozaQidiruv.length > 0 &&
-    !options.some(o => o.label.toLowerCase() === tozaQidiruv.toLowerCase())
+    !options.some((o, i) => o.label.toLowerCase() === tozaQidiruv.toLowerCase() || kalitlar[i] === nomKaliti(tozaQidiruv))
 
   function erkinQiymatniQabulQil() {
     if (!qoshishMumkin) return
@@ -73,6 +83,7 @@ export default function Combobox({
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild disabled={disabled}>
         <button
+          id={id}
           type="button"
           className={cn(
             'w-full flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm transition',
@@ -123,7 +134,15 @@ export default function Combobox({
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); erkinQiymatniQabulQil() }
+                  if (e.key !== 'Enter') return
+                  e.preventDefault()
+                  // Mos variant bo'lsa — o'sha tanlanadi (adashib takror qo'shilmasin):
+                  // avval aynan mosi, bo'lmasa birinchisi
+                  if (tozaQidiruv && filtered.length > 0) {
+                    const aniq = filtered.find(o => nomKaliti(o.label) === nomKaliti(tozaQidiruv))
+                    onChange((aniq ?? filtered[0]).value)
+                    setOpen(false)
+                  } else erkinQiymatniQabulQil()
                 }}
                 placeholder={searchPlaceholder}
                 className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 outline-none"
@@ -138,16 +157,6 @@ export default function Combobox({
 
           {/* Options list */}
           <div className="max-h-52 overflow-y-auto py-1">
-            {qoshishMumkin && (
-              <button
-                type="button"
-                onClick={erkinQiymatniQabulQil}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition font-medium"
-              >
-                <Plus size={14} className="shrink-0" />
-                <span className="truncate">{customLabel(tozaQidiruv)}</span>
-              </button>
-            )}
             {filtered.length === 0 && !qoshishMumkin ? (
               <p className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">{emptyMessage}</p>
             ) : filtered.map(option => (
@@ -162,10 +171,29 @@ export default function Combobox({
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800'
                 )}
               >
-                {option.label}
-                {option.value === value && <Check size={14} className="shrink-0" />}
+                {/* Avvalgidek uzun nom qatorga o'raladi (kesilmaydi) */}
+                <span className="min-w-0 break-words">{option.label}</span>
+                <span className="flex items-center gap-2 shrink-0">
+                  {option.izoh && <span className="text-xs text-gray-400 dark:text-gray-500">{option.izoh}</span>}
+                  {option.value === value && <Check size={14} className="shrink-0" />}
+                </span>
               </button>
             ))}
+            {/* Yangi qiymat qatori oxirida: mos variant bo'lsa u tepada turadi
+                va adashib takror qo'shib yuborilmaydi */}
+            {qoshishMumkin && (
+              <button
+                type="button"
+                onClick={erkinQiymatniQabulQil}
+                className={cn(
+                  'w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-primary hover:bg-primary-light dark:hover:bg-primary/10 transition font-medium',
+                  filtered.length > 0 && 'border-t border-gray-100 dark:border-neutral-800 mt-1',
+                )}
+              >
+                <Plus size={14} className="shrink-0" />
+                <span className="truncate">{customLabel(tozaQidiruv)}</span>
+              </button>
+            )}
           </div>
         </Popover.Content>
       </Popover.Portal>

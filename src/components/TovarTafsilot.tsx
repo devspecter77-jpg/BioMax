@@ -38,7 +38,7 @@ interface Tafsilot {
     id: string; nomi: string
     /** № — do'kon ichidagi tartib raqami */
     tartibRaqami: number | null
-    kategoriya: { id: string; nomi: string } | null
+    kategoriya: { id: string; nomi: string; ombor: { id: string; nomi: string } | null } | null
     taminotchi: { id: string; nomi: string; telefon: string | null } | null
     filial: { id: string; nomi: string } | null
     shtrixKod: string | null; birlik: string; valyuta: string; holati: string
@@ -188,6 +188,12 @@ export default function TovarTafsilot({
                 {t.kategoriya && (
                   <span className="text-xs bg-red-50 dark:bg-red-950/30 text-red-600 px-2.5 py-0.5 rounded-full font-medium">
                     {t.kategoriya.nomi}
+                  </span>
+                )}
+                {/* Qaysi omborda (sklad) — kategoriyasi orqali */}
+                {t.kategoriya?.ombor && (
+                  <span className="text-xs text-gray-600 dark:text-gray-300 flex items-center gap-1" title="Ombor (sklad)">
+                    <Warehouse size={11} /> {t.kategoriya.ombor.nomi}
                   </span>
                 )}
                 {t.filial && (
