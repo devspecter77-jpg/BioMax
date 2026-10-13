@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
       )]
       const narxlar = tarkibIdlar.length === 0 ? [] : await prisma.tovar.findMany({
         where: { id: { in: tarkibIdlar } },
-        select: { id: true, sotishNarxi: true, optomNarxi: true, bolishNarxi: true, valyuta: true },
+        select: { id: true, sotishNarxi: true, optomNarxi: true, bolishNarxi: true, valyuta: true, oramlar: true },
       })
       const kursi = narxlar.some(t => t.valyuta === 'USD') ? (await joriyUsdKursi()).kursi : 0
       const minNarxlar = new Map(narxlar.map(t => [t.id, minNarxSomda(t, kursi)]))

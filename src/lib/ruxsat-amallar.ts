@@ -5,6 +5,7 @@
 // Sof mantiq: prisma import qilmaydi, sinovlarda to'g'ridan-to'g'ri ishlaydi.
 
 import { HARAKAT_MALUMOTI, type HarakatTuri } from './harakat-turlari'
+import { oramlarniOqi, paketNarxi, type SotishNarxTuri } from './birlik'
 
 export interface SotuvTanasi {
   chegirma?: unknown
@@ -29,10 +30,17 @@ function son(q: unknown): number {
  * Kassa sahifasidagi `narxTuriBoyicha` bilan bir xil yaxlitlash.
  */
 export function minNarxSomda(
-  t: { sotishNarxi: unknown; optomNarxi?: unknown; bolishNarxi?: unknown; valyuta?: string | null },
+  t: { sotishNarxi: unknown; optomNarxi?: unknown; bolishNarxi?: unknown; valyuta?: string | null; oramlar?: unknown },
   kursi: number,
 ): MinNarx {
-  const narxlar = [t.sotishNarxi, t.optomNarxi, t.bolishNarxi]
+  // Narx o'ram uchun kiritilgan bo'lsa ("1 blok — 70 000") — bir dona narxi
+  // aniq (70 000 / 60), bazadagi yaxlitlangan ustundan emas
+  const oramlar = oramlarniOqi(t.oramlar)
+  const birlikda = (turi: SotishNarxTuri, ustun: unknown) => {
+    const p = paketNarxi(oramlar, turi)
+    return p ? p.narx / p.miqdor : ustun
+  }
+  const narxlar = [birlikda('sotish', t.sotishNarxi), birlikda('optom', t.optomNarxi), birlikda('bolish', t.bolishNarxi)]
     .filter(n => n !== null && n !== undefined)
     .map(son)
     .filter(n => n > 0)

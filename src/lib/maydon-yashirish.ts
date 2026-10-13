@@ -18,5 +18,18 @@ export function maydonlarniYashir<T extends object>(item: T, yashirilgan: Set<st
   for (const kalit of yashirilgan) {
     if (kalit in nusxa) nusxa[kalit] = null
   }
+  // O'ram uchun kiritilgan kelish narxi ("1 blok — 60 000") ham yashiriladi
+  if (yashirilgan.has('kelishNarxi') && Array.isArray(nusxa.oramlar)) {
+    nusxa.oramlar = oramKelishiniYashir(nusxa.oramlar)
+  }
   return nusxa as T
+}
+
+/** `oramlar` JSON'idagi kelish narxini olib tashlaydi (kelish narxi yashirilgan hisob uchun) */
+export function oramKelishiniYashir(oramlar: unknown): unknown {
+  if (!Array.isArray(oramlar)) return oramlar
+  return oramlar.map(o => {
+    if (!o || typeof o !== 'object' || !('narx' in o) || !o.narx || typeof o.narx !== 'object') return o
+    return { ...o, narx: { ...(o.narx as Record<string, unknown>), kelish: null } }
+  })
 }

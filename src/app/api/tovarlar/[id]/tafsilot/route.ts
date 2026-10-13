@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { sessionFilialId, sessionEgaId } from '@/lib/filial-scope'
 import { getStockMap } from '@/lib/stock'
-import { foydalanuvchiYashirilganMaydonlari } from '@/lib/maydon-yashirish'
+import { foydalanuvchiYashirilganMaydonlari, oramKelishiniYashir } from '@/lib/maydon-yashirish'
 import { harakatMalumoti } from '@/lib/harakat-turlari'
 import { joriyUsdKursi } from '@/lib/kurs'
 
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         yaratilganKursi: tovar.yaratilganKursi,
         qulflangan: tovar.qulflangan,
         birlik: tovar.birlik,
-        oramlar: tovar.oramlar,
+        oramlar: narxYashirin ? oramKelishiniYashir(tovar.oramlar) : tovar.oramlar,
         valyuta: tovar.valyuta,
         holati: tovar.holati,
         kelishNarxi: narxYashirin ? null : tovar.kelishNarxi,

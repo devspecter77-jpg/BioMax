@@ -366,7 +366,8 @@ export default function TovarTafsilot({
                     belgi={<Boxes size={11} />}
                     label="O'lchov birligi"
                     qiymat={birlik}
-                    izoh={oramlar.length > 0 ? oramlar.map(o => `1 ${o.nomi} = ${o.miqdor} ${birlik}`).join(' · ') : undefined}
+                    // Narx o'ram uchun kiritilgan bo'lsa — yonida: "1 blok = 60 dona — 75 000"
+                    izoh={oramlar.length > 0 ? oramlar.map(o => `1 ${o.nomi} = ${o.miqdor} ${birlik}${o.narx?.sotish != null ? ` — ${narxMatni(o.narx.sotish, t.valyuta)}` : ''}`).join(' · ') : undefined}
                   />
                   <Qator belgi={<AlertTriangle size={11} />} label="Minimal qoldiq" qiymat={`${t.minimalQoldiq} ${birlik}`} />
                   {t.yaroqlilikMuddati && (

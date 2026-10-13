@@ -8,6 +8,12 @@
 // Qo'shimcha birlik (o'ram, Tovar.oramlar): "1 karobka = 24 dona". Miqdor
 // bazada har doim ASOSIY birlikda saqlanadi — o'ram faqat kiritish
 // ("5 karobka 3 dona" → 123 dona) va ko'rsatish uchun.
+//
+// Narx o'ram uchun kiritilishi mumkin ("1 blok — 75 000"): bazadagi narx
+// ustunlari baribir BITTA asosiy birlik uchun (75 000 / 60 = 1 250 — qoldiq,
+// hisobot, vitrina shunga tayanadi), o'ramning o'zida esa aniq narx turadi —
+// kassa butun o'ramni aynan shu narxda sotadi (70 000 / 60 = 1 166,67 ni
+// 60 ga ko'paytirib 70 000,20 chiqmasin).
 
 import { nomKaliti } from './utils'
 
@@ -56,15 +62,46 @@ export function birlikTozala(x: unknown): string | null {
   return s.toLowerCase()
 }
 
+/** O'ram uchun kiritilgan narxlar (o'z valyutasida). Kelish narxi yashirilgan hisobga null bo'lib boradi. */
+export type OramNarxi = {
+  kelish: number | null
+  sotish: number | null
+  optom: number | null
+  bolish: number | null
+}
+
 // `type` (interface emas) — Prisma JSON ustuniga to'g'ridan-to'g'ri yoziladi
 export type Oram = {
   /** "karobka", "qop" */
   nomi: string
   /** Ichida nechta asosiy birlik */
   miqdor: number
+  /** Narxlar shu o'ram uchun kiritilgan bo'lsa ("1 blok — 75 000") — faqat bittasida */
+  narx?: OramNarxi
 }
 
+/** Kassadagi narx turlari */
+export type SotishNarxTuri = 'sotish' | 'optom' | 'bolish'
+
+/** O'ram va uning aniq narxi: 60 dona — 75 000 */
+export type Paket = { narx: number; miqdor: number }
+
 const yaxlit3 = (n: number) => Math.round(n * 1000) / 1000
+const yaxlit2 = (n: number) => Math.round(n * 100) / 100
+
+/** Formadan kelgan narx: musbat son yoki null (bo'sh, 0, noto'g'ri) */
+export function musbatYokiNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+function oramNarxiniOqi(x: unknown): OramNarxi | undefined {
+  if (!x || typeof x !== 'object') return undefined
+  const o = x as Record<string, unknown>
+  const narx = { kelish: musbatYokiNull(o.kelish), sotish: musbatYokiNull(o.sotish), optom: musbatYokiNull(o.optom), bolish: musbatYokiNull(o.bolish) }
+  return narx.kelish === null && narx.sotish === null && narx.optom === null && narx.bolish === null ? undefined : narx
+}
 
 /** Bazadagi JSON → ro'yxat; buzuq yozuvlar tashlab yuboriladi. */
 export function oramlarniOqi(x: unknown): Oram[] {
@@ -74,9 +111,68 @@ export function oramlarniOqi(x: unknown): Oram[] {
     if (!o || typeof o !== 'object') continue
     const nomi = String((o as Record<string, unknown>).nomi ?? '').trim()
     const miqdor = Number((o as Record<string, unknown>).miqdor)
-    if (nomi && Number.isFinite(miqdor) && miqdor > 0) r.push({ nomi, miqdor })
+    if (!nomi || !Number.isFinite(miqdor) || miqdor <= 0) continue
+    // Narx faqat bitta o'ramda bo'ladi — ikkinchisi (buzuq yozuv) e'tiborsiz
+    const narx = r.some(q => q.narx) ? undefined : oramNarxiniOqi((o as Record<string, unknown>).narx)
+    r.push(narx ? { nomi, miqdor, narx } : { nomi, miqdor })
   }
   return r
+}
+
+/** Narxlari shu o'ram uchun kiritilgan o'ram; yo'q bo'lsa — narxlar asosiy birlikda. */
+export function narxOrami(oramlar: Oram[]): (Oram & { narx: OramNarxi }) | null {
+  return (oramlar.find(o => o.narx) as (Oram & { narx: OramNarxi }) | undefined) ?? null
+}
+
+/** O'ramlar narxsiz — narxlar to'g'ridan-to'g'ri asosiy birlikda o'zgartirilganda (Excel, ombor formasi) */
+export function oramNarxsiz(oramlar: Oram[]): Oram[] {
+  return oramlar.map(({ nomi, miqdor }) => ({ nomi, miqdor }))
+}
+
+/** O'ram narxi → bitta asosiy birlik narxi (bazadagi narx ustunlari, 2 xona) */
+export function birlikNarxiga(paketNarx: number, miqdor: number): number {
+  return yaxlit2(paketNarx / miqdor)
+}
+
+/** Shu narx turi o'ram uchun kiritilgan bo'lsa — aniq o'ram narxi (o'z valyutasida). */
+export function paketNarxi(oramlar: Oram[], turi: SotishNarxTuri): Paket | null {
+  const o = narxOrami(oramlar)
+  const narx = o?.narx[turi] ?? null
+  return o && narx !== null && narx > 0 ? { narx, miqdor: o.miqdor } : null
+}
+
+/**
+ * Savat qatori summasi. O'ram narxi bo'lsa — aniq: 60 dona × 75 000 / 60 =
+ * 75 000 (dona narxini yaxlitlab ko'paytirsa 70 000 / 60 = 1 166,67 → 60 ta
+ * 70 000,20 bo'lib ketardi). Aks holda — miqdor × narx, avvalgidek.
+ */
+export function qatorSummasi(miqdor: number, birlikNarxi: number, paket?: Paket | null): number {
+  if (paket && paket.miqdor > 0) return yaxlit2(miqdor * paket.narx / paket.miqdor)
+  return miqdor * birlikNarxi
+}
+
+/**
+ * Formadagi narxlar tanlangan birlik uchun ("1 blok — 75 000"). Bazadagi narx
+ * ustunlari BITTA asosiy birlik uchun — shuning uchun bo'linadi; o'ramning
+ * o'ziga aniq narxlar yoziladi. `birlik` — o'ram nomi; bo'sh yoki ro'yxatda
+ * yo'q bo'lsa — narxlar asosiy birlikda (o'zgarishsiz).
+ */
+export function narxlarniJoyla(
+  oramlar: Oram[],
+  birlik: unknown,
+  narxlar: OramNarxi,
+): { oramlar: Oram[]; asosiy: OramNarxi } {
+  const toza = oramNarxsiz(oramlar)
+  const kalit = nomKaliti(String(birlik ?? '').trim())
+  const i = kalit ? toza.findIndex(o => nomKaliti(o.nomi) === kalit) : -1
+  if (i < 0) return { oramlar: toza, asosiy: narxlar }
+  const n = toza[i].miqdor
+  const bol = (v: number | null) => (v === null ? null : birlikNarxiga(v, n))
+  toza[i] = { ...toza[i], narx: { ...narxlar } }
+  return {
+    oramlar: toza,
+    asosiy: { kelish: bol(narxlar.kelish), sotish: bol(narxlar.sotish), optom: bol(narxlar.optom), bolish: bol(narxlar.bolish) },
+  }
 }
 
 /**

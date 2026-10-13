@@ -75,11 +75,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Tovar ID → sotuv tarkibi (narx va miqdor manbai)
-    const sotilganMap = new Map<string, { miqdor: number; birlikNarxi: number }>()
+    const sotilganMap = new Map<string, { miqdor: number; birlikNarxi: number; jami: number }>()
     for (const st of aslSotuv.tarkiblar) {
       sotilganMap.set(st.tovarId, {
         miqdor: Number(st.miqdor),
         birlikNarxi: Number(st.birlikNarxi),
+        jami: Number(st.jami),
       })
     }
 
@@ -111,11 +112,15 @@ export async function POST(req: NextRequest) {
         )
       }
       const birlikNarxi = asl.birlikNarxi // ← Sotuv tarixidagi narx, client'dan emas
+      // O'ram narxida sotilgan qator: 60 dona — 70 000 (dona 1 166,67 yaxlitlangan).
+      // Qaytarishda to'langan narx olinadi — 60 tasi aynan 70 000, ortiq emas.
+      // Qatorga chegirma berilgan bo'lsa (summa farqi 1 so'mdan katta) — avvalgidek.
+      const aniqNarx = asl.miqdor > 0 && Math.abs(asl.jami - asl.miqdor * birlikNarxi) < 1
       tasdiqlangan.push({
         tovarId,
         miqdor,
         birlikNarxi,
-        jami: miqdor * birlikNarxi,
+        jami: aniqNarx ? Math.round(miqdor * asl.jami / asl.miqdor * 100) / 100 : miqdor * birlikNarxi,
       })
     }
 

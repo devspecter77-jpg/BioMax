@@ -12,7 +12,7 @@ import { joriyUsdKursi } from '@/lib/kurs'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
-import { birlikTozala, oramlarniTekshir } from '@/lib/birlik'
+import { birlikTozala, musbatYokiNull, narxlarniJoyla, oramlarniTekshir } from '@/lib/birlik'
 
 export async function GET(req: NextRequest) {
   try {
@@ -159,6 +159,14 @@ export async function POST(req: NextRequest) {
     if (!birlik) return NextResponse.json({ xato: "O'lchov birligi noto'g'ri — 20 belgigacha nom yozing" }, { status: 400 })
     const oramTekshiruv = oramlarniTekshir(data.oramlar, birlik)
     if (!oramTekshiruv.ok) return NextResponse.json({ xato: oramTekshiruv.xato }, { status: 400 })
+    // Narxlar o'ram uchun kiritilgan bo'lsa ("1 blok — 75 000") — bazaga bir
+    // dona narxi, o'ramga aniq narx (lib/birlik.ts). `narxBirligi` bo'sh — asosiy birlik.
+    const narxlar = narxlarniJoyla(oramTekshiruv.oramlar, data.narxBirligi, {
+      kelish: musbatYokiNull(data.kelishNarxi),
+      sotish: musbatYokiNull(data.sotishNarxi),
+      optom: musbatYokiNull(data.optomNarxi),
+      bolish: musbatYokiNull(data.bolishNarxi),
+    })
 
     const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod(filialId)
     const rasmlar = await rasmlarniSiqish(data.rasmlar)
@@ -186,13 +194,13 @@ export async function POST(req: NextRequest) {
           shtrixKod: autoShtrixKod,
           filialId,
           egaId,
-          kelishNarxi: parseFloat(data.kelishNarxi),
-          sotishNarxi: parseFloat(data.sotishNarxi),
-          optomNarxi: data.optomNarxi ? parseFloat(data.optomNarxi) : null,
-          bolishNarxi: data.bolishNarxi ? parseFloat(data.bolishNarxi) : null,
+          kelishNarxi: narxlar.asosiy.kelish ?? 0,
+          sotishNarxi: narxlar.asosiy.sotish ?? 0,
+          optomNarxi: narxlar.asosiy.optom,
+          bolishNarxi: narxlar.asosiy.bolish,
           valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',
           birlik,
-          oramlar: oramTekshiruv.oramlar,
+          oramlar: narxlar.oramlar,
           minimalQoldiq: parseInt(data.minimalQoldiq) || 5,
           taminotchiId,
           keltirilganManzil: manzilTozala(data.keltirilganManzil),
@@ -212,7 +220,7 @@ export async function POST(req: NextRequest) {
             turi: 'KIRIM',
             joy: 'DOKON',
             miqdor: parseFloat(data.boshlangichQoldiq),
-            narx: parseFloat(data.kelishNarxi),
+            narx: narxlar.asosiy.kelish ?? 0,
             // Boshlang'ich kirim ham ta'minotchiga bog'lanadi: "bu partiya
             // kimdan keldi" degan savolga ombor tarixi javob beradi.
             taminotchiId,

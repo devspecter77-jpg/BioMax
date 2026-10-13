@@ -8,7 +8,8 @@ import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
-import { birlikTozala, oramlarniTekshir } from '@/lib/birlik'
+import { birlikTozala, musbatYokiNull, narxlarniJoyla, narxOrami, oramlarniOqi, oramlarniTekshir, oramNarxsiz } from '@/lib/birlik'
+import { nomKaliti } from '@/lib/utils'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -112,6 +113,51 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updateData.sotishNarxi = parseFloat(data.sotishNarxi)
     }
 
+    // Narxlar o'ram uchun kiritilgan bo'lsa ("1 blok — 75 000") — bazaga bir
+    // dona narxi, o'ramga aniq narx (lib/birlik.ts). Narx birligisiz kelsa
+    // (Ombor sahifasidagi qisqa forma) va o'zgargan bo'lsa — o'ramdagi eski
+    // aniq narx olib tashlanadi, aks holda kassa eskirgan narxni olardi.
+    const narxKalitlari = ['kelishNarxi', 'sotishNarxi', 'optomNarxi', 'bolishNarxi'] as const
+    if (bor('narxBirligi') || narxKalitlari.some(bor)) {
+      const joriy = await prisma.tovar.findUnique({
+        where: { id },
+        select: { oramlar: true, kelishNarxi: true, sotishNarxi: true, optomNarxi: true, bolishNarxi: true },
+      })
+      const oramlar = oramlarniOqi(updateData.oramlar !== undefined ? updateData.oramlar : joriy?.oramlar)
+      if (bor('narxBirligi')) {
+        const tanlangan = oramlar.find(o => nomKaliti(o.nomi) === nomKaliti(String(data.narxBirligi ?? '').trim()))
+        const eski = narxOrami(oramlarniOqi(joriy?.oramlar))
+        // Shu hisobga yashirilgan narx formadan kelmaydi: o'sha o'ramdagi eski
+        // aniq narx olinadi, bo'lmasa bazadagi bir dona narxidan hisoblanadi
+        const yashirin = (tur: 'kelish' | 'sotish', ustun: unknown): number | null => {
+          if (eski && tanlangan && nomKaliti(eski.nomi) === nomKaliti(tanlangan.nomi) && eski.miqdor === tanlangan.miqdor && eski.narx[tur] !== null) {
+            return eski.narx[tur]
+          }
+          const b = musbatYokiNull(ustun)
+          return b === null ? null : tanlangan ? Math.round(b * tanlangan.miqdor * 100) / 100 : b
+        }
+        const kelishYashirin = yashirilganMaydonlar.has('kelishNarxi')
+        const sotishYashirin = yashirilganMaydonlar.has('sotishNarxi')
+        const j = narxlarniJoyla(oramlar, data.narxBirligi, {
+          kelish: kelishYashirin ? yashirin('kelish', joriy?.kelishNarxi) : musbatYokiNull(data.kelishNarxi),
+          sotish: sotishYashirin ? yashirin('sotish', joriy?.sotishNarxi) : musbatYokiNull(data.sotishNarxi),
+          optom: musbatYokiNull(data.optomNarxi),
+          bolish: musbatYokiNull(data.bolishNarxi),
+        })
+        updateData.oramlar = j.oramlar
+        if (!kelishYashirin && j.asosiy.kelish !== null) updateData.kelishNarxi = j.asosiy.kelish
+        if (!sotishYashirin && j.asosiy.sotish !== null) updateData.sotishNarxi = j.asosiy.sotish
+        updateData.optomNarxi = j.asosiy.optom
+        updateData.bolishNarxi = j.asosiy.bolish
+      } else if (narxOrami(oramlar)) {
+        const ozgardi = narxKalitlari.some(k => {
+          const yangi = updateData[k]
+          return yangi !== undefined && Number(yangi ?? 0) !== Number(joriy?.[k] ?? 0)
+        })
+        if (ozgardi) updateData.oramlar = oramNarxsiz(oramlar)
+      }
+    }
+
     // Ta'minotchi doirasi — yaratishdagi bilan bir xil tekshiruv
     if (bor('taminotchiId')) {
       let taminotchiId: string | null = null
@@ -162,7 +208,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
-    return NextResponse.json(tovar)
+    return NextResponse.json(maydonlarniYashir(tovar, yashirilganMaydonlar))
   } catch (e) {
     if (e instanceof JoyXatosi) return NextResponse.json({ xato: e.message }, { status: e.status })
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
