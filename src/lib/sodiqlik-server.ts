@@ -10,7 +10,9 @@ import {
   SODIQLIK_KALITLARI,
   sozlamaniOqi,
   sozlamaniYoz,
+  type SodiqlikQoida,
   type SodiqlikSozlama,
+  type ToplashTafsiloti,
 } from './sodiqlik'
 
 /** Tranzaksiya ichida ham, tashqarisida ham ishlaydigan Prisma klienti. */
@@ -40,6 +42,28 @@ export async function sodiqlikSozlamasiniSaqla(s: SodiqlikSozlama): Promise<void
   )
 }
 
+/** Katalog doirasi — `egaFilialWhere(session)` shaklida */
+type Doira = { filialId: string } | { filialId: null; egaId: string | null }
+
+/** Bazadagi qoida qatori → hisob uchun sonli shakl. */
+export function qoidaniSonga(q: {
+  id: string; turi: SodiqlikQoida['turi']; tovarId: string | null; kategoriyaId: string | null
+  minSumma: Prisma.Decimal | number; minMiqdor: Prisma.Decimal | number
+  ball: Prisma.Decimal | number; keshbekFoiz: Prisma.Decimal | number; faol: boolean
+}): SodiqlikQoida {
+  return {
+    id: q.id, turi: q.turi, tovarId: q.tovarId, kategoriyaId: q.kategoriyaId,
+    minSumma: Number(q.minSumma), minMiqdor: Number(q.minMiqdor),
+    ball: Number(q.ball), keshbekFoiz: Number(q.keshbekFoiz), faol: q.faol,
+  }
+}
+
+/** Shu katalogning FAOL qo'shimcha qoidalari (sotuvda to'plash uchun). */
+export async function sodiqlikQoidalari(db: PrismaTx, doira: Doira): Promise<SodiqlikQoida[]> {
+  const qatorlar = await db.sodiqlikQoidasi.findMany({ where: { ...doira, faol: true } })
+  return qatorlar.map(qoidaniSonga)
+}
+
 export interface BalansOzgarishi {
   mijozId: string
   hisob: 'BALL' | 'KESHBEK'
@@ -49,6 +73,8 @@ export interface BalansOzgarishi {
   sotuvId?: string | null
   izoh?: string | null
   foydalanuvchiId?: string | null
+  /** Xariddan to'planganda — qayerdan kelgani (qaytarishda aniq bekor qilish uchun) */
+  tafsilot?: ToplashTafsiloti | null
 }
 
 /**
@@ -95,6 +121,7 @@ export async function balansOzgartir(
       sotuvId: o.sotuvId ?? null,
       izoh: o.izoh ?? null,
       foydalanuvchiId: o.foydalanuvchiId ?? null,
+      ...(o.tafsilot ? { tafsilot: o.tafsilot as unknown as Prisma.InputJsonValue } : {}),
     },
   })
 

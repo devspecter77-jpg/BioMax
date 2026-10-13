@@ -19,8 +19,8 @@ import ChipRow from '@/components/ui/chip-row'
 import { useRuxsat } from '@/hooks/useRuxsat'
 import { minNarxSomda } from '@/lib/ruxsat-amallar'
 import {
-  SODIQLIK_STANDART, sarflashniHisobla, ballSarflanadimi, formatBall,
-  type SodiqlikSozlama,
+  SODIQLIK_STANDART, sarflashniHisobla, ballSarflanadimi, formatBall, sotuvdanToplanadi,
+  type SodiqlikSozlama, type SodiqlikQoida,
 } from '@/lib/sodiqlik'
 import {
   POS_TOLOV_USULLARI, KANAL_USULLARI, TOLOV_MALUMOTI,
@@ -454,6 +454,8 @@ export default function SotuvPage() {
   // Balans har sotuvdan keyin o'zgargani uchun mijoz tanlanganda
   // har safar yangidan olinadi (ro'yxatdagi eskirgan qiymatga tayanmaydi).
   const [sodiqlikSozlama, setSodiqlikSozlama] = useState<SodiqlikSozlama>(SODIQLIK_STANDART)
+  // Qo'shimcha qoidalar (chek summasi, mahsulot, kategoriya) — to'planadiganini oldindan ko'rsatish uchun
+  const [sodiqlikQoidalari, setSodiqlikQoidalari] = useState<SodiqlikQoida[]>([])
   const [mijozBalans, setMijozBalans] = useState<{ ball: number; keshbek: number } | null>(null)
   const [sarfBall, setSarfBall] = useState('')
   const [sarfKeshbek, setSarfKeshbek] = useState('')
@@ -678,12 +680,14 @@ export default function SotuvPage() {
 
     async function yuklashQoshimcha() {
       try {
-        const [mj, sz, kt, sd] = await Promise.all([
+        const [mj, sz, kt, sd, sq] = await Promise.all([
           fetch('/api/mijozlar').then(r => r.json()).catch(() => []),
           fetch('/api/sozlamalar').then(r => r.json()).catch(() => ({})),
           fetch('/api/kategoriyalar').then(r => r.json()).catch(() => []),
           fetch('/api/sodiqlik/sozlamalar').then(r => r.json()).catch(() => null),
+          fetch('/api/sodiqlik/qoidalar').then(r => r.json()).catch(() => []),
         ])
+        setSodiqlikQoidalari(Array.isArray(sq) ? (sq as SodiqlikQoida[]).filter(q => q.faol) : [])
         setMijozlar(Array.isArray(mj) ? mj : [])
         setDokonInfo(sz && typeof sz === 'object' ? sz : {})
         setKategoriyalar(Array.isArray(kt) ? kt : [])
@@ -1148,6 +1152,25 @@ export default function SotuvPage() {
 
   // To'lov kanallari bilan yopiladigan yakuniy summa
   const yakuniySumma = chekSummasi - sodiqlikNatija.jamiChegirma
+
+  // Shu xariddan to'planadigan ball/keshbek — serverdagi bilan AYNAN bir xil
+  // funksiya, kassir mijozga oldindan ayta oladi ("bu xariddan +5 ball").
+  // Kategoriya qoidasi bo'lsagina mahsulotlar kategoriyasi kerak.
+  const kategoriyaKerak = sodiqlikQoidalari.some(q => q.turi === 'KATEGORIYA')
+  const tovarKategoriyasi = kategoriyaKerak && mijozId
+    ? new Map(tovarlar.map(t => [t.id, t.kategoriya?.id ?? null]))
+    : null
+  const toplanadiOldindan = mijozId && sodiqlikSozlama.faol && savat.length > 0
+    ? sotuvdanToplanadi({
+      tolangan: yakuniySumma,
+      tolovUsuli,
+      sozlama: sodiqlikSozlama,
+      qatorlar: savat.map(i => ({
+        tovarId: i.tovarId, kategoriyaId: tovarKategoriyasi?.get(i.tovarId) ?? null, miqdor: i.miqdor, jami: i.jami,
+      })),
+      qoidalar: sodiqlikQoidalari,
+    })
+    : null
 
   // Stock yetishmaydigan itemlarni tekshirish — bitta mahsulotdan oddiy va
   // bonus qatori bo'lishi mumkin, shuning uchun ikkalasi QO'SHIB tekshiriladi
@@ -2121,6 +2144,19 @@ export default function SotuvPage() {
                 {sodiqlikNatija.ogohlantirish && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-500">{sodiqlikNatija.ogohlantirish}</p>
                 )}
+              </div>
+            )}
+
+            {toplanadiOldindan && (toplanadiOldindan.ball > 0 || toplanadiOldindan.keshbek > 0) && (
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-green-50 dark:bg-green-950/20 px-2.5 py-1.5 text-xs text-green-700 dark:text-green-400"
+                title={toplanadiOldindan.qollanilgan.length > 0 ? `Qo'shimcha qoidalar: ${toplanadiOldindan.qollanilgan.length} ta` : 'Umumiy qoida bo‘yicha'}>
+                <span className="flex items-center gap-1"><Gift size={12} /> Bu xariddan to&apos;planadi</span>
+                <span className="font-semibold tabular-nums">
+                  {[
+                    toplanadiOldindan.ball > 0 && `+${formatBall(toplanadiOldindan.ball)} ball`,
+                    toplanadiOldindan.keshbek > 0 && `+${formatSum(toplanadiOldindan.keshbek)}`,
+                  ].filter(Boolean).join(' · ')}
+                </span>
               </div>
             )}
 

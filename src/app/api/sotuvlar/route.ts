@@ -6,8 +6,8 @@ import { generateChekRaqami } from '@/lib/utils'
 import { egaFilialWhere } from '@/lib/filial-scope'
 import { mijozKorinadimi, mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 import { tolovTaqsimoti, tolovUsuliMi, aralashTekshir, type AralashKiritma } from '@/lib/tolov-usullari'
-import { sarflashniHisobla, sotuvdanToplanadi, ballSomda } from '@/lib/sodiqlik'
-import { sodiqlikSozlamasi, balansOzgartir } from '@/lib/sodiqlik-server'
+import { sarflashniHisobla, sotuvdanToplanadi, ballSomda, type ToplashQatori } from '@/lib/sodiqlik'
+import { sodiqlikSozlamasi, sodiqlikQoidalari, balansOzgartir } from '@/lib/sodiqlik-server'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { katalogBoyicha } from '@/lib/ruxsat-katalogi'
 import { minNarxSomda, ruxsatYoqXabari, sotuvUchunKerak } from '@/lib/ruxsat-amallar'
@@ -237,6 +237,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Sodiqlik: qo'shimcha qoidalar (chek summasi, mahsulot, kategoriya) ──
+    // Faqat mijozli sotuvda kerak. Kategoriya qoidasi bo'lsa — mahsulotlar kategoriyasi.
+    const qoidalar = data.mijozId && sodiqlikSozlama.faol
+      ? await sodiqlikQoidalari(prisma, egaFilialWhere(session))
+      : []
+    const kategoriyasi = new Map<string, string>()
+    if (qoidalar.some(q => q.turi === 'KATEGORIYA') && sotilayotganIdlar.length > 0) {
+      const tovarKat = await prisma.tovar.findMany({
+        where: { id: { in: sotilayotganIdlar } },
+        select: { id: true, kategoriyaId: true },
+      })
+      for (const t of tovarKat) kategoriyasi.set(t.id, t.kategoriyaId)
+    }
+    const toplashQatorlari: ToplashQatori[] = (data.tarkiblar as { tovarId: string; miqdor: unknown; jami: unknown }[])
+      .map(t => ({
+        tovarId: t.tovarId,
+        kategoriyaId: kategoriyasi.get(t.tovarId) ?? null,
+        miqdor: parseFloat(String(t.miqdor)) || 0,
+        jami: parseFloat(String(t.jami)) || 0,
+      }))
+
     // Tranzaksiya: sotuv + ombor harakati + nasiya
     const sotuv = await prisma.$transaction(async (tx) => {
       // 1. Sotuv yaratish
@@ -347,27 +368,30 @@ export async function POST(req: NextRequest) {
           })
         }
 
-        // To'plash bazasidan ballar bilan qoplangan qism chiqariladi —
-        // keshbek o'z ustiga keshbek bermasin.
+        // To'plash bazasi — mijoz HAQIQATDA to'lagan summa. `yakuniySumma`
+        // ball/keshbek bilan qoplangan qismsiz keladi (yuqorida tekshirilgan),
+        // shuning uchun u qayta ayirilmaydi (avval ikki marta ayirilardi).
         const toplanadi = sotuvdanToplanadi({
-          yakuniySumma,
-          sarflanganKeshbek: sarflash.keshbek,
-          sarflanganBallSomda: sarflanganBallSom,
+          tolangan: yakuniySumma,
           tolovUsuli: data.tolovUsuli,
           sozlama: sodiqlikSozlama,
+          qatorlar: toplashQatorlari,
+          qoidalar,
         })
+        const izoh = `Chek ${yangiSotuv.chekRaqami}`
+          + (toplanadi.qollanilgan.length > 0 ? ` · qo'shimcha qoida: ${toplanadi.qollanilgan.length} ta` : '')
         if (toplanadi.ball > 0) {
           await balansOzgartir(tx, {
             mijozId: data.mijozId, hisob: 'BALL', miqdor: toplanadi.ball,
             sabab: 'SOTUVDAN', sotuvId: yangiSotuv.id,
-            izoh: `Chek ${yangiSotuv.chekRaqami}`, foydalanuvchiId: kassirId,
+            izoh, foydalanuvchiId: kassirId, tafsilot: toplanadi.tafsilot.ball,
           })
         }
         if (toplanadi.keshbek > 0) {
           await balansOzgartir(tx, {
             mijozId: data.mijozId, hisob: 'KESHBEK', miqdor: toplanadi.keshbek,
             sabab: 'SOTUVDAN', sotuvId: yangiSotuv.id,
-            izoh: `Chek ${yangiSotuv.chekRaqami}`, foydalanuvchiId: kassirId,
+            izoh, foydalanuvchiId: kassirId, tafsilot: toplanadi.tafsilot.keshbek,
           })
         }
       }

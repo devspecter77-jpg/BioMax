@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { balansOzgartir } from '@/lib/sodiqlik-server'
+import { qaytarishdaBekor, tafsilotniOqi } from '@/lib/sodiqlik'
 import { egaFilialWhere } from '@/lib/filial-scope'
 import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 
@@ -171,24 +172,36 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // 4. Sodiqlik: shu xariddan olingan ball/keshbek PROPORSIONAL
-      //    qaytarib olinadi. Aks holda mijoz tovarni qaytarib, u uchun
-      //    berilgan ballni o'zida saqlab qolardi.
+      // 4. Sodiqlik: shu xariddan olingan ball/keshbek qaytarib olinadi —
+      //    aks holda mijoz tovarni qaytarib, u uchun berilgan ballni o'zida
+      //    saqlab qolardi. Umumiy va chek qoidasidan kelgani — qaytarilgan
+      //    summa ulushida; mahsulot qoidasidan kelgani — aynan o'sha mahsulotning
+      //    qaytarilgan miqdori ulushida (lib/sodiqlik.ts qaytarishdaBekor).
       //    Balans allaqachon sarflangan bo'lsa manfiyga ketmaydi —
       //    balansOzgartir bor bo'lganini ayiradi.
       if (aslSotuv.mijozId) {
         const sotuvSummasi = Number(aslSotuv.yakuniySumma)
         if (sotuvSummasi > 0) {
           const ulush = Math.min(1, jamiSumma / sotuvSummasi)
+          const sotilgan = new Map<string, number>()
+          for (const st of aslSotuv.tarkiblar) {
+            if (Number(st.jami) > 0) sotilgan.set(st.tovarId, (sotilgan.get(st.tovarId) ?? 0) + Number(st.miqdor))
+          }
+          const qaytarilgan = new Map<string, number>()
+          for (const t of tasdiqlangan) qaytarilgan.set(t.tovarId, (qaytarilgan.get(t.tovarId) ?? 0) + t.miqdor)
           const toplanganlar = await tx.sodiqlikHarakati.findMany({
             where: { sotuvId: aslSotuvId, sabab: 'SOTUVDAN' },
-            select: { hisob: true, miqdor: true },
+            select: { hisob: true, miqdor: true, tafsilot: true },
           })
           for (const t of toplanganlar) {
-            const qaytariladi = Number(t.miqdor) * ulush
-            const yaxlit = t.hisob === 'BALL'
-              ? Math.floor(qaytariladi * 100) / 100
-              : Math.floor(qaytariladi)
+            const yaxlit = qaytarishdaBekor({
+              hisob: t.hisob,
+              toplangan: Number(t.miqdor),
+              tafsilot: tafsilotniOqi(t.tafsilot),
+              summaUlushi: ulush,
+              qaytarilgan,
+              sotilgan,
+            })
             if (yaxlit > 0) {
               await balansOzgartir(tx, {
                 mijozId: aslSotuv.mijozId,

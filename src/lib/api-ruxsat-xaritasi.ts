@@ -131,6 +131,7 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/xarajatlar/*', OQISH, ['nasiyalar', 'tolovlar'], 'Xarajatlarni ko‘rish'),
   Q('/api/sodiqlik/qolda', '*', ['ballar.qolda'], 'Qo‘lda ball berish'),
   Q('/api/sodiqlik/sozlamalar', YOZISH, ['ballar.sozlama'], 'Sodiqlik sozlamalari'),
+  Q('/api/sodiqlik/qoidalar/*', YOZISH, ['ballar.sozlama'], 'Sodiqlik qoidalari'),
   Q('/api/sodiqlik/*', OQISH, ['ballar', 'sotuv', 'mijozlar'], 'Ballarni ko‘rish'),
 
   // ── Ta'minot, to'lovlar, xodimlar ──

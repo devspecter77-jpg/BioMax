@@ -8,6 +8,10 @@
 // so'm (1:1), ball esa admin belgilagan kurs bo'yicha ("1 ball = shuncha so'm").
 // Ball kursi 0 bo'lsa — ball sarflanmaydi, faqat to'planadi (reyting uchun).
 //
+// Umumiy qoidaga QO'SHIMCHA qoidalar ham bor (SodiqlikQoidasi): chek summasi
+// ("1 000 000 so'mlik xaridga 5 ball"), mahsulot yoki kategoriya ("shu
+// mahsulotdan 5 dona olsa — har donasiga 2 ball va 3% keshbek").
+//
 // Bu fayl serverga bog'liq emas (prisma import qilmaydi) — client va route'lar
 // AYNAN shu funksiyalarni chaqiradi, shuning uchun kassada ko'ringan summa
 // bilan bazaga yozilgani hech qachon farq qilmaydi.
@@ -240,22 +244,107 @@ export function sarflashniHisobla(params: {
   }
 }
 
+// ─── Qo'shimcha qoidalar ─────────────────────────────────────────────────────
+
+export type QoidaTuri = 'CHEK' | 'MAHSULOT' | 'KATEGORIYA'
+
+export interface SodiqlikQoida {
+  id: string
+  turi: QoidaTuri
+  tovarId: string | null
+  kategoriyaId: string | null
+  /** CHEK: to'langan summa kamida shuncha bo'lsa */
+  minSumma: number
+  /** MAHSULOT/KATEGORIYA: kamida shuncha dona (kg, litr…) olinsa */
+  minMiqdor: number
+  /** CHEK: bir martalik ball; MAHSULOT/KATEGORIYA: har bir dona uchun ball */
+  ball: number
+  /** CHEK: to'langan summadan %; MAHSULOT/KATEGORIYA: shu mahsulotlar summasidan % */
+  keshbekFoiz: number
+  faol: boolean
+}
+
+/** Sotuvning bitta qatori (to'plash hisobi uchun). */
+export interface ToplashQatori {
+  tovarId: string
+  kategoriyaId: string | null
+  miqdor: number
+  /** Qator summasi (qator chegirmasidan keyin). 0 — sovg'a (bonus) qatori: sanalmaydi */
+  jami: number
+}
+
+/** Bitta hisob (ball yoki keshbek) bo'yicha to'plangan miqdor qayerdan kelgani. */
+export interface ToplashTafsiloti {
+  /** Umumiy qoida ("har N so'mga M ball", "X% keshbek") */
+  umumiy: number
+  /** Chek summasi qoidasi */
+  chek: number
+  /** Mahsulot va kategoriya qoidalaridan — mahsulot bo'yicha */
+  tovarlar: Record<string, number>
+}
+
+export interface QollanganQoida {
+  qoidaId: string
+  turi: QoidaTuri
+  /** tovarId yoki kategoriyaId; CHEK uchun null */
+  maqsadId: string | null
+  /** Shart uchun sanalgan dona (CHEK uchun 0) */
+  miqdor: number
+  ball: number
+  keshbek: number
+}
+
+export interface ToplashNatija {
+  ball: number
+  keshbek: number
+  /** To'plash bazasi — mijoz haqiqatda to'lagan summa */
+  baza: number
+  tafsilot: { ball: ToplashTafsiloti; keshbek: ToplashTafsiloti }
+  /** Qaysi qo'shimcha qoidalar ishladi (kassada va jurnalda ko'rsatish uchun) */
+  qollanilgan: QollanganQoida[]
+}
+
+const bosTafsilot = (): ToplashTafsiloti => ({ umumiy: 0, chek: 0, tovarlar: {} })
+/** Ball yig'indisi: 0.1 + 0.2 kabi kasr xatolari to'planmasin */
+const ball2 = (n: number) => Math.round(n * 100) / 100
+
+/** Sharti bajarilgan qoidalardan eng kattasi (shart bo'yicha, teng bo'lsa — mukofoti katta). */
+function engKatta(qoidalar: SodiqlikQoida[], shart: (q: SodiqlikQoida) => number): SodiqlikQoida | null {
+  let eng: SodiqlikQoida | null = null
+  for (const q of qoidalar) {
+    if (!eng || shart(q) > shart(eng)
+      || (shart(q) === shart(eng) && (q.ball > eng.ball || (q.ball === eng.ball && q.keshbekFoiz > eng.keshbekFoiz)))) {
+      eng = q
+    }
+  }
+  return eng
+}
+
 /**
- * Sotuvdan keyin to'planadigan ball va keshbek.
+ * Sotuvdan to'planadigan ball va keshbek: umumiy qoida + qo'shimcha qoidalar.
  *
- * MUHIM: to'plash bazasi — mijoz HAQIQATDA to'lagan summa, ya'ni ballar
- * bilan qoplangan qism CHIQARIB tashlanadi. Aks holda keshbek o'z ustiga
- * keshbek berib, cheksiz aylanma hosil qilardi.
+ * `tolangan` — mijoz HAQIQATDA to'lagan summa: chek chegirmasi va ball/keshbek
+ * bilan qoplangan qism allaqachon chiqarilgan (keshbek o'z ustiga keshbek
+ * bermasin). Mahsulot qoidasining keshbek foizi qator summasining shu
+ * to'langan ulushiga hisoblanadi. Ball "har donasiga" — pul ulushiga bog'liq emas.
+ *
+ * Bir maqsadga bir nechta qoida bo'lsa (5 dona → 3%, 10 dona → 5%) — sharti
+ * bajarilganlarning eng kattasi qo'llanadi. Mahsulotning o'z qoidasi ishlasa,
+ * kategoriya qoidasi unga qo'llanmaydi (ikki marta berilmaydi).
  */
 export function sotuvdanToplanadi(params: {
-  yakuniySumma: number
-  sarflanganKeshbek?: number
-  sarflanganBallSomda?: number
+  tolangan: number
   tolovUsuli: string
   sozlama: SodiqlikSozlama
-}): { ball: number; keshbek: number; baza: number } {
-  const { yakuniySumma, tolovUsuli, sozlama: s } = params
-  const bosh = { ball: 0, keshbek: 0, baza: 0 }
+  qatorlar?: ToplashQatori[]
+  qoidalar?: SodiqlikQoida[]
+}): ToplashNatija {
+  const { tolovUsuli, sozlama: s } = params
+  const bosh: ToplashNatija = {
+    ball: 0, keshbek: 0, baza: 0,
+    tafsilot: { ball: bosTafsilot(), keshbek: bosTafsilot() },
+    qollanilgan: [],
+  }
 
   if (!s.faol) return bosh
   // Sherik do'konga jo'natish sotuv emas — hisobotlarda ham chiqarilgan.
@@ -263,11 +352,180 @@ export function sotuvdanToplanadi(params: {
   // Nasiyada pul hali kelmagan — admin ataylab yoqmasa, to'planmaydi.
   if (tolovUsuli === 'NASIYA' && !s.nasiyagaHam) return bosh
 
-  const qoplangan = (Number(params.sarflanganKeshbek) || 0) + (Number(params.sarflanganBallSomda) || 0)
-  const baza = Math.max(0, (Number(yakuniySumma) || 0) - qoplangan)
+  const baza = Math.max(0, Number(params.tolangan) || 0)
   if (baza <= 0) return bosh
 
-  return { ball: hisoblaBall(baza, s), keshbek: hisoblaKeshbek(baza, s), baza }
+  const tb: ToplashTafsiloti = { umumiy: hisoblaBall(baza, s), chek: 0, tovarlar: {} }
+  const tk: ToplashTafsiloti = { umumiy: hisoblaKeshbek(baza, s), chek: 0, tovarlar: {} }
+  const qollanilgan: QollanganQoida[] = []
+  const faollar = (params.qoidalar ?? []).filter(q => q.faol && (q.ball > 0 || q.keshbekFoiz > 0))
+
+  // ── Chek summasi ──
+  const chek = engKatta(faollar.filter(q => q.turi === 'CHEK' && q.minSumma <= baza), q => q.minSumma)
+  if (chek) {
+    tb.chek = ballYaxlit(chek.ball)
+    tk.chek = Math.floor((baza * chek.keshbekFoiz) / 100)
+    qollanilgan.push({ qoidaId: chek.id, turi: 'CHEK', maqsadId: null, miqdor: 0, ball: tb.chek, keshbek: tk.chek })
+  }
+
+  // ── Mahsulot va kategoriya — faqat pullik qatorlar ──
+  const qatorlar = (params.qatorlar ?? []).filter(q => q.miqdor > 0 && q.jami > 0)
+  const jamiQator = qatorlar.reduce((y, q) => y + q.jami, 0)
+  // Chek chegirmasi va ball bilan to'langan qism mutanosib chiqariladi
+  const ulush = jamiQator > 0 ? Math.min(1, baza / jamiQator) : 0
+
+  const tovarlar = new Map<string, { kategoriyaId: string | null; miqdor: number; jami: number }>()
+  for (const q of qatorlar) {
+    const t = tovarlar.get(q.tovarId) ?? { kategoriyaId: q.kategoriyaId, miqdor: 0, jami: 0 }
+    t.miqdor += q.miqdor
+    t.jami += q.jami
+    tovarlar.set(q.tovarId, t)
+  }
+  const qosh = (tovarId: string, b: number, k: number) => {
+    if (b > 0) tb.tovarlar[tovarId] = ball2((tb.tovarlar[tovarId] ?? 0) + b)
+    if (k > 0) tk.tovarlar[tovarId] = (tk.tovarlar[tovarId] ?? 0) + k
+  }
+
+  const ozQoidasi = new Set<string>()
+  for (const [tovarId, t] of tovarlar) {
+    const q = engKatta(
+      faollar.filter(x => x.turi === 'MAHSULOT' && x.tovarId === tovarId && x.minMiqdor <= t.miqdor),
+      x => x.minMiqdor,
+    )
+    if (!q) continue
+    ozQoidasi.add(tovarId)
+    const b = ballYaxlit(q.ball * t.miqdor)
+    const k = Math.floor((t.jami * ulush * q.keshbekFoiz) / 100)
+    qosh(tovarId, b, k)
+    qollanilgan.push({ qoidaId: q.id, turi: 'MAHSULOT', maqsadId: tovarId, miqdor: t.miqdor, ball: b, keshbek: k })
+  }
+
+  const kategoriyalar = new Map<string, { miqdor: number; tovarlar: [string, { miqdor: number; jami: number }][] }>()
+  for (const [tovarId, t] of tovarlar) {
+    if (ozQoidasi.has(tovarId) || !t.kategoriyaId) continue
+    const g = kategoriyalar.get(t.kategoriyaId) ?? { miqdor: 0, tovarlar: [] }
+    g.miqdor += t.miqdor
+    g.tovarlar.push([tovarId, t])
+    kategoriyalar.set(t.kategoriyaId, g)
+  }
+  for (const [kategoriyaId, g] of kategoriyalar) {
+    const q = engKatta(
+      faollar.filter(x => x.turi === 'KATEGORIYA' && x.kategoriyaId === kategoriyaId && x.minMiqdor <= g.miqdor),
+      x => x.minMiqdor,
+    )
+    if (!q) continue
+    let jb = 0
+    let jk = 0
+    for (const [tovarId, t] of g.tovarlar) {
+      const b = ballYaxlit(q.ball * t.miqdor)
+      const k = Math.floor((t.jami * ulush * q.keshbekFoiz) / 100)
+      qosh(tovarId, b, k)
+      jb += b
+      jk += k
+    }
+    qollanilgan.push({ qoidaId: q.id, turi: 'KATEGORIYA', maqsadId: kategoriyaId, miqdor: g.miqdor, ball: ball2(jb), keshbek: jk })
+  }
+
+  const yigindi = (t: ToplashTafsiloti) => t.umumiy + t.chek + Object.values(t.tovarlar).reduce((y, x) => y + x, 0)
+  return {
+    ball: ball2(yigindi(tb)),
+    keshbek: yigindi(tk),
+    baza,
+    tafsilot: { ball: tb, keshbek: tk },
+    qollanilgan,
+  }
+}
+
+/** Bazadagi (JSON) tafsilotni tekshirib o'qiydi; buzuq yoki yo'q bo'lsa — null. */
+export function tafsilotniOqi(x: unknown): ToplashTafsiloti | null {
+  if (!x || typeof x !== 'object') return null
+  const o = x as Record<string, unknown>
+  const son = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  const tovarlar: Record<string, number> = {}
+  if (o.tovarlar && typeof o.tovarlar === 'object') {
+    for (const [k, v] of Object.entries(o.tovarlar as Record<string, unknown>)) {
+      const n = son(v)
+      if (n > 0) tovarlar[k] = n
+    }
+  }
+  return { umumiy: son(o.umumiy), chek: son(o.chek), tovarlar }
+}
+
+/**
+ * Qaytarishda bekor qilinadigan miqdor (bitta hisob uchun).
+ *
+ * Tafsilot bor bo'lsa: umumiy va chek qoidasidan kelgan qism — qaytarilgan
+ * SUMMA ulushida; mahsulot qoidasidan kelgani — o'sha MAHSULOTNING qaytarilgan
+ * miqdori ulushida. Ya'ni ball bermagan mahsulot qaytarilsa, boshqa mahsulot
+ * uchun berilgan ball tegilmaydi. Tafsilotsiz (eski) yozuvda — butun miqdor
+ * summa ulushida, avvalgidek.
+ */
+export function qaytarishdaBekor(params: {
+  hisob: SodiqlikHisobKalit
+  toplangan: number
+  tafsilot: ToplashTafsiloti | null
+  /** Qaytarilgan summa / sotuv summasi */
+  summaUlushi: number
+  /** tovarId → shu qaytarishda qaytarilgan miqdor */
+  qaytarilgan: Map<string, number>
+  /** tovarId → sotuvdagi pullik miqdor */
+  sotilgan: Map<string, number>
+}): number {
+  const ulush = Math.min(1, Math.max(0, params.summaUlushi))
+  let n: number
+  if (params.tafsilot) {
+    const t = params.tafsilot
+    n = (t.umumiy + t.chek) * ulush
+    for (const [tovarId, qiymat] of Object.entries(t.tovarlar)) {
+      const sotildi = params.sotilgan.get(tovarId) ?? 0
+      const qaytdi = params.qaytarilgan.get(tovarId) ?? 0
+      if (sotildi > 0 && qaytdi > 0) n += qiymat * Math.min(1, qaytdi / sotildi)
+    }
+    // Hech qachon to'planganidan ko'p emas
+    n = Math.min(n, Math.max(0, params.toplangan))
+  } else {
+    n = Math.max(0, params.toplangan) * ulush
+  }
+  return params.hisob === 'BALL' ? Math.floor(n * 100 + 1e-6) / 100 : Math.floor(n + 1e-6)
+}
+
+/** Qoida maydonlarini tekshiradi (API va forma bir xil). */
+export function qoidaniTasdiqla(xom: unknown):
+  | { ok: true; qoida: Omit<SodiqlikQoida, 'id'> & { izoh: string | null } }
+  | { ok: false; xato: string } {
+  const o = (xom ?? {}) as Record<string, unknown>
+  const turi = o.turi
+  if (turi !== 'CHEK' && turi !== 'MAHSULOT' && turi !== 'KATEGORIYA') return { ok: false, xato: 'Qoida turini tanlang' }
+  const raqam = (v: unknown) => {
+    const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/\s/g, '').replace(',', '.'))
+    return Number.isFinite(n) ? n : NaN
+  }
+  const minSumma = turi === 'CHEK' ? raqam(o.minSumma) : 0
+  const minMiqdor = turi === 'CHEK' ? 0 : raqam(o.minMiqdor)
+  const ball = raqam(o.ball || 0)
+  const keshbekFoiz = raqam(o.keshbekFoiz || 0)
+  if (turi === 'CHEK' && !(minSumma >= 0)) return { ok: false, xato: 'Chek summasini kiriting' }
+  if (turi !== 'CHEK' && !(minMiqdor >= 0)) return { ok: false, xato: 'Necha donadan boshlab — sonini kiriting' }
+  if (!(ball >= 0) || ball > 1_000_000) return { ok: false, xato: "Ball noto'g'ri" }
+  if (!(keshbekFoiz >= 0) || keshbekFoiz > 100) return { ok: false, xato: "Keshbek 0 dan 100 % gacha bo'ladi" }
+  if (ball === 0 && keshbekFoiz === 0) return { ok: false, xato: 'Ball yoki keshbekdan kamida bittasini kiriting' }
+  const tovarId = turi === 'MAHSULOT' && typeof o.tovarId === 'string' && o.tovarId ? o.tovarId : null
+  const kategoriyaId = turi === 'KATEGORIYA' && typeof o.kategoriyaId === 'string' && o.kategoriyaId ? o.kategoriyaId : null
+  if (turi === 'MAHSULOT' && !tovarId) return { ok: false, xato: 'Mahsulotni tanlang' }
+  if (turi === 'KATEGORIYA' && !kategoriyaId) return { ok: false, xato: 'Kategoriyani tanlang' }
+  const izoh = typeof o.izoh === 'string' && o.izoh.trim() ? o.izoh.trim().slice(0, 200) : null
+  return {
+    ok: true,
+    qoida: {
+      turi, tovarId, kategoriyaId,
+      minSumma: Math.round(minSumma * 100) / 100,
+      minMiqdor: Math.round(minMiqdor * 1000) / 1000,
+      ball: ball2(ball),
+      keshbekFoiz: Math.round(keshbekFoiz * 100) / 100,
+      faol: o.faol === undefined ? true : o.faol === true || o.faol === 'true',
+      izoh,
+    },
+  }
 }
 
 /** Ballni ko'rsatish uchun formatlash — 2.00 emas, 2; 0.50 emas, 0.5 */

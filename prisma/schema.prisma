@@ -202,6 +202,7 @@ model Kategoriya {
   filial      Filial?  @relation(fields: [filialId], references: [id])
   ega         Foydalanuvchi? @relation("KategoriyaEgasi", fields: [egaId], references: [id])
   tovarlar    Tovar[]
+  sodiqlikQoidalari SodiqlikQoidasi[]
 
   @@unique([nomi, filialId, egaId])
   @@index([omborId])
@@ -277,6 +278,7 @@ model Tovar {
   otkazmaQabuli    OtkazmaTarkibi[] @relation("OtkazmaQabulTovar")
   sorovTarkibi     TaminotchiSorovTarkibi[]
   onlaynRezervlar   OnlaynRezerv[]
+  sodiqlikQoidalari SodiqlikQoidasi[]
   kartochka        TovarKartochka?
   namunalar        NamunaTarkibi[]
 
@@ -1160,6 +1162,10 @@ model SodiqlikHarakati {
   sotuvId     String?
   izoh        String?
   foydalanuvchiId String?
+  /// Xariddan to'planganda — qayerdan kelgani: { umumiy, chek, tovarlar: { [tovarId]: miqdor } }.
+  /// Qaytarishda mahsulot qoidasidan kelgan qism aynan shu mahsulot bo'yicha bekor
+  /// qilinadi (qolgani summa ulushi bo'yicha). Eski yozuvlarda bo'sh.
+  tafsilot    Json?
   sana        DateTime        @default(now())
 
   mijoz         Mijoz          @relation(fields: [mijozId], references: [id], onDelete: Cascade)
@@ -1182,6 +1188,49 @@ enum SodiqlikSabab {
   SARFLANDI     // kassada chegirma sifatida ishlatildi
   QAYTARISHDAN  // tovar qaytarilgani uchun bekor qilindi
   QOLDA         // admin qo'lda tuzatdi
+}
+
+// Qo'shimcha sodiqlik qoidasi — umumiy qoidaga ("har N so'mga M ball",
+// "X% keshbek") QO'SHILADI:
+//   CHEK       — to'langan summa kamida `minSumma` bo'lsa: `ball` (bir marta)
+//                va to'langan summaning `keshbekFoiz` %i;
+//   MAHSULOT   — shu mahsulotdan kamida `minMiqdor` olinsa: har bir dona
+//                (kg, litr…) uchun `ball` va shu mahsulot summasining %i;
+//   KATEGORIYA — xuddi shunday, kategoriyadagi barcha mahsulotlar uchun
+//                (o'z mahsulot qoidasi qo'llangan mahsulotdan tashqari).
+// Bir maqsadda bir nechta qoida bo'lsa (masalan 5 dona → 3%, 10 dona → 5%) —
+// sharti bajarilganlarning eng kattasi qo'llanadi, ular qo'shilmaydi.
+model SodiqlikQoidasi {
+  id           String            @id @default(cuid())
+  turi         SodiqlikQoidaTuri
+  tovarId      String?
+  kategoriyaId String?
+  minSumma     Decimal           @default(0) @db.Decimal(14, 2)
+  minMiqdor    Decimal           @default(0) @db.Decimal(12, 3)
+  ball         Decimal           @default(0) @db.Decimal(12, 2)
+  keshbekFoiz  Decimal           @default(0) @db.Decimal(5, 2)
+  izoh         String?
+  faol         Boolean           @default(true)
+  // Katalog doirasi: filial yoki Ega katalogi (mahsulot va kategoriyalar kabi)
+  filialId     String?
+  egaId        String?
+  yaratilgan   DateTime          @default(now())
+  yangilangan  DateTime          @updatedAt
+
+  tovar      Tovar?      @relation(fields: [tovarId], references: [id], onDelete: Cascade)
+  kategoriya Kategoriya? @relation(fields: [kategoriyaId], references: [id], onDelete: Cascade)
+
+  @@index([egaId])
+  @@index([filialId])
+  @@index([tovarId])
+  @@index([kategoriyaId])
+  @@map("sodiqlik_qoidalari")
+}
+
+enum SodiqlikQoidaTuri {
+  CHEK
+  MAHSULOT
+  KATEGORIYA
 }
 
 // ========================

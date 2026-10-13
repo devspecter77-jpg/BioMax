@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  Gift, Settings, Users, History, Loader2, Plus, Minus, Save, Percent,
+  Gift, Settings, Users, History, Loader2, Plus, Minus, Save, Percent, ListChecks,
 } from 'lucide-react'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
 import { toliqManzil } from '@/lib/hudud'
@@ -16,6 +16,7 @@ import SearchBar from '@/components/ui/search-bar'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
+import QoidalarTab from '@/components/sodiqlik/QoidalarTab'
 
 interface BalansMijoz {
   id: string
@@ -41,6 +42,23 @@ interface Harakat {
   mijoz: { id: string; ism: string; telefon: string | null }
   sotuv: { chekRaqami: string; yakuniySumma: string | number } | null
   foydalanuvchi: { ism: string } | null
+  /** Xariddan to'planganda — qaysi qoidadan qancha (umumiy, chek, mahsulotlar) */
+  tafsilot?: { umumiy?: number; chek?: number; tovarlar?: Record<string, number> } | null
+}
+
+/** "umumiy +0.5 · chek qoidasi +5 · mahsulot qoidalari +8" — faqat qo'shimcha qoida ishlagan bo'lsa */
+function tafsilotMatni(h: Harakat): string | null {
+  const t = h.tafsilot
+  if (h.sabab !== 'SOTUVDAN' || !t) return null
+  const mahsulot = Object.values(t.tovarlar ?? {}).reduce((y, x) => y + (Number(x) || 0), 0)
+  const chek = Number(t.chek) || 0
+  if (chek <= 0 && mahsulot <= 0) return null
+  const f = (n: number) => (h.hisob === 'BALL' ? formatBall(n) : formatSum(n))
+  return [
+    (Number(t.umumiy) || 0) > 0 && `umumiy +${f(Number(t.umumiy))}`,
+    chek > 0 && `chek qoidasi +${f(chek)}`,
+    mahsulot > 0 && `mahsulot qoidalari +${f(mahsulot)}`,
+  ].filter(Boolean).join(' · ')
 }
 
 const SABAB_LABEL: Record<Harakat['sabab'], string> = {
@@ -58,7 +76,7 @@ const SABAB_RANG: Record<Harakat['sabab'], string> = {
 
 const inputCls = 'w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition text-sm'
 
-type Tab = 'mijozlar' | 'harakatlar' | 'sozlamalar'
+type Tab = 'mijozlar' | 'harakatlar' | 'qoidalar' | 'sozlamalar'
 
 export default function BallarPage() {
   // Qo'lda ball berish va dastur sozlamalari — Ruxsatlar bo'limidan (standartda faqat administrator)
@@ -115,6 +133,8 @@ export default function BallarPage() {
         {([
           ['mijozlar', 'Mijozlar', Users],
           ['harakatlar', 'Harakatlar', History],
+          // Qoidalarni hamma ko'radi (kassir mijozga aytib bera olsin), o'zgartirish — ruxsat bilan
+          ['qoidalar', 'Qoidalar', ListChecks],
           ...(sozlamaRuxsat ? [['sozlamalar', 'Sozlamalar', Settings] as const] : []),
         ] as [Tab, string, typeof Users][]).map(([kalit, label, Icon]) => (
           <button
@@ -133,6 +153,9 @@ export default function BallarPage() {
 
       {tab === 'mijozlar' && <MijozlarTab sozlama={sozlama} admin={qoldaRuxsat} />}
       {tab === 'harakatlar' && <HarakatlarTab />}
+      {tab === 'qoidalar' && (
+        <QoidalarTab sozlama={sozlama} tahrir={sozlamaRuxsat} onSozlamalar={() => setTab('sozlamalar')} />
+      )}
       {tab === 'sozlamalar' && sozlamaRuxsat && (
         <SozlamalarTab sozlama={sozlama} onSaqlandi={setSozlama} />
       )}
@@ -495,6 +518,7 @@ function HarakatlarTab() {
                     {h.foydalanuvchi && ` · ${h.foydalanuvchi.ism}`}
                   </p>
                   {h.izoh && <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5 truncate">{h.izoh}</p>}
+                  {tafsilotMatni(h) && <p className="text-green-700 dark:text-green-400 text-[11px] mt-0.5">{tafsilotMatni(h)}</p>}
                 </div>
                 <div className="text-right shrink-0">
                   <p className={`font-semibold text-sm font-mono tabular-nums ${musbat ? 'text-green-600' : 'text-amber-600'}`}>
@@ -607,6 +631,9 @@ function SozlamalarTab({
         </div>
         <p className="text-gray-500 dark:text-gray-400 text-xs">
           0 qoldirilsa — ball sarflanmaydi, faqat to&apos;planadi (mijoz reytingi uchun).
+        </p>
+        <p className="text-gray-500 dark:text-gray-400 text-xs">
+          Chek summasi, mahsulot yoki kategoriya bo&apos;yicha qo&apos;shimcha ball va keshbek — «Qoidalar» bo&apos;limida.
         </p>
       </div>
 

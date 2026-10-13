@@ -6,7 +6,7 @@ import { egaFilialWhere } from './filial-scope'
 import { generateChekRaqami } from './utils'
 import { tolovTaqsimoti } from './tolov-usullari'
 import { sotuvdanToplanadi } from './sodiqlik'
-import { sodiqlikSozlamasi, balansOzgartir } from './sodiqlik-server'
+import { sodiqlikSozlamasi, sodiqlikQoidalari, balansOzgartir } from './sodiqlik-server'
 import { chiqimRejasi, rezervMuddati, telefonVariantlari, yetmayotganlar, type ZaxiraQatori } from './onlayn-sotuv'
 import type { OnlaynBuyurtma } from './onlayn-buyurtma'
 
@@ -116,6 +116,8 @@ export async function onlaynSotuvYarat(
   const tolovUsuli = b.tolovUsuli === 'KARTA_YETKAZISHDA' ? 'KARTA' : 'NAQD'
   const ids = [...new Set(b.qatorlar.map(q => q.erpTovarId))]
   const sodiqlik = await sodiqlikSozlamasi()
+  // Qo'shimcha qoidalar — kassadagi bilan bir xil (shu katalogniki)
+  const qoidalar = sodiqlik.faol ? await sodiqlikQoidalari(prisma, doira) : []
 
   try {
     const sotuv = await prisma.$transaction(async tx => {
@@ -124,7 +126,7 @@ export async function onlaynSotuvYarat(
       const oldin = await tx.sotuv.findUnique({ where: { onlaynRaqam: b.raqam }, select: { id: true, chekRaqami: true } })
       if (oldin) return { ...oldin, yangi: false }
 
-      const tovarlar = await tx.tovar.findMany({ where: { id: { in: ids } }, select: { id: true } })
+      const tovarlar = await tx.tovar.findMany({ where: { id: { in: ids } }, select: { id: true, kategoriyaId: true } })
       if (tovarlar.length !== ids.length) throw new OnlaynXato('Buyurtmadagi mahsulotlardan biri ERP’da topilmadi')
 
       // ── Mijoz kartasi: telefon bo'yicha topiladi yoki ochiladi ──
@@ -217,12 +219,21 @@ export async function onlaynSotuvYarat(
 
       // ── Ballar va keshbek — kassadagi qoida bilan ──
       if (mijozId) {
-        const t = sotuvdanToplanadi({ yakuniySumma, tolovUsuli, sozlama: sodiqlik })
-        for (const [hisob, miqdor] of [['BALL', t.ball], ['KESHBEK', t.keshbek]] as const) {
+        const kategoriyasi = new Map(tovarlar.map(t => [t.id, t.kategoriyaId]))
+        const t = sotuvdanToplanadi({
+          tolangan: yakuniySumma,
+          tolovUsuli,
+          sozlama: sodiqlik,
+          qatorlar: b.qatorlar.map(q => ({
+            tovarId: q.erpTovarId, kategoriyaId: kategoriyasi.get(q.erpTovarId) ?? null, miqdor: q.miqdor, jami: q.jami,
+          })),
+          qoidalar,
+        })
+        for (const [hisob, miqdor, tafsilot] of [['BALL', t.ball, t.tafsilot.ball], ['KESHBEK', t.keshbek, t.tafsilot.keshbek]] as const) {
           if (miqdor > 0) {
             await balansOzgartir(tx, {
               mijozId, hisob, miqdor, sabab: 'SOTUVDAN', sotuvId: yangiSotuv.id,
-              izoh: `Onlayn ${b.raqam}`, foydalanuvchiId: kassirId,
+              izoh: `Onlayn ${b.raqam}`, foydalanuvchiId: kassirId, tafsilot,
             })
           }
         }

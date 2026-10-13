@@ -4,6 +4,8 @@ import { useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface MoneyInputProps {
+  /** input id'si — `<label htmlFor>` bilan bog'lash uchun */
+  id?: string
   value: string | number   // raw number as string
   onChange: (value: string) => void  // returns raw number string e.g. "1500000"
   placeholder?: string
@@ -23,7 +25,7 @@ function formatWithCommas(val: string): string {
 }
 
 export default function MoneyInput({
-  value, onChange,
+  id, value, onChange,
   placeholder = "0",
   min,
   max,
@@ -62,6 +64,7 @@ export default function MoneyInput({
           ta'sir qiladi, daraxt bo'ylab tarqalmaydi, ya'ni haqiqiy
           nomuvofiqliklar tekshirilishda qolaveradi. */}
       <input
+        id={id}
         suppressHydrationWarning
         ref={inputRef}
         type="text"
