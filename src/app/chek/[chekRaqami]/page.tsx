@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { tolovQisqa, tolovKanallari } from '@/lib/tolov-usullari'
+import { chekHolati } from '@/lib/chek-print'
 
 // ─── Turlar ──────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,15 @@ export default function PublicChekPage() {
             <div>
               <p className="text-gray-500 text-xs">Chek raqami</p>
               <p className="text-gray-900 font-bold text-sm font-mono">{data.chekRaqami}</p>
+              {/* To'lov belgisi: TO'LANGAN / NASIYA (chop etilgan chek bilan bir xil) */}
+              {(() => {
+                const h = chekHolati(data)
+                return (
+                  <span className={`mt-1 inline-block rounded-md border-2 px-2 py-0.5 text-[11px] font-extrabold tracking-wider ${h.tur === 'tolangan' ? 'border-green-700 text-green-700' : 'border-amber-700 text-amber-700'}`}>
+                    {h.matn}
+                  </span>
+                )
+              })()}
             </div>
             <div className="text-right">
               <p className="text-gray-500 text-xs">Sana</p>

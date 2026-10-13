@@ -9,7 +9,7 @@
 // mijoz kartasi — qayerdan chiqarilsa ham chek bir xil bo'ladi.
 
 import { formatSanaVaVaqt } from './utils'
-import { toKirill, type ChekDokonInfo } from './chek-print'
+import { chekHolati, toKirill, type ChekDokonInfo } from './chek-print'
 import { tolovKanallari, tolovLabel, tolovQisqa } from './tolov-usullari'
 import { bosmaOynasiniOch } from './bosma-oyna'
 
@@ -51,6 +51,8 @@ export interface ChekA4Malumot {
   havola: string
   /** Havolaning QR kodi (`data:` URL) */
   qr: string | null
+  /** To'lovdan oldingi hisob (savatdan, bazaga yozilmagan) — "TO'LANMAGAN" */
+  tolanmagan?: boolean
 }
 
 type Til = 'lotin' | 'kirill'
@@ -80,6 +82,9 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
   const aloqa = [dokon.manzil ? tt(dokon.manzil) : '', dokon.telefon ? `Tel: ${esc(dokon.telefon)}` : '']
     .filter(Boolean).join(' · ')
   const bekor = m.holati === 'BEKOR_QILINGAN'
+  // To'lov belgisi: TO'LANGAN / TO'LANMAGAN / NASIYA (lib/chek-print.ts)
+  const holat = chekHolati(m)
+  const tolanmagan = holat.tur === 'tolanmagan'
 
   const qatorlar = m.qatorlar.map((q, i) => {
     const bonus = q.birlikNarxi === 0
@@ -119,9 +124,11 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
     yigma.push(qator(tt('Umumiy to‘lov'), uzs(m.yakuniySumma + m.yetkazishNarx), 'umumiy'))
   }
 
-  const tolov = m.tolovUsuli === 'ARALASH'
-    ? tolovKanallari(m).map(k => qator(esc(tolovQisqa(k.usul, til)), uzs(k.summa), 'tolov')).join('')
-    : qator(tt("To'lov"), esc(tolovLabel(m.tolovUsuli, til)), 'tolov')
+  const tolov = tolanmagan
+    ? qator(tt("To'lov"), tt('hali to‘lanmagan'), 'tolov')
+    : m.tolovUsuli === 'ARALASH'
+      ? tolovKanallari(m).map(k => qator(esc(tolovQisqa(k.usul, til)), uzs(k.summa), 'tolov')).join('')
+      : qator(tt("To'lov"), esc(tolovLabel(m.tolovUsuli, til)), 'tolov')
 
   const tomon = (yorliq: string, ism: string | null | undefined, tel: string | null | undefined) =>
     ism || tel
@@ -160,6 +167,11 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
   .hujjat .sana { margin-top: .5mm; color: #555; font-variant-numeric: tabular-nums; }
   .bekor { margin-top: 1.5mm; display: inline-block; padding: .6mm 2.5mm; border: 1.5px solid #b91c1c;
     color: #b91c1c; border-radius: 1mm; font-size: 8.5pt; font-weight: 800; letter-spacing: .8pt; }
+  .holat { margin-top: 1.5mm; display: inline-block; padding: .8mm 3mm; border: 2px solid; border-radius: 1mm;
+    font-size: 10pt; font-weight: 800; letter-spacing: 1pt; }
+  .holat-tolangan { color: #15803d; border-color: #15803d; }
+  .holat-tolanmagan { color: #b91c1c; border-color: #b91c1c; }
+  .holat-qarz { color: #b45309; border-color: #b45309; }
 
   .tomonlar { display: flex; gap: 12mm; margin: 3.5mm 0 4.5mm; font-size: 9.5pt; }
   .tomonlar .yorliq { font-size: 7.5pt; font-weight: 600; letter-spacing: .7pt; text-transform: uppercase; color: #888; }
@@ -216,10 +228,10 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
       ${aloqa ? `<div class="aloqa">${aloqa}</div>` : ''}
     </div>
     <div class="hujjat">
-      <div class="tur">${tt('SAVDO CHEKI')}</div>
-      <div class="raqam">№ ${esc(m.chekRaqami)}</div>
+      <div class="tur">${tolanmagan ? tt('TO‘LOVDAN OLDINGI HISOB') : tt('SAVDO CHEKI')}</div>
+      ${tolanmagan ? '' : `<div class="raqam">№ ${esc(m.chekRaqami)}</div>`}
       <div class="sana">${esc(formatSanaVaVaqt(m.sana))}</div>
-      ${bekor ? `<div class="bekor">${tt('BEKOR QILINGAN')}</div>` : ''}
+      ${bekor ? `<div class="bekor">${tt('BEKOR QILINGAN')}</div>` : `<div class="holat holat-${holat.tur}">${tt(holat.matn)}</div>`}
     </div>
   </header>
 
@@ -244,13 +256,23 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
 
   <footer class="past">
     <div>
-      <div class="rahmat">${tt('Xaridingiz uchun rahmat!')}</div>
+      <div class="rahmat">${tolanmagan ? tt('Bu hisob to‘lovni tasdiqlamaydi') : tt('Xaridingiz uchun rahmat!')}</div>
       ${chekMatn ? `<div class="matn">${chekMatn}</div>` : ''}
     </div>
     ${m.qr && rasmMi(m.qr) ? `<div class="qr"><img src="${m.qr}" alt="" />${tt('Chekni onlayn ko‘rish')}</div>` : ''}
   </footer>
 </div>
 </body></html>`
+}
+
+/**
+ * Tayyor ma'lumotdan A4 chek (masalan to'lovdan oldingi hisob — savatdan,
+ * serverga so'rovsiz). Bosish ichida chaqirilishi shart (qalqib chiquvchi oyna).
+ */
+export async function chekA4niKorsat(m: ChekA4Malumot, dokon: ChekDokonInfo | undefined, til: Til = 'lotin'): Promise<void> {
+  const oyna = bosmaOynasiniOch(til === 'kirill' ? toKirill('Chek tayyorlanmoqda…') : 'Chek tayyorlanmoqda…')
+  if (!oyna) throw new Error('Brauzer yangi oynani to‘sdi — bu sayt uchun qalqib chiquvchi oynalarga ruxsat bering')
+  await oyna.chopEt(chekA4Html(m, dokon, til))
 }
 
 /**

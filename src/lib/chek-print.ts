@@ -52,6 +52,19 @@ export interface ChekData {
   bankTolangan?: number | string
   mijoz?: { ism: string } | null
   kassir?: { telefon?: string | null } | null
+  /** To'lovdan oldingi hisob (savatdan, bazaga yozilmagan) — "TO'LANMAGAN" */
+  tolanmagan?: boolean
+}
+
+/**
+ * Chekdagi to'lov belgisi: to'lovdan oldingi hisob — TO'LANMAGAN; puli hozir
+ * tushmagan sotuv — NASIYA / SHERIK HISOBIGA; qolgani — TO'LANGAN.
+ */
+export function chekHolati(s: { tolanmagan?: boolean; tolovUsuli?: string | null }): { matn: string; tur: 'tolanmagan' | 'qarz' | 'tolangan' } {
+  if (s.tolanmagan) return { matn: "TO'LANMAGAN", tur: 'tolanmagan' }
+  if (s.tolovUsuli === 'NASIYA') return { matn: 'NASIYA', tur: 'qarz' }
+  if (s.tolovUsuli === 'SHERIK') return { matn: 'SHERIK HISOBIGA', tur: 'qarz' }
+  return { matn: "TO'LANGAN", tur: 'tolangan' }
 }
 
 export interface ChekDokonInfo {
@@ -88,6 +101,8 @@ function chekStyle(sz: number): string {
   table{width:100%;border-collapse:collapse}td{vertical-align:top;padding:1px 0;font-size:${sz}px;font-weight:bold}
   .center{text-align:center}.bold{font-weight:bold}.sep{border-top:1px dashed #000;margin:3px 0}
   .total td{font-weight:bold;font-size:${sz + 2}px}
+  /* To'lov holati belgisi — termal printer bir rangli, shuning uchun ramka bilan */
+  .holat{border:2px solid #000;border-radius:1mm;text-align:center;font-size:${sz + 4}px;letter-spacing:2px;padding:2px 0;margin:4px 0}
 </style>`
 }
 
@@ -150,18 +165,23 @@ export function buildChekHtml(opts: ChekPrintOptions): string {
     : `<tr><td>${t("To'lov")}:</td><td style="text-align:right">${tolovLabel(s.tolovUsuli, til)}</td></tr>`
 
   const kassirHtml = kassirTel ? `<div>${t('Kassir tel')}: ${kassirTel}</div>` : ''
+  // To'lovdan oldingi hisob: raqamsiz, to'lov usulisiz — faqat ro'yxat va jami
+  const holat = chekHolati(s)
+  const tolanmagan = holat.tur === 'tolanmagan'
 
-  return chekBoshi(`${t('Chek')} ${s.chekRaqami}`, sz, dokonNomi, manzil, tel) + `
+  return chekBoshi(tolanmagan ? t("To'lanmagan chek") : `${t('Chek')} ${s.chekRaqami}`, sz, dokonNomi, manzil, tel) + `
 <div class="sep"></div>
-<div>${t('Chek')}: ${s.chekRaqami}</div>
+<div class="holat">${t(holat.matn)}</div>
+${tolanmagan ? `<div>${t("To'lovdan oldingi hisob")}</div>` : `<div>${t('Chek')}: ${s.chekRaqami}</div>`}
 <div>${t('Sana')}: ${formatSanaVaVaqt(s.sana)}</div>
 ${kassirHtml}
 <div class="sep"></div>
 <table>${tovarlarHtml}</table>
 <div class="sep"></div>
-<table>${chegirmaHtml}<tr class="total"><td>${t('JAMI')}:</td><td style="text-align:right">${formatSum(s.yakuniySumma)}</td></tr></table>
-<div class="sep"></div>
-<table>${tolov}</table>
+<table>${chegirmaHtml}<tr class="total"><td>${t(tolanmagan ? "TO'LANADI" : 'JAMI')}:</td><td style="text-align:right">${formatSum(s.yakuniySumma)}</td></tr></table>
+${tolanmagan
+    ? `<div class="sep"></div><div class="center" style="font-size:${sz - 1}px">${t("Bu chek to'lovni tasdiqlamaydi")}</div>`
+    : `<div class="sep"></div><table>${tolov}</table>`}
 ${chekMatn ? `<div class="sep"></div><div class="center" style="font-size:${sz - 1}px">${chekMatn}</div>` : ''}
 <div class="sep"></div>
 <div class="center" style="font-size:10px">${t('Rahmat')}!</div>

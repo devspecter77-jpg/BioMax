@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone, playBeep, uzSearch } from '@/lib/utils'
-import { buildChekHtml, chekChopEtish as printChek, type ChekData, type ChekTarkib } from '@/lib/chek-print'
-import { chekniA4ChopEt } from '@/lib/chek-a4'
+import { buildChekHtml, chekChopEtish as printChek, chekHolati, type ChekData, type ChekDokonInfo, type ChekTarkib } from '@/lib/chek-print'
+import { chekA4niKorsat, chekniA4ChopEt, type ChekA4Malumot } from '@/lib/chek-a4'
 import { kodniAjrat } from '@/lib/qr-kod'
 import { toast } from 'sonner'
 import type { Html5Qrcode } from 'html5-qrcode'
@@ -487,6 +487,102 @@ function kirill(text: string): string {
   return result
 }
 
+/**
+ * Chek ko'rinishi (oynada): to'lovdan keyin — "TO'LANGAN" (nasiyada
+ * "NASIYA"), to'lovdan oldingi hisobda — "TO'LANMAGAN": raqamsiz va to'lov
+ * usulisiz. Chop etiladigan chek (lib/chek-print.ts) bilan bir xil tartib.
+ */
+function ChekKorinishi({ s, dokonInfo, til }: { s: SotuvYozuvi; dokonInfo: ChekDokonInfo; til: 'lotin' | 'kirill' }) {
+  const t = (text: string) => til === 'kirill' ? kirill(text) : text
+  const dokonNomi = t(dokonInfo.dokon_nomi || "Do'kon")
+  const manzil = t(dokonInfo.manzil || '')
+  const tel = dokonInfo.telefon || ''
+  const chekMatn = t(dokonInfo.chek_matn || '')
+  const kassirTel = s.kassir?.telefon || ''
+  const holat = chekHolati(s)
+  const tolanmagan = holat.tur === 'tolanmagan'
+  const rang = holat.tur === 'tolangan' ? '#15803d' : holat.tur === 'qarz' ? '#b45309' : '#b91c1c'
+  return (
+    <div className="chek-print bg-white flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ fontFamily: "'Courier New', Consolas, monospace", fontSize: 12, color: '#000', width: '100%', padding: '12px 16px' }}>
+      <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>{dokonNomi}</div>
+      {manzil && <div style={{ textAlign: 'center', fontSize: 11, marginBottom: 1 }}>{manzil}</div>}
+      {tel && <div style={{ textAlign: 'center', fontSize: 11 }}>Tel: {tel}</div>}
+      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+      <div data-chek-holati={holat.tur} style={{ border: `2px solid ${rang}`, color: rang, borderRadius: 4, textAlign: 'center', fontWeight: 'bold', fontSize: 15, letterSpacing: 2, padding: '2px 0', margin: '4px 0' }}>
+        {t(holat.matn)}
+      </div>
+      {tolanmagan ? <div>{t("To'lovdan oldingi hisob")}</div> : <div>{t('Chek')}: {s.chekRaqami}</div>}
+      <div>{t('Sana')}: {formatSanaVaVaqt(s.sana)}</div>
+      {kassirTel && <div>{t('Kassir tel')}: {kassirTel}</div>}
+      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+      {s.tarkiblar?.map(item => {
+        const bonusmi = Number(item.birlikNarxi) === 0
+        // O'ramda sotilgan qator — "2 blok × 75 000"
+        const q = chekQatori(item)
+        const soni = q.oram ? `${q.soni} ${t(q.oram)}` : q.soni
+        return (
+        <div key={item.id} style={{ marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ flex: 1 }}>
+              {t(item.tovar?.nomi || '—')}
+              {bonusmi && <span style={{ fontSize: 10, fontWeight: 'normal', color: '#8b5cf6', marginLeft: 4 }}>({t('Bonus')})</span>}
+            </span>
+          </div>
+          {bonusmi ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8b5cf6' }}>
+              <span>{soni} × {t('Bepul')}</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#555' }}>{soni} × {formatSum(q.narx)}</span>
+              <span style={{ fontWeight: 'bold' }}>{formatSum(item.jami)}</span>
+            </div>
+          )}
+        </div>
+        )
+      })}
+      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+      {Number(s.chegirma) > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>{t('Chegirma')} ({Math.round((Number(s.chegirma) / (Number(s.chegirma) + Number(s.yakuniySumma))) * 100)}%):</span><span>-{formatSum(s.chegirma)}</span>
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 13 }}>
+        <span>{t(tolanmagan ? "TO'LANADI" : 'JAMI')}:</span><span>{formatSum(s.yakuniySumma)}</span>
+      </div>
+      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+      {tolanmagan ? (
+        <div style={{ textAlign: 'center', fontSize: 11 }}>{t("Bu chek to'lovni tasdiqlamaydi")}</div>
+      ) : s.tolovUsuli === 'ARALASH' ? (
+        <>
+          {tolovKanallari(s).map(kanal => (
+            <div key={kanal.usul} style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>{tolovQisqa(kanal.usul, til)}:</span><span>{formatSum(kanal.summa)}</span>
+            </div>
+          ))}
+        </>
+      ) : s.tolovUsuli === 'NASIYA' ? (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t("To'lov")}:</span><span>{t('Nasiya')}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Mijoz')}:</span><span>{t(s.mijoz?.ism || '—')}</span></div>
+        </>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>{t("To'lov")}:</span><span>{tolovLabel(s.tolovUsuli, til)}</span>
+        </div>
+      )}
+      {chekMatn && (
+        <>
+          <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+          <div style={{ textAlign: 'center', fontSize: 11 }}>{chekMatn}</div>
+        </>
+      )}
+      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+      <div style={{ textAlign: 'center', fontSize: 11 }}>{t('Rahmat')}!</div>
+    </div>
+  )
+}
+
 export default function SotuvPage() {
   const [tovarlar, setTovarlar] = useState<Tovar[]>([])
   const [kursi, setKursi] = useState<number>(12700)
@@ -569,6 +665,8 @@ export default function SotuvPage() {
   const [chekYuborish, setChekYuborish] = useState<'tayyor' | 'ketmoqda' | 'yuborildi'>('tayyor')
   /** A4 rasmli chek tayyorlanmoqda (rasmlar serverdan keladi) */
   const [a4Band, setA4Band] = useState(false)
+  // To'lovdan oldingi (to'lanmagan) chek oynasi — savatdan, hech qayerga yozilmaydi
+  const [hisobOyna, setHisobOyna] = useState(false)
   const [dokonInfo, setDokonInfo] = useState<Record<string, string>>({})
   const [editNarx, setEditNarx] = useState<{ kalit: string; val: string } | null>(null)
   const [mobileTab, setMobileTab] = useState<'tovarlar' | 'savat'>('tovarlar')
@@ -1785,6 +1883,74 @@ export default function SotuvPage() {
     }
   }
 
+  /**
+   * To'lovdan oldingi hisob — savatdan. Bazaga ham, "oxirgi sotuv"ga ham
+   * YOZILMAYDI (sotuvlar ro'yxati va mijoz xaridlariga tushmaydi).
+   */
+  function hisobCheki(): SotuvYozuvi {
+    return {
+      id: 'hisob',
+      chekRaqami: '',
+      sana: new Date().toISOString(),
+      tolanmagan: true,
+      tarkiblar: savat.map(x => ({
+        id: qatorKaliti(x),
+        tovarId: x.tovarId,
+        tovar: { nomi: x.nomi },
+        // Sotuv qatori kabi: miqdor asosiy birlikda, o'ram nomi bilan — chekda "2 blok × 75 000"
+        miqdor: asosiyda(x),
+        birlikNarxi: x.oram ? Math.round(x.birlikNarxi / x.oram.miqdor * 100) / 100 : x.birlikNarxi,
+        jami: x.miqdor * x.birlikNarxi,
+        oramNomi: x.oram?.nomi ?? null,
+        oramMiqdori: x.oram?.miqdor ?? null,
+      })),
+      chegirma,
+      yakuniySumma,
+      tolovUsuli,
+      mijoz: tanlanganMijoz ? { ism: tanlanganMijoz.ism } : null,
+      kassir: null,
+    }
+  }
+
+  // To'lanmagan chek — A4 (serverga so'rovsiz, savatdan)
+  async function hisobA4(s: SotuvYozuvi) {
+    if (a4Band) return
+    setA4Band(true)
+    try {
+      const m: ChekA4Malumot = {
+        chekRaqami: '',
+        sana: String(s.sana),
+        holati: 'HISOB',
+        tolanmagan: true,
+        qatorlar: s.tarkiblar.map(q => {
+          const c = chekQatori(q)
+          const tv = tovarlar.find(x => x.id === q.tovarId)
+          return {
+            nomi: q.tovar?.nomi ?? '—', birlik: c.oram ?? tv?.birlik ?? 'DONA', shtrixKod: tv?.shtrixKod ?? null,
+            miqdor: c.soni, birlikNarxi: c.narx, jami: Number(q.jami), rasm: null,
+          }
+        }),
+        jamiSumma,
+        chegirma,
+        ballIshlatilgan: Math.max(0, sodiqlikNatija.jamiChegirma - sodiqlikNatija.keshbek),
+        keshbekIshlatilgan: sodiqlikNatija.keshbek,
+        yakuniySumma: Number(s.yakuniySumma),
+        yetkazishNarx: 0,
+        tolovUsuli: s.tolovUsuli,
+        naqdTolangan: 0, kartaTolangan: 0, clickTolangan: 0, bankTolangan: 0,
+        mijoz: tanlanganMijoz ? { ism: tanlanganMijoz.ism, telefon: tanlanganMijoz.telefon } : null,
+        kassir: null,
+        havola: '',
+        qr: null,
+      }
+      await chekA4niKorsat(m, dokonInfo, til)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'A4 chek chiqmadi')
+    } finally {
+      setA4Band(false)
+    }
+  }
+
   function chekPdfYuklash(s: SotuvYozuvi) {
     const dokonNomi = t(dokonInfo.dokon_nomi || "Do'kon")
     const manzil = t(dokonInfo.manzil || '')
@@ -1812,12 +1978,31 @@ export default function SotuvPage() {
     if (tel) { doc.text('Tel: ' + tel, w / 2, y + 2, { align: 'center' }); y += 4 }
     y = 30
 
+    // === TO'LOV BELGISI: TO'LANGAN / TO'LANMAGAN / NASIYA ===
+    const holat = chekHolati(s)
+    const tolanmagan = holat.tur === 'tolanmagan'
+    const holatRang: [number, number, number] = holat.tur === 'tolangan' ? [21, 128, 61] : holat.tur === 'qarz' ? [180, 83, 9] : [185, 28, 28]
+    doc.setDrawColor(...holatRang)
+    doc.setLineWidth(0.6)
+    doc.roundedRect(mx, y - 4, cw, 7, 1, 1, 'S')
+    doc.setTextColor(...holatRang)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.text(t(holat.matn), w / 2, y + 0.8, { align: 'center' })
+    y += 7
+
     // === META ===
     doc.setTextColor(80, 80, 80)
     doc.setFontSize(8)
-    doc.text(t('Chek') + ':', mx, y)
-    doc.setFont('helvetica', 'bold')
-    doc.text(String(s.chekRaqami || ''), w - mx, y, { align: 'right' })
+    if (tolanmagan) {
+      doc.setFont('helvetica', 'bold')
+      doc.text(t("To'lovdan oldingi hisob"), mx, y)
+    } else {
+      doc.setFont('helvetica', 'normal')
+      doc.text(t('Chek') + ':', mx, y)
+      doc.setFont('helvetica', 'bold')
+      doc.text(String(s.chekRaqami || ''), w - mx, y, { align: 'right' })
+    }
     y += 4
     doc.setFont('helvetica', 'normal')
     doc.text(t('Sana') + ':', mx, y)
@@ -1909,7 +2094,7 @@ export default function SotuvPage() {
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(220, 38, 38)
-    doc.text(t('JAMI') + ':', mx, y)
+    doc.text(t(tolanmagan ? "TO'LANADI" : 'JAMI') + ':', mx, y)
     doc.text(formatSum(s.yakuniySumma), w - mx, y, { align: 'right' })
     y += 6
 
@@ -1921,7 +2106,10 @@ export default function SotuvPage() {
     doc.setFontSize(7.5)
     doc.setTextColor(80, 80, 80)
     doc.setFont('helvetica', 'normal')
-    if (s.tolovUsuli === 'ARALASH') {
+    if (tolanmagan) {
+      doc.text(t("Bu chek to'lovni tasdiqlamaydi"), w / 2, y, { align: 'center' })
+      y += 4
+    } else if (s.tolovUsuli === 'ARALASH') {
       // Har bir kanal alohida qator — naqd+karta, naqd+Click, naqd+o'tkazma
       for (const kanal of tolovKanallari(s)) {
         doc.text(tolovQisqa(kanal.usul, til) + ':', mx, y)
@@ -1967,7 +2155,10 @@ export default function SotuvPage() {
     const pageH = y + 10
     doc.internal.pageSize.height = pageH
 
-    doc.save(`chek-${s.chekRaqami || 'sotuv'}.pdf`)
+    // To'lanmagan chek — raqamsiz: fayl nomida mahalliy sana
+    const bugun = new Date()
+    const sanaNomi = `${bugun.getFullYear()}-${String(bugun.getMonth() + 1).padStart(2, '0')}-${String(bugun.getDate()).padStart(2, '0')}`
+    doc.save(tolanmagan ? `tolanmagan-chek-${sanaNomi}.pdf` : `chek-${s.chekRaqami || 'sotuv'}.pdf`)
   }
 
   // Savat va kassa paneli — BITTA joyda yozilgan, ikki joyda
@@ -2446,6 +2637,15 @@ export default function SotuvPage() {
             )}
 
             <div className="flex gap-2">
+              {/* To'lovdan oldin — mahsulotlar ro'yxati "TO'LANMAGAN" belgisi bilan; sotuv yozilmaydi */}
+              <button
+                type="button"
+                onClick={() => setHisobOyna(true)}
+                title="To‘lanmagan chek — to‘lovdan oldin mahsulotlar ro‘yxati. Sotuv yozilmaydi"
+                className="px-3 py-3 border border-amber-300 dark:border-amber-800/70 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl text-sm font-medium transition flex items-center justify-center gap-1.5 shrink-0"
+              >
+                <Printer size={16} aria-hidden /> Chek
+              </button>
               <button
                 onClick={sotuvYakunla}
                 disabled={yuklanmoqda || !!aralashXato}
@@ -3094,15 +3294,64 @@ export default function SotuvPage() {
         </Modal>
       )}
 
+      {/* To'lanmagan chek — to'lovdan oldin, savatdan; hech qayerga yozilmaydi */}
+      {hisobOyna && savat.length > 0 && (() => {
+        const s = hisobCheki()
+        return (
+          <Modal
+            olcham="sm"
+            belgi={<Printer size={18} className="text-amber-600" />}
+            sarlavha={<>{t('To‘lanmagan chek')}</>}
+            tavsif={t('To‘lovdan oldin — mahsulotlar ro‘yxati. Sotuv yozilmaydi')}
+            onYopish={() => setHisobOyna(false)}
+            footer={<div className="w-full space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => printChek(buildChekHtml({ data: s, dokonInfo, til, fontSize: 11 }))}
+                  className="py-2.5 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-700 dark:text-gray-300"
+                >
+                  <Printer size={15} className="shrink-0" />
+                  <span className="truncate">{t('Chek')} (80 mm)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void hisobA4(s)}
+                  disabled={a4Band}
+                  className="py-2.5 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-700 dark:text-gray-300 disabled:opacity-60"
+                >
+                  {a4Band ? <Loader2 size={15} className="shrink-0 animate-spin" /> : <FileImage size={15} className="shrink-0" />}
+                  <span className="truncate">A4</span>
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => chekPdfYuklash(s)}
+                  className="flex-1 py-2 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-600 dark:text-gray-400"
+                >
+                  <Download size={14} /> PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTil(til === 'lotin' ? 'kirill' : 'lotin')}
+                  className="flex-1 py-2 border border-gray-200 dark:border-neutral-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-neutral-800 transition flex items-center justify-center gap-1.5 text-gray-600 dark:text-gray-400"
+                >
+                  <Languages size={14} /> {til === 'lotin' ? 'Кирилл' : 'Lotin'}
+                </button>
+              </div>
+            </div>}
+          >
+            <div className="-mx-4 sm:-mx-5 -my-4">
+              <ChekKorinishi s={s} dokonInfo={dokonInfo} til={til} />
+            </div>
+          </Modal>
+        )
+      })()}
+
       {/* Chek modal */}
       {chekModal && oxirgiSotuv && (() => {
         const s = oxirgiSotuv
-        const dokonNomi = t(dokonInfo.dokon_nomi || "Do'kon")
-        const manzil = t(dokonInfo.manzil || '')
-        const tel = dokonInfo.telefon || ''
-        const chekMatn = t(dokonInfo.chek_matn || '')
-        const kassirTel = s.kassir?.telefon || ''
-
         return (
           // Telefonda pastdan varaq; chek matni o'rtada scroll bo'ladi, sarlavha va
           // tugmalar qotib turadi — uzun chekda "Yopish" ekrandan chiqib ketmaydi.
@@ -3125,78 +3374,7 @@ export default function SotuvPage() {
                 </button>
               </div>
 
-              <div className="chek-print bg-white flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ fontFamily: "'Courier New', Consolas, monospace", fontSize: 12, color: '#000', width: '100%', padding: '12px 16px' }}>
-                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>{dokonNomi}</div>
-                {manzil && <div style={{ textAlign: 'center', fontSize: 11, marginBottom: 1 }}>{manzil}</div>}
-                {tel && <div style={{ textAlign: 'center', fontSize: 11 }}>Tel: {tel}</div>}
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                <div>{t('Chek')}: {s.chekRaqami}</div>
-                <div>{t('Sana')}: {formatSanaVaVaqt(s.sana)}</div>
-                {kassirTel && <div>{t('Kassir tel')}: {kassirTel}</div>}
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                {s.tarkiblar?.map(item => {
-                  const bonusmi = Number(item.birlikNarxi) === 0
-                  // O'ramda sotilgan qator — "2 blok × 75 000"
-                  const q = chekQatori(item)
-                  const soni = q.oram ? `${q.soni} ${t(q.oram)}` : q.soni
-                  return (
-                  <div key={item.id} style={{ marginBottom: 4 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ flex: 1 }}>
-                        {t(item.tovar?.nomi || '—')}
-                        {bonusmi && <span style={{ fontSize: 10, fontWeight: 'normal', color: '#8b5cf6', marginLeft: 4 }}>({t('Bonus')})</span>}
-                      </span>
-                    </div>
-                    {bonusmi ? (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8b5cf6' }}>
-                        <span>{soni} × {t('Bepul')}</span>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#555' }}>{soni} × {formatSum(q.narx)}</span>
-                        <span style={{ fontWeight: 'bold' }}>{formatSum(item.jami)}</span>
-                      </div>
-                    )}
-                  </div>
-                  )
-                })}
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                {Number(s.chegirma) > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{t('Chegirma')} ({Math.round((Number(s.chegirma) / (Number(s.chegirma) + Number(s.yakuniySumma))) * 100)}%):</span><span>-{formatSum(s.chegirma)}</span>
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 13 }}>
-                  <span>{t('JAMI')}:</span><span>{formatSum(s.yakuniySumma)}</span>
-                </div>
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                {s.tolovUsuli === 'ARALASH' ? (
-                  <>
-                    {tolovKanallari(s).map(kanal => (
-                      <div key={kanal.usul} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{tolovQisqa(kanal.usul, til)}:</span><span>{formatSum(kanal.summa)}</span>
-                      </div>
-                    ))}
-                  </>
-                ) : s.tolovUsuli === 'NASIYA' ? (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t("To'lov")}:</span><span>{t('Nasiya')}</span></div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Mijoz')}:</span><span>{t(s.mijoz?.ism || '—')}</span></div>
-                  </>
-                ) : (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{t("To'lov")}:</span><span>{tolovLabel(s.tolovUsuli, til)}</span>
-                  </div>
-                )}
-                {chekMatn && (
-                  <>
-                    <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                    <div style={{ textAlign: 'center', fontSize: 11 }}>{chekMatn}</div>
-                  </>
-                )}
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                <div style={{ textAlign: 'center', fontSize: 11 }}>{t('Rahmat')}!</div>
-              </div>
+              <ChekKorinishi s={s} dokonInfo={dokonInfo} til={til} />
 
               <div className="shrink-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4 space-y-2 border-t border-gray-100 dark:border-neutral-800">
                 {/* Chek linki */}
