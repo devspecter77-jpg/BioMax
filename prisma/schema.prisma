@@ -670,6 +670,12 @@ model SotuvTarkibi {
   birlikNarxi Decimal  @db.Decimal(12, 2)
   chegirma    Decimal  @default(0) @db.Decimal(12, 2)
   jami        Decimal  @db.Decimal(12, 2)
+  /// Qaysi birlikda sotilgan — o'ram ("blok"); null — asosiy birlikda. `miqdor`
+  /// va `birlikNarxi` baribir ASOSIY birlikda (qoldiq, hisobot, foyda shunga
+  /// tayanadi); chekda "2 blok × 75 000" shu ikki ustundan chiqadi.
+  oramNomi    String?
+  /// 1 o'ramda nechta asosiy birlik — sotuv paytidagi
+  oramMiqdori Decimal? @db.Decimal(12, 3)
 
   sotuv       Sotuv    @relation(fields: [sotuvId], references: [id])
   tovar       Tovar    @relation(fields: [tovarId], references: [id])
@@ -1104,6 +1110,12 @@ model BuyurtmaTarkibi {
   miqdor      Decimal  @db.Decimal(12, 3)
   birlikNarxi Decimal  @db.Decimal(12, 2)
   jami        Decimal  @db.Decimal(12, 2)
+  /// Qaysi birlikda sotilgan — o'ram ("blok"); null — asosiy birlikda. `miqdor`
+  /// va `birlikNarxi` baribir ASOSIY birlikda (qoldiq, hisobot, foyda shunga
+  /// tayanadi); chekda "2 blok × 75 000" shu ikki ustundan chiqadi.
+  oramNomi    String?
+  /// 1 o'ramda nechta asosiy birlik — sotuv paytidagi
+  oramMiqdori Decimal? @db.Decimal(12, 3)
 
   buyurtma    Buyurtma @relation(fields: [buyurtmaId], references: [id], onDelete: Cascade)
   tovar       Tovar    @relation(fields: [tovarId], references: [id])

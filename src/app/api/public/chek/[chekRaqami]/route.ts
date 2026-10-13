@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { chekQatori } from '@/lib/birlik'
 
 // GET — Ommaviy chek ma'lumotlari (auth kerak emas)
 export async function GET(
@@ -58,14 +59,18 @@ export async function GET(
       bankTolangan: sotuv.bankTolangan,
       kassir: sotuv.kassir.ism,
       mijoz: sotuv.mijoz ? { ism: sotuv.mijoz.ism } : null,
-      tarkiblar: sotuv.tarkiblar.map((t) => ({
-        tovar: t.tovar.nomi,
-        birlik: t.tovar.birlik,
-        miqdor: t.miqdor,
-        birlikNarxi: t.birlikNarxi,
-        chegirma: t.chegirma,
-        jami: t.jami,
-      })),
+      tarkiblar: sotuv.tarkiblar.map((t) => {
+        // O'ramda sotilgan qator chekda o'ram bilan: "2 blok × 75 000"
+        const q = chekQatori(t)
+        return {
+          tovar: t.tovar.nomi,
+          birlik: q.oram ?? t.tovar.birlik,
+          miqdor: q.oram ? q.soni : t.miqdor,
+          birlikNarxi: q.oram ? q.narx : t.birlikNarxi,
+          chegirma: t.chegirma,
+          jami: t.jami,
+        }
+      }),
       nasiya: sotuv.nasiya
         ? {
             jamiQarz: sotuv.nasiya.jamiQarz,

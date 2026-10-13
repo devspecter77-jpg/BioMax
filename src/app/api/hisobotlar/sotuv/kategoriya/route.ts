@@ -54,8 +54,8 @@ export async function GET(req: NextRequest) {
         }
         bor.revenue += Number(t.jami)
         bor.qty += Number(t.miqdor)
-        bor.foyda +=
-          (Number(t.birlikNarxi) - Number(t.tovar.kelishNarxi)) * Number(t.miqdor)
+        // Foyda = qator summasi − tannarx ("1 blok — 75 000" ham aniq)
+        bor.foyda += Number(t.jami) - Number(t.tovar.kelishNarxi) * Number(t.miqdor)
         const tv = bor.tovarlar.get(t.tovarId) ?? { nomi: t.tovar.nomi, revenue: 0 }
         tv.revenue += Number(t.jami)
         bor.tovarlar.set(t.tovarId, tv)

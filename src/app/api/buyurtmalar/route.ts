@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
 import { mijozDoirasi, mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
+import { oramlarniOqi } from '@/lib/birlik'
+import { nomKaliti } from '@/lib/utils'
 
 // Saqlab qo'yilgan savat ("zakaz"). Kassir mijoz uchun mahsulot yig'ib
 // qo'yadi, keyin qaytarib yuklab savdoni davom ettiradi.
@@ -78,36 +80,45 @@ export async function POST(req: NextRequest) {
     )
     const tovarlar = await prisma.tovar.findMany({
       where: { id: { in: tovarIdlar }, ...doira },
-      select: { id: true },
+      select: { id: true, oramlar: true },
     })
+    const tovarOramlari = new Map(tovarlar.map(t => [t.id, oramlarniOqi(t.oramlar)]))
     if (tovarlar.length !== tovarIdlar.length) {
       return NextResponse.json({ xato: "Ba'zi mahsulotlar topilmadi" }, { status: 400 })
     }
 
     // Qatorlarni tozalash va jamini SERVERDA hisoblash — client yuborgan
     // "jami" ga ishonilmaydi (aks holda zakaz summasi yolg'on bo'lardi).
-    const tozaQatorlar = tarkiblar
-      .map((t: { tovarId: string; miqdor: unknown; birlikNarxi: unknown }) => {
+    // O'ramda ("2 blok × 75 000") kelgan qator bazada asosiy birlikda saqlanadi:
+    // 120 dona, bir dona narxi, summa — aniq 150 000; o'ram nomi va hajmi bilan.
+    type ZakazQatori = { tovarId: string; miqdor: number; birlikNarxi: number; jami: number; oramNomi: string | null; oramMiqdori: number | null }
+    const tozaQatorlar: ZakazQatori[] = tarkiblar
+      .map((t: { tovarId: string; miqdor: unknown; birlikNarxi: unknown; oramNomi?: unknown }): ZakazQatori => {
         const miqdor = Number(t.miqdor)
         const birlikNarxi = Number(t.birlikNarxi)
+        const soni = Number.isFinite(miqdor) && miqdor > 0 ? miqdor : 0
+        // Bonus qator narxi 0 bo'lishi mumkin — shuning uchun >= 0
+        const narx = Number.isFinite(birlikNarxi) && birlikNarxi >= 0 ? birlikNarxi : 0
+        const oram = t.oramNomi
+          ? tovarOramlari.get(String(t.tovarId))?.find(o => nomKaliti(o.nomi) === nomKaliti(String(t.oramNomi)))
+          : undefined
+        if (!oram) return { tovarId: String(t.tovarId), miqdor: soni, birlikNarxi: narx, jami: soni * narx, oramNomi: null, oramMiqdori: null }
         return {
           tovarId: String(t.tovarId),
-          miqdor: Number.isFinite(miqdor) && miqdor > 0 ? miqdor : 0,
-          // Bonus qator narxi 0 bo'lishi mumkin — shuning uchun >= 0
-          birlikNarxi: Number.isFinite(birlikNarxi) && birlikNarxi >= 0 ? birlikNarxi : 0,
+          miqdor: Math.round(soni * oram.miqdor * 1000) / 1000,
+          birlikNarxi: Math.round(narx / oram.miqdor * 100) / 100,
+          jami: Math.round(soni * narx * 100) / 100,
+          oramNomi: oram.nomi,
+          oramMiqdori: oram.miqdor,
         }
       })
-      .filter((t: { miqdor: number }) => t.miqdor > 0)
-      .map((t: { tovarId: string; miqdor: number; birlikNarxi: number }) => ({
-        ...t,
-        jami: t.miqdor * t.birlikNarxi,
-      }))
+      .filter((t: ZakazQatori) => t.miqdor > 0)
 
     if (tozaQatorlar.length === 0) {
       return NextResponse.json({ xato: "Miqdori bor mahsulot yo'q" }, { status: 400 })
     }
 
-    const jamiSumma = tozaQatorlar.reduce((s: number, t: { jami: number }) => s + t.jami, 0)
+    const jamiSumma = tozaQatorlar.reduce((s, t) => s + t.jami, 0)
 
     const buyurtma = await prisma.buyurtma.create({
       data: {

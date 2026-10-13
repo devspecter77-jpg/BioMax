@@ -12,6 +12,8 @@ import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { katalogBoyicha } from '@/lib/ruxsat-katalogi'
 import { minNarxSomda, ruxsatYoqXabari, sotuvUchunKerak } from '@/lib/ruxsat-amallar'
 import { joriyUsdKursi } from '@/lib/kurs'
+import { oramlarniOqi, type Oram } from '@/lib/birlik'
+import { nomKaliti } from '@/lib/utils'
 
 export async function GET(req: NextRequest) {
   try {
@@ -133,6 +135,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ xato: 'Mijoz topilmadi' }, { status: 404 })
     }
 
+    // Mahsulot o'ramlari (blok, karobka) — qator qaysi birlikda sotilganini
+    // bazadagi o'ramdan aniqlash uchun (brauzer yuborgan hajmga ishonilmaydi)
+    const tovarOramlari = new Map<string, Oram[]>()
+
     // ── Amal ruxsatlari: chegirma/bonus/narx pasaytirish va nasiya ──
     // Bo'lim ruxsatini proxy tekshirgan; bular esa so'rov mazmuniga bog'liq.
     // Narxlar bazadan olinadi — brauzer yuborgan narxga ishonilmaydi.
@@ -145,6 +151,7 @@ export async function POST(req: NextRequest) {
         where: { id: { in: tarkibIdlar } },
         select: { id: true, sotishNarxi: true, optomNarxi: true, bolishNarxi: true, valyuta: true, oramlar: true },
       })
+      for (const t of narxlar) tovarOramlari.set(t.id, oramlarniOqi(t.oramlar))
       const kursi = narxlar.some(t => t.valyuta === 'USD') ? (await joriyUsdKursi()).kursi : 0
       const minNarxlar = new Map(narxlar.map(t => [t.id, minNarxSomda(t, kursi)]))
       for (const kalit of sotuvUchunKerak(data, minNarxlar)) {
@@ -282,6 +289,10 @@ export async function POST(req: NextRequest) {
 
       // 2. Sotuv tarkiblarini kiritish va omborni kamaytirish
       for (const item of data.tarkiblar) {
+        // "2 blok" — miqdor baribir asosiy birlikda (120 dona); o'ram bazada bo'lsagina yoziladi
+        const oram = item.oramNomi
+          ? tovarOramlari.get(item.tovarId)?.find(o => nomKaliti(o.nomi) === nomKaliti(String(item.oramNomi)))
+          : undefined
         await tx.sotuvTarkibi.create({
           data: {
             sotuvId: yangiSotuv.id,
@@ -290,6 +301,8 @@ export async function POST(req: NextRequest) {
             birlikNarxi: parseFloat(item.birlikNarxi),
             chegirma: parseFloat(item.chegirma || 0),
             jami: parseFloat(item.jami),
+            oramNomi: oram?.nomi ?? null,
+            oramMiqdori: oram?.miqdor ?? null,
           },
         })
 

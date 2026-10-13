@@ -74,14 +74,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ xato: 'Asl sotuv topilmadi' }, { status: 404 })
     }
 
-    // Tovar ID → sotuv tarkibi (narx va miqdor manbai)
-    const sotilganMap = new Map<string, { miqdor: number; birlikNarxi: number; jami: number }>()
+    // Tovar ID → sotilgani (narx va miqdor manbai). Bir mahsulot bir nechta
+    // qatorda bo'lishi mumkin ("2 blok" va "5 dona", yoki bonus) — miqdor va
+    // summa qo'shiladi. `aniq` — summa to'langan narxdan: qatorga chegirma
+    // berilmagan (summa = miqdor × narx) yoki o'ramda sotilgan.
+    const sotilganMap = new Map<string, { miqdor: number; birlikNarxi: number; jami: number; qatorlar: number; aniq: boolean }>()
     for (const st of aslSotuv.tarkiblar) {
-      sotilganMap.set(st.tovarId, {
-        miqdor: Number(st.miqdor),
-        birlikNarxi: Number(st.birlikNarxi),
-        jami: Number(st.jami),
-      })
+      const miqdor = Number(st.miqdor)
+      const birlikNarxi = Number(st.birlikNarxi)
+      const jami = Number(st.jami)
+      const aniq = st.oramMiqdori !== null || Math.abs(jami - miqdor * birlikNarxi) < 1
+      const e = sotilganMap.get(st.tovarId)
+      sotilganMap.set(st.tovarId, e
+        ? { miqdor: e.miqdor + miqdor, birlikNarxi, jami: e.jami + jami, qatorlar: e.qatorlar + 1, aniq: e.aniq && aniq }
+        : { miqdor, birlikNarxi, jami, qatorlar: 1, aniq })
     }
 
     // Oldingi qaytarishlar miqdori — limitni aniqlash uchun
@@ -94,6 +100,8 @@ export async function POST(req: NextRequest) {
 
     // Validate + backend'dan narxni qayta tiklash
     const tasdiqlangan: Array<{ tovarId: string; miqdor: number; birlikNarxi: number; jami: number }> = []
+    // Bir so'rovda bitta mahsulot ikki marta kelsa ham limitdan oshmasin
+    const soralgan = new Map<string, number>()
     for (const t of tarkiblar) {
       const tovarId = String(t.tovarId)
       const miqdor = parseFloat(t.miqdor)
@@ -104,23 +112,24 @@ export async function POST(req: NextRequest) {
       if (!asl) {
         return NextResponse.json({ xato: `Tovar sotuvda yo'q (${tovarId})` }, { status: 400 })
       }
-      const qolganLimit = asl.miqdor - (oldinQaytarilgan.get(tovarId) ?? 0)
+      const qolganLimit = asl.miqdor - (oldinQaytarilgan.get(tovarId) ?? 0) - (soralgan.get(tovarId) ?? 0)
+      soralgan.set(tovarId, (soralgan.get(tovarId) ?? 0) + miqdor)
       if (miqdor > qolganLimit + 1e-6) {
         return NextResponse.json(
           { xato: `Qaytariladigan miqdor sotilgandan oshib ketgan (tovar: ${tovarId}, limit: ${qolganLimit})` },
           { status: 400 }
         )
       }
-      const birlikNarxi = asl.birlikNarxi // ← Sotuv tarixidagi narx, client'dan emas
-      // O'ram narxida sotilgan qator: 60 dona — 70 000 (dona 1 166,67 yaxlitlangan).
-      // Qaytarishda to'langan narx olinadi — 60 tasi aynan 70 000, ortiq emas.
-      // Qatorga chegirma berilgan bo'lsa (summa farqi 1 so'mdan katta) — avvalgidek.
-      const aniqNarx = asl.miqdor > 0 && Math.abs(asl.jami - asl.miqdor * birlikNarxi) < 1
+      // ← Sotuv tarixidagi narx, client'dan emas. Bir nechta qator bo'lsa —
+      // o'rtacha (to'langan summa / sotilgan miqdor)
+      const birlikNarxi = asl.qatorlar > 1 && asl.miqdor > 0 ? Math.round(asl.jami / asl.miqdor * 100) / 100 : asl.birlikNarxi
+      // Qaytarishda to'langan narx olinadi: 1 blok 70 000 ga sotilgan bo'lsa,
+      // 60 dona qaytsa aynan 70 000 (1 166,67 × 60 = 70 000,20 emas)
       tasdiqlangan.push({
         tovarId,
         miqdor,
         birlikNarxi,
-        jami: aniqNarx ? Math.round(miqdor * asl.jami / asl.miqdor * 100) / 100 : miqdor * birlikNarxi,
+        jami: asl.aniq && asl.miqdor > 0 ? Math.round(miqdor * asl.jami / asl.miqdor * 100) / 100 : miqdor * birlikNarxi,
       })
     }
 

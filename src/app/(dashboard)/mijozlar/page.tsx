@@ -56,7 +56,7 @@ const BOSH_FORMA = {
   masulId: '',
 }
 
-interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
+interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; oramNomi?: string | null; oramMiqdori?: number | string | null; tovar: { nomi: string; birlik: string } }
 interface QaytarishTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
 interface MijozQaytarish {
   id: string; jamiSumma: number; sabab: string | null; yaratilgan: string
@@ -228,6 +228,8 @@ export default function MijozlarPage() {
           miqdor: t.miqdor,
           birlikNarxi: t.birlikNarxi,
           jami: t.jami,
+          oramNomi: t.oramNomi,
+          oramMiqdori: t.oramMiqdori,
         })),
         chegirma: sotuv.chegirma,
         yakuniySumma: sotuv.yakuniySumma,
@@ -303,6 +305,8 @@ export default function MijozlarPage() {
           miqdor: t.miqdor,
           birlikNarxi: t.birlikNarxi,
           jami: t.jami,
+          oramNomi: t.oramNomi,
+          oramMiqdori: t.oramMiqdori,
         })),
         qaytarishlar: (sv.qaytarishlar || []).map(q => ({
           jamiSumma: q.jamiSumma,

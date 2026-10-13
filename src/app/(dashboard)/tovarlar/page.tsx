@@ -10,9 +10,18 @@ import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
 import { nomKaliti, normalizeUzbek } from '@/lib/utils'
 import { asosiyNom, markaziyNomimi, omborKategoriyasi, type MaqsadOmbor } from '@/lib/tovar-ombori'
-import { birlikMatni, miqdorMatni, narxOrami, oramlarniOqi, oramlarniTekshir, qismlardanJami, type Oram } from '@/lib/birlik'
+import {
+  birlikMatni, birlikNarxlariniJoyla, formaNarxlari, miqdorMatni, musbatYokiNull, oramlarniOqi, oramlarniTekshir,
+  qismlardanJami, sotuvBirliklari, sotuvBirligi, type Oram, type SotishNarxTuri,
+} from '@/lib/birlik'
 import BirlikTanlash, { birlikTakliflariniOl } from '@/components/tovar/BirlikTanlash'
 import OramlarMaydoni, { type OramQatori } from '@/components/tovar/OramlarMaydoni'
+
+/** Formadagi o'ram qatori: o'z narxlari va "kelish narxi shu birlikda" belgisi qatorning o'zida */
+type FormaOrami = OramQatori & { sotish?: string; optom?: string; bolish?: string; kelish?: boolean }
+const NARX_TUR_NOMI: Record<SotishNarxTuri, string> = { sotish: 'Chakana', optom: 'Optom', bolish: 'Bo‘lish' }
+/** Hisoblangan narx — katakda kulrang namuna bo'lib turadi */
+const namunaNarx = (n: number | null) => (n === null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n))
 import MiqdorKiritish from '@/components/tovar/MiqdorKiritish'
 import ViewToggle from '@/components/ViewToggle'
 import Combobox from '@/components/ui/combobox'
@@ -211,45 +220,63 @@ export default function TovarlarPage() {
     nomi: '', kategoriyaId: '', shtrixKod: '', kelishNarxi: '',
     sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
     rasmlar: [] as string[], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '',
-    oramlar: [] as OramQatori[],
-    /** Narxlar qaysi o'ram uchun — `oramlar` qatori indeksi; null — asosiy birlik */
-    narxOrami: null as number | null,
+    oramlar: [] as FormaOrami[],
   })
   // Pastdagi miqdor qo'shimcha birliklarda: { karobka: '5', '': '3' } (lib/birlik.ts)
   const [qoldiqQismlari, setQoldiqQismlari] = useState<Record<string, string>>({})
 
   // Kelish narxi / ustama foiz / sotish narxi — uchtasi bir-biriga bog'liq.
-  // Kelish yoki foiz o'zgarsa -> sotish avtomatik hisoblanadi.
+  // Kelish yoki foiz o'zgarsa -> sotish avtomatik hisoblanadi. Kelish narxi
+  // qaysi birlikda yozilgan bo'lsa (1 dona yoki 1 blok), ustama o'sha birlikning
+  // chakana narxiga qo'llanadi.
+  type Forma = typeof form
+  const chakananiYoz = (f: Forma, qiymat: string): Forma => {
+    const i = f.oramlar.findIndex(q => q.kelish)
+    return i < 0 ? { ...f, sotishNarxi: qiymat } : { ...f, oramlar: f.oramlar.map((q, j) => (j === i ? { ...q, sotish: qiymat } : q)) }
+  }
+  const foizniHisobla = (sotishMatn: string, f: Forma): string => {
+    const sotish = parseFloat(sotishMatn) || 0
+    const kelish = parseFloat(f.kelishNarxi) || 0
+    return kelish > 0 ? String(Math.round(((sotish - kelish) / kelish) * 1000) / 10) : f.foiz
+  }
   function kelishNarxiOzgardi(v: string) {
     const kelish = parseFloat(v) || 0
     const foiz = parseFloat(form.foiz) || 0
-    setForm(f => ({ ...f, kelishNarxi: v, sotishNarxi: kelish > 0 ? String(Math.round(kelish * (1 + foiz / 100))) : f.sotishNarxi }))
+    setForm(f => {
+      const yangi = { ...f, kelishNarxi: v }
+      return kelish > 0 ? chakananiYoz(yangi, String(Math.round(kelish * (1 + foiz / 100)))) : yangi
+    })
   }
   function foizOzgardi(v: string) {
     const foiz = parseFloat(v) || 0
     const kelish = parseFloat(form.kelishNarxi) || 0
-    setForm(f => ({ ...f, foiz: v, sotishNarxi: kelish > 0 ? String(Math.round(kelish * (1 + foiz / 100))) : f.sotishNarxi }))
+    setForm(f => {
+      const yangi = { ...f, foiz: v }
+      return kelish > 0 ? chakananiYoz(yangi, String(Math.round(kelish * (1 + foiz / 100)))) : yangi
+    })
   }
-  // Sotish to'g'ridan-to'g'ri o'zgartirilsa -> foiz avtomatik hisoblanadi.
+  // Sotish to'g'ridan-to'g'ri o'zgartirilsa -> foiz avtomatik hisoblanadi
+  // (kelish narxi shu birlikda yozilgan bo'lsa).
   function sotishNarxiOzgardi(v: string) {
-    const sotish = parseFloat(v) || 0
-    const kelish = parseFloat(form.kelishNarxi) || 0
-    const yangiFoiz = kelish > 0 ? Math.round(((sotish - kelish) / kelish) * 1000) / 10 : null
-    setForm(f => ({ ...f, sotishNarxi: v, foiz: yangiFoiz !== null ? String(yangiFoiz) : f.foiz }))
+    setForm(f => ({ ...f, sotishNarxi: v, foiz: f.oramlar.some(q => q.kelish) ? f.foiz : foizniHisobla(v, f) }))
+  }
+  function oramNarxiOzgardi(i: number, tur: SotishNarxTuri, v: string) {
+    setForm(f => ({
+      ...f,
+      oramlar: f.oramlar.map((q, j) => (j === i ? { ...q, [tur]: v } : q)),
+      foiz: tur === 'sotish' && f.oramlar[i]?.kelish ? foizniHisobla(v, f) : f.foiz,
+    }))
+  }
+  /** Kelish narxi qaysi birlik uchun: o'ram qatori indeksi; null — asosiy birlik */
+  function kelishBirliginiTanla(i: number | null) {
+    setForm(f => ({ ...f, oramlar: f.oramlar.map((q, j) => ({ ...q, kelish: j === i ? true : undefined })) }))
   }
 
-  // Narx birligi tanlangan o'ram QATORIGA ergashadi: nomi o'zgarsa ham, boshqa
-  // qator o'chirilsa ham (OramlarMaydoni o'zgarmagan qatorlarni o'sha obyekt
-  // bilan qaytaradi). Tanlangan qatorning o'zi o'chirilsa — asosiy birlikka.
+  // O'ram qatorlari: narxlari va kelish belgisi qatorning o'zida — nomi
+  // o'zgarsa ham, boshqa qator o'chirilsa ham o'sha qator bilan yuradi
+  // (OramlarMaydoni o'zgarmagan qatorni o'sha obyekt bilan qaytaradi).
   function oramlarOzgardi(yangi: OramQatori[]) {
-    setForm(f => {
-      const eski = f.narxOrami === null ? undefined : f.oramlar[f.narxOrami]
-      const j = eski ? yangi.indexOf(eski) : -1
-      const indeks = f.narxOrami === null ? null
-        : yangi.length === f.oramlar.length ? f.narxOrami
-          : j >= 0 ? j : null
-      return { ...f, oramlar: yangi, narxOrami: indeks }
-    })
+    setForm(f => ({ ...f, oramlar: yangi as FormaOrami[] }))
   }
 
   // Render limit
@@ -433,29 +460,36 @@ export default function TovarlarPage() {
   function ochModal(tovar?: Tovar) {
     if (tovar) {
       setTahrirlash(tovar)
-      const kelish = tovar.kelishNarxi
-      const sotish = tovar.sotishNarxi
-      const foiz = kelish !== null && sotish !== null && kelish > 0 ? Math.round(((sotish - kelish) / kelish) * 1000) / 10 : 15
       const oramQatorlari = oramlarniOqi(tovar.oramlar)
-      // Narxlar o'ram uchun kiritilgan bo'lsa — formada o'sha o'ram narxi (aniq),
-      // aks holda bir asosiy birlik narxi
-      const narxO = narxOrami(oramQatorlari)
-      const narxMatni = (ustun: number | null, aniq: number | null | undefined) =>
-        ustun === null ? '' : String(narxO ? (aniq ?? Math.round(ustun * narxO.miqdor * 100) / 100) : ustun)
+      // Har bir birlikning KIRITILGAN narxi; o'ramdan hisoblangani bo'sh qoladi
+      // (formada kulrang "avtomatik" bo'lib turadi)
+      const fn = formaNarxlari(tovar)
+      const matn = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n))
+      // Ustama — kelish narxi yozilgan birlikning chakana narxiga nisbatan
+      const kelishBirligi = sotuvBirligi(tovar, fn.kelish.birlik)
+      const kelishQiymati = tovar.kelishNarxi === null ? null : fn.kelish.narx
+      const foiz = kelishQiymati !== null && kelishQiymati > 0 && kelishBirligi.sotish !== null
+        ? Math.round(((kelishBirligi.sotish - kelishQiymati) / kelishQiymati) * 1000) / 10 : 15
       setForm({
         nomi: tovar.nomi, kategoriyaId: tovar.kategoriya.id,
-        shtrixKod: tovar.shtrixKod || '', kelishNarxi: narxMatni(kelish, narxO?.narx.kelish),
-        sotishNarxi: narxMatni(sotish, narxO?.narx.sotish),
-        optomNarxi: narxMatni(tovar.optomNarxi, narxO?.narx.optom),
-        bolishNarxi: narxMatni(tovar.bolishNarxi, narxO?.narx.bolish),
+        shtrixKod: tovar.shtrixKod || '', kelishNarxi: matn(kelishQiymati),
+        sotishNarxi: matn(fn.birliklar['']?.sotish),
+        optomNarxi: matn(fn.birliklar['']?.optom),
+        bolishNarxi: matn(fn.birliklar['']?.bolish),
         foiz: String(foiz), valyuta: tovar.valyuta || 'UZS', birlik: tovar.birlik,
         minimalQoldiq: String(tovar.minimalQoldiq), boshlangichQoldiq: '0', qoldiqQoshish: '0',
         rasmlar: tovar.rasmlar || [],
         yaroqlilikMuddati: tovar.yaroqlilikMuddati ? tovar.yaroqlilikMuddati.slice(0, 10) : '',
         taminotchiId: tovar.taminotchi?.id || '',
         keltirilganManzil: tovar.keltirilganManzil || '',
-        oramlar: oramQatorlari.map(o => ({ nomi: o.nomi, miqdor: String(o.miqdor) })),
-        narxOrami: narxO ? oramQatorlari.findIndex(o => o === narxO) : null,
+        oramlar: oramQatorlari.map(o => ({
+          nomi: o.nomi,
+          miqdor: String(o.miqdor),
+          sotish: matn(fn.birliklar[o.nomi]?.sotish),
+          optom: matn(fn.birliklar[o.nomi]?.optom),
+          bolish: matn(fn.birliklar[o.nomi]?.bolish),
+          ...(fn.kelish.birlik === o.nomi ? { kelish: true } : {}),
+        })),
       })
       // Mahsulotning kategoriyasi qaysi omborga tegishli bo'lsa o'sha tanlanadi
       const k = kategoriyalar.find(x => x.id === tovar.kategoriya.id)
@@ -471,7 +505,7 @@ export default function TovarlarPage() {
       setFormaOmbor(k ? (k.ombor?.id ?? (omborMaydoni ? MARKAZIY_QIYMAT : '')) : '')
       setForm({ nomi: '', kategoriyaId: k?.id ?? '', shtrixKod: '',
         kelishNarxi: '', sotishNarxi: '', optomNarxi: '', bolishNarxi: '', foiz: '15', valyuta: 'UZS', birlik: 'DONA', minimalQoldiq: '5', boshlangichQoldiq: '0', qoldiqQoshish: '0',
-        rasmlar: [], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '', oramlar: [], narxOrami: null })
+        rasmlar: [], yaroqlilikMuddati: '', taminotchiId: '', keltirilganManzil: '', oramlar: [] })
     }
     setQoldiqQismlari({})
     setYangiOmbor('')
@@ -615,6 +649,8 @@ export default function TovarlarPage() {
     const oramTekshiruv = oramlarniTekshir(form.oramlar, form.birlik)
     if (!oramTekshiruv.ok) { toast.error(oramTekshiruv.xato); return }
     const kiritilganMiqdor = String(qismlardanJami(qoldiqQismlari, oramTekshiruv.oramlar))
+    // Hech bir birlikda chakana narx bo'lmasa — bir dona narxini hisoblab bo'lmaydi
+    if (formaNarxlariniKorinish.asosiySotish === null) { toast.error('Sotish narxini kiriting — 1 dona yoki o‘ram uchun'); return }
     setSaqlanmoqda(true)
     try {
       const url = tahrirlash ? `/api/tovarlar/${tahrirlash.id}` : '/api/tovarlar'
@@ -625,8 +661,8 @@ export default function TovarlarPage() {
       const tana = {
         ...form,
         oramlar: oramTekshiruv.oramlar,
-        // Narxlar qaysi o'ram uchun ("1 blok — 75 000"); bo'sh — asosiy birlik
-        narxBirligi: tanlanganNarxBirligi?.nomi ?? '',
+        // Har bir birlikning o'z narxi va kelish narxi qaysi birlikda yozilgani
+        narxlar: formaNarxKiritmasi(),
         ...(tahrirlash ? { qoldiqQoshish: kiritilganMiqdor } : { boshlangichQoldiq: kiritilganMiqdor }),
         kategoriyaId: yangiKategoriya ? '' : form.kategoriyaId,
         ...(yangiKategoriya ? { yangiKategoriya } : {}),
@@ -832,29 +868,43 @@ export default function TovarlarPage() {
     }
   }
 
-  // Narx birligi tanlovi: yaroqli o'ram qatorlari (kichigidan), indeksi bilan
+  // Narx jadvali: yaroqli o'ram qatorlari (kichigidan), indeksi bilan
   const asosiyBirlikMatni = birlikMatni(form.birlik)
   const narxBirliklari = form.oramlar
-    .map((q, i) => ({ i: i as number | null, nomi: q.nomi.trim().toLowerCase(), miqdor: Number(q.miqdor.replace(',', '.')) }))
+    .map((q, i) => ({ i, nomi: q.nomi.trim().toLowerCase(), miqdor: Number(q.miqdor.replace(',', '.')) }))
     .filter(q => q.nomi && nomKaliti(q.nomi) !== nomKaliti(asosiyBirlikMatni) && Number.isFinite(q.miqdor) && q.miqdor > 0)
     .sort((a, b) => a.miqdor - b.miqdor)
-  const tanlanganNarxBirligi = narxBirliklari.find(b => b.i === form.narxOrami) ?? null
-  // Narx yorlig'i: o'ram bo'lsa — qaysi birlik uchun ekani doim yoziladi
-  const narxYorligi = narxBirliklari.length > 0 ? ` (1 ${tanlanganNarxBirligi?.nomi ?? asosiyBirlikMatni})` : ''
-  // Kassada qanday sotiladi: tanlangan birlik narxidan har bir birlik narxi
-  const sotishKorinishi = (() => {
-    const sotish = parseFloat(form.sotishNarxi)
-    if (narxBirliklari.length === 0 || !(sotish > 0)) return ''
-    const bolinadi = tanlanganNarxBirligi?.miqdor ?? 1
-    return [{ nomi: asosiyBirlikMatni, miqdor: 1 }, ...narxBirliklari]
-      .map(b => `1 ${b.nomi} — ${formatNarx(Math.round(sotish * b.miqdor / bolinadi * 100) / 100, form.valyuta)}`)
-      .join(' · ')
-  })()
+  // Kelish narxi qaysi birlikda yozilgan (o'ram yo'q bo'lsa — yorliq qo'shilmaydi)
+  const kelishBirligi = narxBirliklari.find(b => form.oramlar[b.i]?.kelish) ?? null
+  const kelishYorligi = narxBirliklari.length > 0 ? ` (1 ${kelishBirligi?.nomi ?? asosiyBirlikMatni})` : ''
 
   // Formadagi yaroqli qo'shimcha birliklar — pastdagi miqdor shu bo'yicha kiritiladi
   const formaOramlari: Oram[] = (() => {
     const t = oramlarniTekshir(form.oramlar.filter(q => q.nomi.trim() && q.miqdor.trim()), form.birlik)
     return t.ok ? t.oramlar : oramlarniOqi(form.oramlar.map(q => ({ nomi: q.nomi.trim().toLowerCase(), miqdor: Number(q.miqdor.replace(',', '.')) })))
+  })()
+
+  // API'ga: har bir birlik narxi ('' — asosiy birlik) va kelish narxi birligi
+  function formaNarxKiritmasi() {
+    const kelishQatori = form.oramlar.find(q => q.kelish && q.nomi.trim())
+    return {
+      kelish: { birlik: kelishQatori?.nomi.trim() ?? '', narx: form.kelishNarxi },
+      birliklar: [
+        { birlik: '', sotish: form.sotishNarxi, optom: form.optomNarxi, bolish: form.bolishNarxi },
+        ...form.oramlar.filter(q => q.nomi.trim()).map(q => ({ birlik: q.nomi.trim(), sotish: q.sotish ?? '', optom: q.optom ?? '', bolish: q.bolish ?? '' })),
+      ],
+    }
+  }
+  // Kassada har bir birlik qanchadan sotiladi — bo'sh katakdagi kulrang qiymat shu
+  const formaNarxlariniKorinish = (() => {
+    const k = formaNarxKiritmasi()
+    const j = birlikNarxlariniJoyla(formaOramlari, k.birliklar.map(b => ({
+      birlik: b.birlik, sotish: musbatYokiNull(b.sotish), optom: musbatYokiNull(b.optom), bolish: musbatYokiNull(b.bolish),
+    })), { birlik: '', narx: null })
+    return {
+      asosiySotish: j.asosiy.sotish,
+      birliklar: sotuvBirliklari({ sotishNarxi: j.asosiy.sotish, optomNarxi: j.asosiy.optom, bolishNarxi: j.asosiy.bolish, oramlar: j.oramlar }),
+    }
   })()
 
   // Formadagi ombor ro'yxati: "Markaziy ombor" va FAOL omborlar. Istisno:
@@ -1310,13 +1360,10 @@ export default function TovarlarPage() {
                     </td>
                     <td className="px-3 py-3 text-right text-green-600 text-sm font-semibold whitespace-nowrap">
                       {narxKorsat(t.sotishNarxi, t.valyuta)}
-                      {(() => {
-                        // Narx o'ram uchun kiritilgan: ostida "1 blok — 75 000"
-                        const o = narxOrami(oramlarniOqi(t.oramlar))
-                        return o?.narx.sotish != null
-                          ? <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">1 {o.nomi} — {narxKorsat(o.narx.sotish, t.valyuta)}</span>
-                          : null
-                      })()}
+                      {/* O'ramlar narxi: "1 blok — 75 000" (kiritilgani yoki hisoblangani) */}
+                      {sotuvBirliklari(t).slice(1).map(b => b.sotish !== null && (
+                        <span key={b.nomi} className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">1 {b.nomi} — {narxKorsat(b.sotish, t.valyuta)}</span>
+                      ))}
                     </td>
                     {/* Ranglar mahsulot kartasi va tafsilot oynasidagi bilan bir xil:
                         optom — ko'k, bo'lish — sariq. Kiritilmagan narx "—". */}
@@ -1764,38 +1811,9 @@ export default function TovarlarPage() {
                   </button>
                 </div>
               </div>
-              {/* Narxlar qaysi birlik uchun — o'ram bo'lsa: "1 blok — 75 000" yozilsa,
-                  kassada 1 dona 1 250 dan, butun blok aynan 75 000 dan sotiladi */}
-              {narxBirliklari.length > 0 && (
-                <div>
-                  <p id="narx-birligi-yorliq" className="text-gray-700 dark:text-gray-300 text-sm mb-1.5 font-medium">Narxlar qaysi birlik uchun</p>
-                  <div role="radiogroup" aria-labelledby="narx-birligi-yorliq" className="flex flex-wrap gap-1.5">
-                    {[{ i: null as number | null, nomi: asosiyBirlikMatni, miqdor: 1 }, ...narxBirliklari].map(b => {
-                      const tanlangan = (tanlanganNarxBirligi?.i ?? null) === b.i
-                      return (
-                        <button
-                          key={b.i ?? 'asosiy'}
-                          type="button"
-                          role="radio"
-                          aria-checked={tanlangan}
-                          onClick={() => setForm(f => ({ ...f, narxOrami: b.i }))}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${tanlangan
-                            ? 'bg-primary text-white'
-                            : 'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
-                        >
-                          1 {b.nomi}{b.i !== null && <span className="opacity-75"> · {b.miqdor} {asosiyBirlikMatni}</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-                    Narxni qaysi birlik uchun bilsangiz — shuni tanlang. Kassada {asosiyBirlikMatni} ham, butun o‘ram ham to‘g‘ri narxda sotiladi.
-                  </p>
-                </div>
-              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kelish narxi{narxYorligi} *</label>
+                  <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Kelish narxi{kelishYorligi} *</label>
                   {/* MoneyInput for formatted currency entry */}
                   <MoneyInput
                     value={form.kelishNarxi}
@@ -1823,8 +1841,85 @@ export default function TovarlarPage() {
                   </div>
                 </div>
               </div>
+              {/* Kelish narxi qaysi birlik uchun — o'ram bo'lsa ("1 blok — 60 000") */}
+              {narxBirliklari.length > 0 && (
+                <div>
+                  <p id="kelish-birligi-yorliq" className="text-gray-500 dark:text-gray-400 text-xs mb-1">Kelish narxi qaysi birlik uchun</p>
+                  <div role="radiogroup" aria-labelledby="kelish-birligi-yorliq" className="flex flex-wrap gap-1.5">
+                    {[{ i: null as number | null, nomi: asosiyBirlikMatni, miqdor: 1 }, ...narxBirliklari].map(b => {
+                      const tanlangan = (kelishBirligi?.i ?? null) === b.i
+                      return (
+                        <button
+                          key={b.i ?? 'asosiy'}
+                          type="button"
+                          role="radio"
+                          aria-checked={tanlangan}
+                          onClick={() => kelishBirliginiTanla(b.i)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${tanlangan
+                            ? 'bg-primary text-white'
+                            : 'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
+                        >
+                          1 {b.nomi}{b.i !== null && <span className="opacity-75"> · {b.miqdor} {asosiyBirlikMatni}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {narxBirliklari.length > 0 ? (
+                /* Har bir birlikning o'z narxi: 1 dona — 1 300, 1 blok — 75 000.
+                   Bo'sh katak — hisoblanadi (kulrang): eng kichik narxli o'ramdan
+                   yoki asosiy birlikdan. */
+                <div>
+                  <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">Sotish narxlari *</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mb-2">
+                    Kassada har bir birlik o‘z narxida sotiladi. Bo‘sh katakdagi kulrang narx — avtomatik hisoblangani.
+                  </p>
+                  <div className="space-y-2">
+                    {[{ i: null as number | null, nomi: asosiyBirlikMatni, miqdor: 1 }, ...narxBirliklari].map(b => {
+                      const korinish = b.i === null
+                        ? formaNarxlariniKorinish.birliklar[0]
+                        : formaNarxlariniKorinish.birliklar.find(x => x.nomi && nomKaliti(x.nomi) === nomKaliti(b.nomi))
+                      const qiymat = (tur: SotishNarxTuri) => b.i === null
+                        ? (tur === 'sotish' ? form.sotishNarxi : tur === 'optom' ? form.optomNarxi : form.bolishNarxi)
+                        : (form.oramlar[b.i]?.[tur] ?? '')
+                      const ozgartir = (tur: SotishNarxTuri, v: string) => {
+                        if (b.i !== null) oramNarxiOzgardi(b.i, tur, v)
+                        else if (tur === 'sotish') sotishNarxiOzgardi(v)
+                        else setForm(f => ({ ...f, [tur === 'optom' ? 'optomNarxi' : 'bolishNarxi']: v }))
+                      }
+                      return (
+                        <div key={b.i ?? 'asosiy'} className="rounded-xl border border-gray-200 dark:border-neutral-800 px-3 py-2.5">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1.5">
+                            1 {b.nomi}{b.i !== null && <span className="font-normal text-gray-500 dark:text-gray-400"> · {b.miqdor} {asosiyBirlikMatni}</span>}
+                          </p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(['sotish', 'optom', 'bolish'] as const).map(tur => (
+                              <div key={tur} className="min-w-0">
+                                <label htmlFor={`narx-${b.i ?? 'asosiy'}-${tur}`} className="block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">{NARX_TUR_NOMI[tur]}</label>
+                                <MoneyInput
+                                  id={`narx-${b.i ?? 'asosiy'}-${tur}`}
+                                  value={qiymat(tur)}
+                                  onChange={v => ozgartir(tur, v)}
+                                  placeholder={namunaNarx(korinish?.[tur] ?? null)}
+                                  suffix=""
+                                  className="px-2"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                    Narxlar {form.valyuta === 'USD' ? 'dollarda ($)' : 'so‘mda'}.
+                  </p>
+                </div>
+              ) : (
+                <>
               <div>
-                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Sotish narxi{narxYorligi} *</label>
+                <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">Sotish narxi *</label>
                 {/* MoneyInput for formatted currency entry */}
                 <MoneyInput
                   value={form.sotishNarxi}
@@ -1838,14 +1933,11 @@ export default function TovarlarPage() {
                     ≈ {formatSum(Math.round((parseFloat(form.sotishNarxi) || 0) * kursi))} (joriy kurs: {formatSum(kursi)}/$)
                   </p>
                 )}
-                {sotishKorinishi && (
-                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 tabular-nums">Kassada: {sotishKorinishi}</p>
-                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
-                    Optom narxi{narxYorligi} <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
+                    Optom narxi <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
                   </label>
                   <MoneyInput
                     value={form.optomNarxi}
@@ -1856,7 +1948,7 @@ export default function TovarlarPage() {
                 </div>
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
-                    Bo&apos;lish narxi{narxYorligi} <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
+                    Bo&apos;lish narxi <span className="text-gray-400 font-normal">(ixtiyoriy)</span>
                   </label>
                   <MoneyInput
                     value={form.bolishNarxi}
@@ -1866,6 +1958,8 @@ export default function TovarlarPage() {
                   />
                 </div>
               </div>
+                </>
+              )}
               <div>
                 <label className="text-gray-700 dark:text-gray-300 text-sm mb-1 block font-medium">
                   Rasmlar <span className="text-gray-400 font-normal">(ixtiyoriy, maksimal {MAX_RASM} ta)</span>

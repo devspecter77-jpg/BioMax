@@ -23,9 +23,9 @@ import {
   type SodiqlikSozlama, type SodiqlikQoida,
 } from '@/lib/sodiqlik'
 import {
-  birlikKasrlimi, birlikMatni, birlikNarxiga, miqdorMatni as oramdaYoz, oramlarniOqi, oramlarTartibda, paketNarxi, qatorSummasi,
-  type Paket,
+  birlikKasrlimi, birlikMatni, chekQatori, miqdorMatni as oramdaYoz, oramlarniOqi, oramlarTartibda, sotuvBirliklari, sotuvBirligi,
 } from '@/lib/birlik'
+import { nomKaliti } from '@/lib/utils'
 import {
   POS_TOLOV_USULLARI, KANAL_USULLARI, TOLOV_MALUMOTI,
   tolovLabel, tolovQisqa, tolovBadge, tolovTaqsimoti, tolovKanallari,
@@ -50,45 +50,31 @@ const NARX_TURI_LABEL: Record<NarxTuri, string> = { sotish: 'Chakana', optom: 'O
 interface SotuvTarkibi extends ChekTarkib {
   id: string
   tovarId: string
+  tovar?: { nomi: string; birlik?: string } | null
 }
 interface SotuvYozuvi extends ChekData {
   id: string
   tarkiblar: SotuvTarkibi[]
 }
 
-// Tanlangan narx turi bo'yicha narxni tanlaydi — o'sha tur uchun mahsulotda
-// narx kiritilmagan bo'lsa, oddiy sotish narxiga qaytadi.
-function narxTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number): number {
-  // Narx o'ram uchun kiritilgan ("1 blok — 75 000") — bir dona narxi undan
-  const paket = paketTuriBoyicha(tovar, turi, kursi)
-  if (paket) return birlikNarxiga(paket.narx, paket.miqdor)
-  const asosiy = turi === 'optom' && tovar.optomNarxi != null ? tovar.optomNarxi
-    : turi === 'bolish' && tovar.bolishNarxi != null ? tovar.bolishNarxi
-    : tovar.sotishNarxi
-  return tovar.valyuta === 'USD' ? Math.round(asosiy * kursi) : asosiy
+// Tanlangan narx turi bo'yicha narx — sotilayotgan birlikniki (1 dona yoki
+// 1 blok, lib/birlik.ts). O'sha tur uchun narx bo'lmasa — o'sha birlikning
+// oddiy sotish (chakana) narxi.
+function narxTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number, oramNomi?: string | null): number {
+  const b = sotuvBirligi(tovar, oramNomi)
+  const narx = b[amaldagiNarxTuri(tovar, turi, oramNomi)] ?? b.sotish ?? tovar.sotishNarxi
+  return tovar.valyuta === 'USD' ? Math.round(narx * kursi) : narx
 }
 
 /**
- * Amalda qo'llanadigan narx turi: mahsulotda tanlangan tur uchun narx
- * kiritilmagan bo'lsa, chakana narx olinadi. Savat qatoridagi "Optom"
- * belgisi shu bilan to'g'ri chiqadi — narx chakana bo'lib, belgi "Optom"
- * deb turmaydi.
+ * Amalda qo'llanadigan narx turi: mahsulotda (shu birlikda) tanlangan tur
+ * uchun narx kiritilmagan bo'lsa, chakana narx olinadi. Savat qatoridagi
+ * "Optom" belgisi shu bilan to'g'ri chiqadi — narx chakana bo'lib, belgi
+ * "Optom" deb turmaydi.
  */
-function amaldagiNarxTuri(tovar: Tovar, turi: NarxTuri): NarxTuri {
-  if (turi === 'optom' && tovar.optomNarxi == null) return 'sotish'
-  if (turi === 'bolish' && tovar.bolishNarxi == null) return 'sotish'
-  return turi
-}
-
-/**
- * Narx o'ram uchun kiritilgan bo'lsa — o'ram va uning aniq narxi, so'mda.
- * Savat qatori summasi shundan hisoblanadi: 60 dona (1 blok) aynan 75 000,
- * 1 dona — 1 250 (lib/birlik.ts → qatorSummasi).
- */
-function paketTuriBoyicha(tovar: Tovar, turi: NarxTuri, kursi: number): Paket | undefined {
-  const p = paketNarxi(oramlarniOqi(tovar.oramlar), amaldagiNarxTuri(tovar, turi))
-  if (!p) return undefined
-  return tovar.valyuta === 'USD' ? { narx: Math.round(p.narx * kursi), miqdor: p.miqdor } : p
+function amaldagiNarxTuri(tovar: Tovar, turi: NarxTuri, oramNomi?: string | null): NarxTuri {
+  if (turi === 'sotish') return turi
+  return sotuvBirligi(tovar, oramNomi)[turi] === null ? 'sotish' : turi
 }
 
 // API narxlarni Prisma Decimal sifatida — satr ko'rinishida ("12000.00")
@@ -118,14 +104,17 @@ async function sotuvTovarlariniOl(): Promise<Tovar[]> {
 }
 interface Mijoz { id: string; ism: string; telefon: string | null; telefon2?: string | null; qoshimchaTelefonlar?: string[]; manzil?: string | null; lokatsiyaLat?: number | null; lokatsiyaLng?: number | null }
 interface SavatItem {
+  /** `miqdor` va `birlikNarxi` — qator birligida (2 blok × 75 000); `mavjudQoldiq` — asosiy birlikda */
   tovarId: string; nomi: string; birlikNarxi: number; miqdor: number; birlik: string; chegirma: number; jami: number; mavjudQoldiq: number; bonus?: boolean
   narxTuri?: NarxTuri
-  /** Narx o'ram uchun kiritilgan — summa shundan aniq hisoblanadi; narx qo'lda o'zgartirilsa yo'qoladi */
-  paket?: Paket
+  /** Qaysi birlikda sotilmoqda: o'ram (1 blok = 60 dona); yo'q bo'lsa — asosiy birlikda (dona) */
+  oram?: { nomi: string; miqdor: number }
 }
 
-/** Qator summasi — o'ram narxi bo'lsa aniq (60 dona = 75 000), aks holda miqdor × narx */
-const qatorJami = (s: { miqdor: number; birlikNarxi: number; paket?: Paket }) => qatorSummasi(s.miqdor, s.birlikNarxi, s.paket)
+/** Qator miqdori asosiy birlikda: 2 blok → 120 dona (qoldiq, hisobot shunga qaraydi) */
+const asosiyda = (s: { miqdor: number; oram?: { miqdor: number } }) => Math.round(s.miqdor * (s.oram?.miqdor ?? 1) * 1000) / 1000
+/** Savat qatori kaliti: bir mahsulot har xil birlikda (dona, blok) va bonus bo'lib alohida qatorda turadi */
+const qatorKaliti = (s: { tovarId: string; oram?: { nomi: string }; bonus?: boolean }) => `${s.tovarId}|${s.oram?.nomi ?? ''}|${s.bonus ? 'b' : ''}`
 // Saqlab qo'yilgan zakaz — serverda (Buyurtma jadvali). Brauzer
 // xotirasida emas: boshqa kassir yoki qurilmadan ham ochilsin.
 interface SaqlanganZakaz {
@@ -138,8 +127,12 @@ interface SaqlanganZakaz {
   tarkiblar: Array<{
     id: string
     tovarId: string
+    /** Asosiy birlikda (o'ramda saqlangan bo'lsa ham: 2 blok → 120) */
     miqdor: number | string
     birlikNarxi: number | string
+    jami?: number | string
+    oramNomi?: string | null
+    oramMiqdori?: number | string | null
     tovar: { id: string; nomi: string; birlik: string }
   }>
 }
@@ -189,45 +182,77 @@ const kasrliBirlikmi = birlikKasrlimi
 const miqdorYaxlitla = (n: number) => Math.round(n * 1000) / 1000
 const miqdorniOqi = (matn: string) => parseFloat(matn.replace(',', '.'))
 
-/** Skanerlangan miqdor savatga sig'adimi; sig'masa — kassirga ko'rsatiladigan sabab. */
-function skanMiqdorXatosi(miqdor: number, tovar: Tovar, savatda: number): string | null {
-  const birlik = tovar.birlik.toLowerCase()
-  const qolgan = miqdorYaxlitla(tovar.qoldiq - savatda)
+/**
+ * Skanerlangan miqdor savatga sig'adimi; sig'masa — kassirga ko'rsatiladigan sabab.
+ * `savatda` — asosiy birlikda (barcha qatorlar); `miqdor` va xabar — tanlangan
+ * birlikda ("Omborda faqat 3 blok bor"). `hajm` — 1 birlikda nechta asosiy birlik.
+ */
+function skanMiqdorXatosi(miqdor: number, tovar: Tovar, savatda: number, hajm = 1, birlik = tovar.birlik.toLowerCase()): string | null {
+  const qolganAsosiy = miqdorYaxlitla(tovar.qoldiq - savatda)
+  const qolgan = hajm === 1 ? qolganAsosiy : Math.floor(qolganAsosiy / hajm + 1e-9)
   if (!Number.isFinite(miqdor) || miqdor <= 0) return 'Miqdorni kiriting'
-  if (!kasrliBirlikmi(tovar.birlik) && !Number.isInteger(miqdor)) return 'Butun son kiriting'
+  if ((hajm !== 1 || !kasrliBirlikmi(tovar.birlik)) && !Number.isInteger(miqdor)) return 'Butun son kiriting'
   if (miqdor > qolgan) {
     return savatda > 0
-      ? `Savatda ${savatda} ${birlik} bor — yana faqat ${qolgan} ${birlik} qo'shish mumkin`
+      ? `Savatda ${savatda} ${tovar.birlik.toLowerCase()} bor — yana faqat ${qolgan} ${birlik} qo'shish mumkin`
       : `Omborda faqat ${qolgan} ${birlik} bor`
   }
   return null
 }
 
+/**
+ * Qaytarish uchun sotuv qatorlari mahsulot bo'yicha jamlanadi: bir mahsulot
+ * "2 blok" va "5 dona" bo'lib ikki qatorda sotilgan bo'lishi mumkin. Miqdor —
+ * asosiy birlikda, narx — o'rtacha (to'langan summa / miqdor).
+ */
+function qaytarishQatorlari(tarkiblar: SotuvTarkibi[]) {
+  const m = new Map<string, { tovarId: string; nomi: string; miqdor: number; jami: number; birlikNarxi: number; qismlar: string[]; oramli: boolean }>()
+  for (const t of tarkiblar) {
+    const q = chekQatori(t)
+    const qism = q.oram ? `${q.soni} ${q.oram}` : `${Number(t.miqdor)} ${birlikMatni(t.tovar?.birlik)}`
+    const e = m.get(t.tovarId)
+    if (e) {
+      e.miqdor = miqdorYaxlitla(e.miqdor + Number(t.miqdor))
+      e.jami += Number(t.jami)
+      e.birlikNarxi = e.miqdor > 0 ? Math.round(e.jami / e.miqdor * 100) / 100 : 0
+      e.qismlar.push(qism)
+      e.oramli ||= !!q.oram
+    } else {
+      m.set(t.tovarId, {
+        tovarId: t.tovarId, nomi: t.tovar?.nomi || '—', miqdor: Number(t.miqdor), jami: Number(t.jami),
+        birlikNarxi: Number(t.birlikNarxi), qismlar: [qism], oramli: !!q.oram,
+      })
+    }
+  }
+  return [...m.values()]
+}
+
 interface SkanMiqdorProps {
   tovar: Tovar
   bonus: boolean
-  /** Bir birlik narxi, so'mda (bonusda 0) */
-  narx: number
-  /** Narx o'ram uchun kiritilgan bo'lsa — aniq o'ram narxi (summa aniq chiqsin) */
-  paket?: Paket | null
+  /** Qaysi birliklarda sotiladi va 1 birlik narxi, so'mda (bonusda 0): dona, blok… Birinchisi — asosiy birlik */
+  birliklar: { nomi: string; miqdor: number; narx: number }[]
+  /** Oyna ochilganda tanlangan birlik ('' — asosiy) */
+  boshlangichBirlik: string
   /** Qaysi narx: "Chakana" / "Optom" / "Bo'lish" */
   narxYorligi: string
-  /** Savatdagi shu mahsulot qatorining miqdori */
+  /** Savatdagi shu mahsulot — asosiy birlikda, barcha qatorlari */
   savatda: number
   /** Oyna ochilgandagi miqdor */
   boshlangich: string
-  onTasdiq: (miqdor: number) => void
+  onTasdiq: (miqdor: number, birlik: string) => void
   onYop: () => void
   /**
    * Oyna ochiq turganda USB skaner yangi kod o'qidi. `true` — xuddi shu
    * mahsulot (miqdor +1 bo'ladi).
    */
-  onSkan: (oldingiMatn: string, kod: string) => Promise<boolean>
+  onSkan: (oldingiMatn: string, kod: string, birlik: string) => Promise<boolean>
 }
 
 /**
  * Skaner o'qigan mahsulot uchun miqdor so'raydi: Enter — savatga qo'shadi,
- * Esc — bekor qiladi.
+ * Esc — bekor qiladi. Mahsulot blok/karobkada ham sotilsa — tepada birlik
+ * tanlanadi, miqdor va narx o'sha birlikda (2 blok × 75 000).
  *
  * USB skaner klaviatura kabi yozadi: oyna ochiq paytda keyingi mahsulot
  * skanerlansa, uning 13 xonali kodi shu maydonga "miqdor" bo'lib tushardi.
@@ -237,20 +262,26 @@ interface SkanMiqdorProps {
  * sekin bo'shliq (brauzer band bo'lgan lahza) skanni buzmasligi uchun har bir
  * bo'shliq emas, o'rtacha tezlik o'lchanadi.
  */
-function SkanMiqdorOynasi({ tovar, bonus, narx, paket, narxYorligi, savatda, boshlangich, onTasdiq, onYop, onSkan }: SkanMiqdorProps) {
+function SkanMiqdorOynasi({ tovar, bonus, birliklar, boshlangichBirlik, narxYorligi, savatda, boshlangich, onTasdiq, onYop, onSkan }: SkanMiqdorProps) {
   // Matn shu yerda saqlanadi, sahifada emas: har tugma bosilishi butun
   // kassani qayta chizmasin — og'ir render skaner belgilarini sekinlashtirib,
   // ularni odam yozuvidan ajratib bo'lmay qolardi.
   const [matn, setMatn] = useState(boshlangich)
+  const [birlikNomi, setBirlikNomi] = useState(boshlangichBirlik)
   const inputRef = useRef<HTMLInputElement>(null)
   const tezYozuv = useRef({ oldingi: '', kod: '', boshi: 0, vaqt: 0 })
-  const kasrli = kasrliBirlikmi(tovar.birlik)
-  const birlik = birlikMatni(tovar.birlik)
-  const qolgan = miqdorYaxlitla(tovar.qoldiq - savatda)
-  // Qo'shimcha birliklar: "1 karobka" bosilsa — 24 dona
+  const tanlangan = birliklar.find(b => b.nomi === birlikNomi) ?? birliklar[0]
+  const hajm = tanlangan.miqdor
+  const asosiyMatn = birlikMatni(tovar.birlik)
+  const birlik = tanlangan.nomi || asosiyMatn
+  const narx = tanlangan.narx
+  const kasrli = hajm === 1 && kasrliBirlikmi(tovar.birlik)
+  const qolganAsosiy = miqdorYaxlitla(tovar.qoldiq - savatda)
+  const qolgan = hajm === 1 ? qolganAsosiy : Math.floor(qolganAsosiy / hajm + 1e-9)
+  // Asosiy birlikda kiritilganda o'ramlarda ko'rinishi: "2 karobka 5 dona"
   const oramlar = oramlarTartibda(oramlarniOqi(tovar.oramlar))
   const miqdor = miqdorniOqi(matn)
-  const xato = skanMiqdorXatosi(miqdor, tovar, savatda)
+  const xato = skanMiqdorXatosi(miqdor, tovar, savatda, hajm, birlik)
   const tezTanlov = kasrli ? [0.5, 1, 2, 5] : [1, 2, 5, 10]
 
   useEffect(() => {
@@ -279,7 +310,7 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, paket, narxYorligi, savatda, bos
           type="button"
           keng
           rang={bonus ? 'binafsha' : 'pos'}
-          onClick={() => { if (!xato) onTasdiq(miqdor) }}
+          onClick={() => { if (!xato) onTasdiq(miqdor, tanlangan.nomi) }}
           disabled={!!xato}
         >
           {xato ? 'Qo‘shish' : `${miqdor} ${birlik} qo‘shish`}
@@ -287,6 +318,31 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, paket, narxYorligi, savatda, bos
       </>}
     >
         <div className="space-y-3">
+          {/* Qaysi birlikda sotiladi: dona yoki o'ram — har biri o'z narxida */}
+          {birliklar.length > 1 && (
+            <div role="radiogroup" aria-label="Qaysi birlikda sotiladi" className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {birliklar.map(b => {
+                const faol = b.nomi === tanlangan.nomi
+                return (
+                  <button
+                    key={b.nomi || 'asosiy'}
+                    type="button"
+                    role="radio"
+                    aria-checked={faol}
+                    onMouseDown={fokusniSaqla}
+                    onClick={() => setBirlikNomi(b.nomi)}
+                    disabled={b.miqdor > qolganAsosiy}
+                    className={`px-2.5 py-2 rounded-xl text-left transition disabled:opacity-40 ${faol ? 'bg-pos text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
+                  >
+                    <span className="block text-sm font-semibold">1 {b.nomi || asosiyMatn}</span>
+                    {!bonus && <span className="block text-xs tabular-nums opacity-90">{formatSum(b.narx)}</span>}
+                    {b.miqdor > 1 && <span className="block text-[11px] tabular-nums opacity-75">{b.miqdor} {asosiyMatn}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-3 text-sm tabular-nums">
             <span className="text-gray-900 dark:text-gray-100 font-medium">
               {bonus ? 'Bonus — bepul' : (
@@ -298,7 +354,8 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, paket, narxYorligi, savatda, bos
             </span>
             <span className="text-gray-500 dark:text-gray-400 text-right">
               Qoldiq: {qolgan} {birlik}
-              {savatda > 0 && <span className="block text-xs">savatda {savatda}</span>}
+              {hajm > 1 && <span className="block text-xs">{qolganAsosiy} {asosiyMatn}</span>}
+              {savatda > 0 && <span className="block text-xs">savatda {savatda} {asosiyMatn}</span>}
             </span>
           </div>
 
@@ -342,7 +399,7 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, paket, narxYorligi, savatda, bos
                     tezYozuv.current = { oldingi: '', kod: '', boshi: 0, vaqt: 0 }
                     // Skaner raqamlari maydonga tushib qolgan — oldingi miqdorga qaytamiz
                     setMatn(oldingi)
-                    onSkan(oldingi, kod).then(birXil => {
+                    onSkan(oldingi, kod, tanlangan.nomi).then(birXil => {
                       if (!birXil) return
                       setMatn(m => {
                         const joriy = miqdorniOqi(m)
@@ -351,7 +408,7 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, paket, narxYorligi, savatda, bos
                     })
                     return
                   }
-                  if (!xato) onTasdiq(miqdor)
+                  if (!xato) onTasdiq(miqdor, tanlangan.nomi)
                   return
                 }
                 if (e.key.length !== 1) return
@@ -391,28 +448,12 @@ function SkanMiqdorOynasi({ tovar, bonus, narx, paket, narxYorligi, savatda, bos
             ))}
           </div>
 
-          {oramlar.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {oramlar.map(o => (
-                <button
-                  key={o.nomi}
-                  type="button"
-                  onMouseDown={fokusniSaqla}
-                  onClick={() => setMatn(String(o.miqdor))}
-                  disabled={o.miqdor > qolgan}
-                  aria-pressed={miqdor === o.miqdor}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium tabular-nums transition disabled:opacity-40 ${miqdor === o.miqdor ? 'bg-pos text-white' : 'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
-                >
-                  1 {o.nomi} <span className="opacity-75">· {o.miqdor} {birlik}{!bonus && narx > 0 ? ` · ${formatSum(qatorSummasi(o.miqdor, narx, paket))}` : ''}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
           <p className={`min-h-5 text-sm ${xato && matn ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`} aria-live="polite">
             {xato ? (matn ? xato : '') : [
-              bonus ? '' : `Jami: ${formatSum(paket ? qatorSummasi(miqdor, narx, paket) : Math.round(narx * miqdor))}`,
-              oramlar.length > 0 && miqdor > 0 && oramdaYoz(miqdor, tovar.birlik, oramlar) !== `${miqdor} ${birlik}` ? oramdaYoz(miqdor, tovar.birlik, oramlar) : '',
+              bonus ? '' : `Jami: ${formatSum(Math.round(narx * miqdor))}`,
+              hajm > 1 && miqdor > 0
+                ? `${miqdorYaxlitla(miqdor * hajm)} ${asosiyMatn}`
+                : oramlar.length > 0 && miqdor > 0 && oramdaYoz(miqdor, tovar.birlik, oramlar) !== `${miqdor} ${asosiyMatn}` ? oramdaYoz(miqdor, tovar.birlik, oramlar) : '',
             ].filter(Boolean).join(' · ')}
           </p>
         </div>
@@ -529,7 +570,7 @@ export default function SotuvPage() {
   /** A4 rasmli chek tayyorlanmoqda (rasmlar serverdan keladi) */
   const [a4Band, setA4Band] = useState(false)
   const [dokonInfo, setDokonInfo] = useState<Record<string, string>>({})
-  const [editNarx, setEditNarx] = useState<{ tovarId: string; val: string } | null>(null)
+  const [editNarx, setEditNarx] = useState<{ kalit: string; val: string } | null>(null)
   const [mobileTab, setMobileTab] = useState<'tovarlar' | 'savat'>('tovarlar')
   // Kassa oynasi: mahsulot qidirib pastga tushilganda savat ustuni
   // ko'rinmay qoladi — shunda suzuvchi tugma chiqadi va kassa shu yerda ochiladi.
@@ -579,7 +620,7 @@ export default function SotuvPage() {
   // Skaner o'qigan mahsulot — miqdor so'rash oynasi (null — yopiq).
   // `klaviatura`: USB skaner qidiruv maydoniga yozgan — oyna yopilgach
   // fokus o'sha maydonga qaytadi, keyingi skan ham shu yerga tushsin.
-  const [skanOyna, setSkanOyna] = useState<{ tovar: Tovar; boshlangich: string; klaviatura: boolean } | null>(null)
+  const [skanOyna, setSkanOyna] = useState<{ tovar: Tovar; boshlangich: string; klaviatura: boolean; birlik: string } | null>(null)
   const skanOynaOchiqRef = useRef(false)
   const qidiruvInputRef = useRef<HTMLInputElement>(null)
 
@@ -836,8 +877,9 @@ export default function SotuvPage() {
         const tovar = tovarlar.find(t => t.id === item.tovarId)
         if (tovar && tovar.qoldiq !== item.mavjudQoldiq) {
           changed = true
-          const yangiMiqdor = Math.min(item.miqdor, tovar.qoldiq)
-          return { ...item, mavjudQoldiq: tovar.qoldiq, miqdor: yangiMiqdor, jami: qatorJami({ ...item, miqdor: yangiMiqdor }) }
+          const maks = item.oram ? Math.floor(tovar.qoldiq / item.oram.miqdor + 1e-9) : tovar.qoldiq
+          const yangiMiqdor = Math.min(item.miqdor, maks)
+          return { ...item, mavjudQoldiq: tovar.qoldiq, miqdor: yangiMiqdor, jami: yangiMiqdor * item.birlikNarxi }
         }
         return item
       })
@@ -853,8 +895,23 @@ export default function SotuvPage() {
   )
   const korsatiladiganTovarlar = filteredTovarlar
 
-  /** Savatga `miqdor` birlik qo'shadi; qoldiq yetmasa rad etib `false` qaytaradi. */
-  function savatQosh(tovar: Tovar, miqdor = 1): boolean {
+  /**
+   * Qatorga ko'pi bilan qancha sig'adi — o'z birligida (blok). Shu mahsulotning
+   * boshqa qatorlari ham (dona, bonus) qoldiqdan oladi.
+   */
+  function qatorMaksimum(item: SavatItem, royxat: SavatItem[] = savat): number {
+    const boshqa = royxat
+      .filter(s => s.tovarId === item.tovarId && qatorKaliti(s) !== qatorKaliti(item))
+      .reduce((x, s) => x + asosiyda(s), 0)
+    const qoldi = Math.max(0, item.mavjudQoldiq - boshqa)
+    return item.oram ? Math.floor(qoldi / item.oram.miqdor + 1e-9) : miqdorYaxlitla(qoldi)
+  }
+
+  /**
+   * Savatga `miqdor` qo'shadi — tanlangan birlikda (dona yoki o'ram, `oramNomi`);
+   * narx — o'sha birlikniki. Qoldiq yetmasa rad etib `false` qaytaradi.
+   */
+  function savatQosh(tovar: Tovar, miqdor = 1, oramNomi = ''): boolean {
     if (tovar.qoldiq <= 0) {
       toast.error(`${tovar.nomi}: qoldiq yo'q`)
       return false
@@ -863,15 +920,17 @@ export default function SotuvPage() {
       toast.error(`${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()}`)
       return false
     }
+    // Shu mahsulotning savatdagi barcha qatorlari (dona, blok, bonus) qoldiqdan oladi
+    const band = savatdagiAsosiy(tovar.id)
     if (bonusTanlashRejimi) {
       // Bonus xuddi shu mahsulotdan ham bo'lishi mumkin (masalan 5ta sotib
       // olib, 1tasi bonusga xuddi o'shanidan) — shuning uchun tovarId bir xil
       // bo'lgan oddiy (pullik) qator borligi to'sqinlik qilmaydi, faqat
       // ALLAQACHON bonus qatori bo'lsa, shunga miqdor qo'shiladi (dublikat
-      // qator ochilmaydi).
+      // qator ochilmaydi). Bonus — asosiy birlikda.
+      if (band + miqdor > tovar.qoldiq + 1e-9) return qoldiqYetmaydi()
       const mavjudBonus = savat.find(s => s.tovarId === tovar.id && s.bonus)
       if (mavjudBonus) {
-        if (mavjudBonus.miqdor + miqdor > tovar.qoldiq) return qoldiqYetmaydi()
         setSavat(prev => prev.map(s => (s.tovarId === tovar.id && s.bonus)
           ? { ...s, miqdor: Math.min(miqdorYaxlitla(s.miqdor + miqdor), tovar.qoldiq) }
           : s))
@@ -880,7 +939,6 @@ export default function SotuvPage() {
         toast.success(`${tovar.nomi} bonus miqdori oshirildi`)
         return true
       }
-      if (miqdor > tovar.qoldiq) return qoldiqYetmaydi()
       setSavat(prev => [{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: 0,
         miqdor, birlik: tovar.birlik, chegirma: 0,
@@ -891,36 +949,35 @@ export default function SotuvPage() {
       toast.success(`${tovar.nomi} bonus sifatida qo'shildi`)
       return true
     }
-    // Joriy tanlangan narx turi (chakana/optom/bo'lish) bo'yicha — mahsulotda
-    // o'sha tur uchun narx kiritilmagan bo'lsa, oddiy sotish narxiga tushadi.
-    const narxSomda = narxTuriBoyicha(tovar, narxTuri, kursi)
-    const paket = paketTuriBoyicha(tovar, narxTuri, kursi)
+    // Sotiladigan birlik: dona yoki o'ram (1 blok = 60 dona) — narx o'sha
+    // birlikniki, joriy narx turi (chakana/optom/bo'lish) bo'yicha
+    const b = sotuvBirligi(tovar, oramNomi)
+    const oram = b.nomi ? { nomi: b.nomi, miqdor: b.miqdor } : undefined
+    if (band + miqdor * b.miqdor > tovar.qoldiq + 1e-9) return qoldiqYetmaydi()
+    const narxSomda = narxTuriBoyicha(tovar, narxTuri, kursi, oram?.nomi)
+    const kalit = qatorKaliti({ tovarId: tovar.id, oram })
     // `savat` state'idan (setSavat ichidagi `prev`dan emas — u yangilanish
     // React tomonidan keyinroq bajarilishi mumkin) — shu mahsulot savatda
     // birinchi marta qo'shilayotganini oldindan bilib olamiz.
-    const savatdagi = savat.find(s => s.tovarId === tovar.id && !s.bonus)
-    const yangiQator = !savatdagi
-    if ((savatdagi?.miqdor ?? 0) + miqdor > tovar.qoldiq) return qoldiqYetmaydi()
+    const yangiQator = !savat.some(s => s.tovarId === tovar.id && !s.bonus)
     setSavat(prev => {
-      // Faqat oddiy (bonus bo'lmagan) qator bilan birlashtiriladi — bonus
-      // qatori (bor bo'lsa) tegilmasdan saqlanib qoladi. Mavjud qatorning
-      // narxi (va turi) o'zgartirilmaydi — faqat miqdor qo'shiladi, narx
-      // turini almashtirish kerak bo'lsa narxni qo'lda tahrirlash mumkin.
-      const mavjud = prev.find(s => s.tovarId === tovar.id && !s.bonus)
+      // Xuddi shu birlikdagi oddiy qator bilan birlashtiriladi — narxi (va
+      // turi) o'zgartirilmaydi, faqat miqdor qo'shiladi.
+      const mavjud = prev.find(s => qatorKaliti(s) === kalit)
       if (mavjud) {
         // Qoldiq yuqorida `savat` bo'yicha tekshirildi; bu yerdagi cheklov —
         // bir hodisada ketma-ket ikki qo'shish (state hali yangilanmagan)
         // qoldiqdan oshirib yubormasligi uchun.
-        const yangiMiqdor = Math.min(miqdorYaxlitla(mavjud.miqdor + miqdor), tovar.qoldiq)
-        const yangilangan = { ...mavjud, miqdor: yangiMiqdor, jami: qatorJami({ ...mavjud, miqdor: yangiMiqdor }) }
-        return [yangilangan, ...prev.filter(s => !(s.tovarId === tovar.id && !s.bonus))]
+        const yangiMiqdor = Math.min(miqdorYaxlitla(mavjud.miqdor + miqdor), qatorMaksimum(mavjud, prev))
+        const yangilangan = { ...mavjud, miqdor: yangiMiqdor, jami: yangiMiqdor * mavjud.birlikNarxi }
+        return [yangilangan, ...prev.filter(s => qatorKaliti(s) !== kalit)]
       }
       return [{
         tovarId: tovar.id, nomi: tovar.nomi, birlikNarxi: narxSomda,
         miqdor, birlik: tovar.birlik, chegirma: 0,
-        jami: qatorSummasi(miqdor, narxSomda, paket), mavjudQoldiq: tovar.qoldiq,
-        narxTuri: amaldagiNarxTuri(tovar, narxTuri),
-        paket,
+        jami: narxSomda * miqdor, mavjudQoldiq: tovar.qoldiq,
+        narxTuri: amaldagiNarxTuri(tovar, narxTuri, oram?.nomi),
+        oram,
       }, ...prev]
     })
     // Mijoz allaqachon tanlangan bo'lsa — bu mahsulot birinchi marta
@@ -939,20 +996,23 @@ export default function SotuvPage() {
   // Skanerlangan mahsulot darhol 1 dona qo'shilmaydi: avval nechta
   // kerakligi so'raladi (5 kiritilsa — 5 dona).
 
-  function savatdagiMiqdor(tovarId: string, bonus: boolean) {
-    return savat.find(s => s.tovarId === tovarId && !!s.bonus === bonus)?.miqdor ?? 0
+  /** Savatdagi shu mahsulot — asosiy birlikda, barcha qatorlari (dona, blok, bonus) */
+  function savatdagiAsosiy(tovarId: string) {
+    return miqdorYaxlitla(savat.filter(s => s.tovarId === tovarId).reduce((x, s) => x + asosiyda(s), 0))
   }
 
   function miqdorSorash(tovar: Tovar, klaviatura: boolean) {
-    const qolgan = miqdorYaxlitla(tovar.qoldiq - savatdagiMiqdor(tovar.id, bonusTanlashRejimi))
+    const qolgan = miqdorYaxlitla(tovar.qoldiq - savatdagiAsosiy(tovar.id))
     if (qolgan <= 0) {
       toast.error(tovar.qoldiq <= 0
         ? `${tovar.nomi}: qoldiq yo'q`
         : `${tovar.nomi}: omborda faqat ${tovar.qoldiq} ${tovar.birlik.toLowerCase()} — hammasi savatda`)
       return
     }
+    // Savatda shu mahsulot blokda sotilayotgan bo'lsa — oyna o'sha birlikda ochiladi
+    const birlik = bonusTanlashRejimi ? '' : (savat.find(s => s.tovarId === tovar.id && !s.bonus)?.oram?.nomi ?? '')
     // Kasrli birlikda 1 dan kam qolgan bo'lishi mumkin (0.4 kg) — borini taklif qiladi
-    setSkanOyna({ tovar, boshlangich: String(Math.min(1, qolgan)), klaviatura })
+    setSkanOyna({ tovar, boshlangich: String(Math.min(1, qolgan)), klaviatura, birlik })
   }
 
   /** Skaner o'qigan kod bo'yicha mahsulot — avval yuklangan ro'yxatdan, bo'lmasa API'dan. */
@@ -993,13 +1053,13 @@ export default function SotuvPage() {
     if (klaviatura) qidiruvInputRef.current?.focus()
   }
 
-  function skanMiqdorniTasdiqla(miqdor: number) {
+  function skanMiqdorniTasdiqla(miqdor: number, birlik: string) {
     if (!skanOyna) return
     const { tovar } = skanOyna
     const bonus = bonusTanlashRejimi
-    if (!savatQosh(tovar, miqdor)) return
+    if (!savatQosh(tovar, miqdor, birlik)) return
     // Bonus rejimida savatQosh o'zi xabar beradi
-    if (!bonus) toast.success(`${tovar.nomi}: ${miqdor} ${tovar.birlik.toLowerCase()} qo'shildi`)
+    if (!bonus) toast.success(`${tovar.nomi}: ${miqdor} ${birlik || tovar.birlik.toLowerCase()} qo'shildi`)
     skanOynaniYop()
   }
 
@@ -1007,7 +1067,7 @@ export default function SotuvPage() {
   // bo'lsa — `true` (oyna miqdorni +1 qiladi). Boshqa mahsulot bo'lsa —
   // joriysi skandan oldingi miqdor bilan savatga tushadi va yangisi uchun
   // oyna ochiladi.
-  async function oynadaSkan(oldingiMatn: string, kod: string): Promise<boolean> {
+  async function oynadaSkan(oldingiMatn: string, kod: string, birlik: string): Promise<boolean> {
     const joriy = skanOyna
     if (!joriy) return false
     playBeep()
@@ -1020,14 +1080,15 @@ export default function SotuvPage() {
     const oldingi = miqdorniOqi(oldingiMatn)
     // Joriy miqdor noto'g'ri bo'lsa hech narsa jim tashlab yuborilmaydi:
     // oyna o'z joyida qoladi, kassir tuzatib, keyingisini qayta skanerlaydi.
-    const xato = skanMiqdorXatosi(oldingi, joriy.tovar, savatdagiMiqdor(joriy.tovar.id, bonusTanlashRejimi))
+    const hajm = bonusTanlashRejimi ? 1 : sotuvBirligi(joriy.tovar, birlik).miqdor
+    const xato = skanMiqdorXatosi(oldingi, joriy.tovar, savatdagiAsosiy(joriy.tovar.id), hajm, birlik || undefined)
     if (xato) {
       toast.error(`${joriy.tovar.nomi}: ${xato.toLowerCase()} — ${yangi.nomi} qo'shilmadi`)
       return false
     }
     const bonus = bonusTanlashRejimi
-    if (!savatQosh(joriy.tovar, oldingi)) return false
-    if (!bonus) toast.success(`${joriy.tovar.nomi}: ${oldingi} ${joriy.tovar.birlik.toLowerCase()} qo'shildi`)
+    if (!savatQosh(joriy.tovar, oldingi, birlik)) return false
+    if (!bonus) toast.success(`${joriy.tovar.nomi}: ${oldingi} ${birlik || joriy.tovar.birlik.toLowerCase()} qo'shildi`)
     miqdorSorash(yangi, joriy.klaviatura)
     return false
   }
@@ -1097,56 +1158,94 @@ export default function SotuvPage() {
   useEffect(() => { skanOynaOchiqRef.current = skanOyna !== null }, [skanOyna])
   useBodyScrollLock(skanOyna !== null)
 
-  // Bitta mahsulotdan bir vaqtda ham oddiy, ham bonus qator bo'lishi mumkin
-  // (tovarId bir xil) — shuning uchun har doim `bonus` bayrog'i bilan birga
-  // aniq qatorni ko'rsatib beriladi, aks holda ikkalasi ham o'zgarib qolardi.
-  function miqdorOzgartir(tovarId: string, bonus: boolean | undefined, yangiMiqdor: number) {
+  // Bitta mahsulotdan bir vaqtda bir nechta qator bo'lishi mumkin: oddiy va
+  // bonus, dona va blok (tovarId bir xil) — shuning uchun qator doim o'z
+  // kaliti bilan ko'rsatiladi (`qatorKaliti`), aks holda hammasi o'zgarib qolardi.
+  function miqdorOzgartir(kalit: string, yangiMiqdor: number) {
     if (yangiMiqdor <= 0) {
-      setSavat(prev => prev.filter(s => !(s.tovarId === tovarId && !!s.bonus === !!bonus)))
+      setSavat(prev => prev.filter(s => qatorKaliti(s) !== kalit))
       return
     }
     setSavat(prev => prev.map(s => {
-      if (!(s.tovarId === tovarId && !!s.bonus === !!bonus)) return s
-      const cheklangan = Math.min(yangiMiqdor, s.mavjudQoldiq)
-      return { ...s, miqdor: cheklangan, jami: qatorJami({ ...s, miqdor: cheklangan }) }
+      if (qatorKaliti(s) !== kalit) return s
+      // O'ram butun sonda sotiladi (1,5 blok emas)
+      const soni = s.oram ? Math.max(1, Math.floor(yangiMiqdor)) : yangiMiqdor
+      const cheklangan = Math.min(soni, qatorMaksimum(s, prev))
+      return { ...s, miqdor: cheklangan, jami: cheklangan * s.birlikNarxi }
     }))
   }
 
-  function narxiOzgartir(tovarId: string, yangiNarx: number) {
+  function narxiOzgartir(kalit: string, yangiNarx: number) {
     if (yangiNarx <= 0) return
-    setSavat(prev => prev.map(s => (s.tovarId === tovarId && !s.bonus)
-      ? { ...s, birlikNarxi: yangiNarx, jami: s.miqdor * yangiNarx, paket: undefined }
+    setSavat(prev => prev.map(s => (qatorKaliti(s) === kalit && !s.bonus)
+      ? { ...s, birlikNarxi: yangiNarx, jami: s.miqdor * yangiNarx }
       : s
     ))
   }
 
-  function narxTasdiqla(tovarId: string) {
+  function narxTasdiqla(kalit: string) {
     if (!editNarx) return
     const val = parseFloat(editNarx.val.replace(/\s/g, ''))
     if (!isNaN(val) && val > 0) {
-      // Chegirma ruxsati yo'q xodim narxni ro'yxatdagi eng past narxdan tushira olmaydi
-      const tovar = tovarlar.find(t => t.id === tovarId)
-      const min = tovar ? minNarxSomda(tovar, kursi) : null
-      if (!chegirmaRuxsat && min && min.somda > 0 && val < min.somda) {
-        toast.error(`Narxni ${formatSum(min.somda)} dan pasaytirishga ruxsatingiz yo‘q`)
+      // Chegirma ruxsati yo'q xodim narxni ro'yxatdagi eng past narxdan tushira
+      // olmaydi — qator birligida (1 blokning eng past narxi)
+      const qator = savat.find(s => qatorKaliti(s) === kalit)
+      const tovar = qator && tovarlar.find(t => t.id === qator.tovarId)
+      const m = tovar ? minNarxSomda(tovar, kursi) : null
+      const min = qator?.oram ? m?.oramlar?.get(nomKaliti(qator.oram.nomi))?.somda : m?.somda
+      if (!chegirmaRuxsat && min && min > 0 && val < min) {
+        toast.error(`Narxni ${formatSum(min)} dan pasaytirishga ruxsatingiz yo‘q`)
       } else {
-        narxiOzgartir(tovarId, val)
+        narxiOzgartir(kalit, val)
       }
     }
     setEditNarx(null)
   }
 
   // Savatdagi bitta qator uchun narx turini (chakana/optom/bo'lish) tanlash —
-  // narxni o'sha tovarning o'zidagi mos narxga o'zgartiradi va turini eslab qoladi.
-  function savatNarxTuriTanlash(tovarId: string, turi: NarxTuri) {
-    const tovar = tovarlar.find(t => t.id === tovarId)
-    if (!tovar) return
-    const narx = narxTuriBoyicha(tovar, turi, kursi)
-    const paket = paketTuriBoyicha(tovar, turi, kursi)
-    setSavat(prev => prev.map(s => (s.tovarId === tovarId && !s.bonus)
-      ? { ...s, birlikNarxi: narx, jami: qatorSummasi(s.miqdor, narx, paket), narxTuri: amaldagiNarxTuri(tovar, turi), paket }
+  // narxni o'sha tovarning shu birlikdagi mos narxiga o'zgartiradi va turini eslab qoladi.
+  function savatNarxTuriTanlash(kalit: string, turi: NarxTuri) {
+    const qator = savat.find(s => qatorKaliti(s) === kalit)
+    const tovar = qator && tovarlar.find(t => t.id === qator.tovarId)
+    if (!qator || !tovar) return
+    const narx = narxTuriBoyicha(tovar, turi, kursi, qator.oram?.nomi)
+    setSavat(prev => prev.map(s => (qatorKaliti(s) === kalit && !s.bonus)
+      ? { ...s, birlikNarxi: narx, jami: s.miqdor * narx, narxTuri: amaldagiNarxTuri(tovar, turi, qator.oram?.nomi) }
       : s
     ))
+  }
+
+  /**
+   * Savat qatorini boshqa birlikka o'tkazish (dona ↔ blok): soni o'sha qoladi,
+   * narx — yangi birlikniki (qatorning narx turi bo'yicha). Shu birlikda qator
+   * allaqachon bo'lsa — birlashadi. Qoldiq yetmasa — o'tkazilmaydi.
+   */
+  function birlikniAlmashtir(kalit: string, oramNomi: string) {
+    const qator = savat.find(s => qatorKaliti(s) === kalit)
+    const tovar = qator && tovarlar.find(t => t.id === qator.tovarId)
+    if (!qator || !tovar || qator.bonus) return
+    const b = sotuvBirligi(tovar, oramNomi)
+    const oram = b.nomi ? { nomi: b.nomi, miqdor: b.miqdor } : undefined
+    const turi = qator.narxTuri ?? narxTuri
+    const yangiKalit = qatorKaliti({ tovarId: qator.tovarId, oram })
+    if (yangiKalit === kalit) return
+    const ustma = savat.find(s => qatorKaliti(s) === yangiKalit)
+    const narx = ustma ? ustma.birlikNarxi : narxTuriBoyicha(tovar, turi, kursi, oram?.nomi)
+    const asos: SavatItem = ustma ?? { ...qator, oram, birlikNarxi: narx, narxTuri: amaldagiNarxTuri(tovar, turi, oram?.nomi) }
+    const boshqalar = savat.filter(s => qatorKaliti(s) !== kalit && qatorKaliti(s) !== yangiKalit)
+    const kerak = miqdorYaxlitla((ustma?.miqdor ?? 0) + (oram ? Math.max(1, Math.floor(qator.miqdor)) : qator.miqdor))
+    const miqdor = Math.min(kerak, qatorMaksimum({ ...asos, miqdor: kerak }, boshqalar))
+    if (miqdor <= 0) {
+      toast.error(`${tovar.nomi}: 1 ${b.nomi || birlikMatni(tovar.birlik)} uchun qoldiq yetmaydi`)
+      return
+    }
+    const yangi = { ...asos, miqdor, jami: miqdor * asos.birlikNarxi }
+    setSavat(prev => {
+      const i = prev.findIndex(s => qatorKaliti(s) === kalit)
+      const natija = prev.filter(s => qatorKaliti(s) !== kalit && qatorKaliti(s) !== yangiKalit)
+      natija.splice(Math.max(0, Math.min(i, natija.length)), 0, yangi)
+      return natija
+    })
   }
 
   // Yuqoridagi Chakana / Optom / Bo'lish tugmasi. Ilgari u faqat savatga
@@ -1162,17 +1261,18 @@ export default function SotuvPage() {
     if (qatorlar.length === 0) return
 
     let narxiYoq = 0
-    const yangiNarx = new Map<string, { narx: number; tur: NarxTuri; paket?: Paket }>()
+    // Har bir qator o'z birligida: 1 blok optom narxi — blokniki
+    const yangiNarx = new Map<string, { narx: number; tur: NarxTuri }>()
     for (const s of qatorlar) {
       const tovar = tovarlar.find(t => t.id === s.tovarId)
       if (!tovar) continue
-      const tur = amaldagiNarxTuri(tovar, turi)
+      const tur = amaldagiNarxTuri(tovar, turi, s.oram?.nomi)
       if (tur !== turi) narxiYoq++
-      yangiNarx.set(s.tovarId, { narx: narxTuriBoyicha(tovar, turi, kursi), tur, paket: paketTuriBoyicha(tovar, turi, kursi) })
+      yangiNarx.set(qatorKaliti(s), { narx: narxTuriBoyicha(tovar, turi, kursi, s.oram?.nomi), tur })
     }
     setSavat(prev => prev.map(s => {
-      const y = !s.bonus && yangiNarx.get(s.tovarId)
-      return y ? { ...s, birlikNarxi: y.narx, jami: qatorSummasi(s.miqdor, y.narx, y.paket), narxTuri: y.tur, paket: y.paket } : s
+      const y = !s.bonus && yangiNarx.get(qatorKaliti(s))
+      return y ? { ...s, birlikNarxi: y.narx, jami: s.miqdor * y.narx, narxTuri: y.tur } : s
     }))
 
     const nomi = NARX_TURI_LABEL[turi].toLowerCase()
@@ -1183,7 +1283,7 @@ export default function SotuvPage() {
     }
   }
 
-  const jamiSumma = savat.reduce((s, i) => s + qatorJami(i), 0)
+  const jamiSumma = savat.reduce((s, i) => s + i.miqdor * i.birlikNarxi, 0)
   const qolBilan = qolBilanSumma ? parseFloat(qolBilanSumma.replace(/\s/g, '')) : NaN
   // Chegirmadan keyingi, LEKIN ball/keshbek sarflashdan OLDINGI summa.
   // Sodiqlik hisob-kitobi ham, serverdagi tekshiruv ham shu songa tayanadi.
@@ -1219,7 +1319,7 @@ export default function SotuvPage() {
       tolovUsuli,
       sozlama: sodiqlikSozlama,
       qatorlar: savat.map(i => ({
-        tovarId: i.tovarId, kategoriyaId: tovarKategoriyasi?.get(i.tovarId) ?? null, miqdor: i.miqdor, jami: i.jami,
+        tovarId: i.tovarId, kategoriyaId: tovarKategoriyasi?.get(i.tovarId) ?? null, miqdor: asosiyda(i), jami: i.jami,
       })),
       qoidalar: sodiqlikQoidalari,
     })
@@ -1228,8 +1328,9 @@ export default function SotuvPage() {
   // Stock yetishmaydigan itemlarni tekshirish — bitta mahsulotdan oddiy va
   // bonus qatori bo'lishi mumkin, shuning uchun ikkalasi QO'SHIB tekshiriladi
   // (har biri alohida qoldiqdan oshmasa ham, birgalikda oshib ketishi mumkin).
+  // Asosiy birlikda: 2 blok + 5 dona = 125 dona
   const jamiTalabMap = new Map<string, number>()
-  for (const s of savat) jamiTalabMap.set(s.tovarId, (jamiTalabMap.get(s.tovarId) || 0) + s.miqdor)
+  for (const s of savat) jamiTalabMap.set(s.tovarId, (jamiTalabMap.get(s.tovarId) || 0) + asosiyda(s))
   const ortiqchaTovarIdlar = new Set(
     savat.filter(s => (jamiTalabMap.get(s.tovarId) || 0) > s.mavjudQoldiq).map(s => s.tovarId)
   )
@@ -1412,9 +1513,15 @@ export default function SotuvPage() {
       // va yakuniy summa mos kelmasa sotuvni rad etadi.
       sodiqlikSarf: { ball: sodiqlikNatija.ball, keshbek: sodiqlikNatija.keshbek },
       nasiyaMuddat: tolovUsuli === 'NASIYA' ? nasiyaMuddat : null,
+      // Qoldiq, hisobot va foyda asosiy birlikda: 2 blok → 120 dona; summa —
+      // aniq (2 × 75 000); qaysi birlikda sotilgani — chek uchun
       tarkiblar: savat.map(s => ({
-        tovarId: s.tovarId, miqdor: s.miqdor, birlikNarxi: s.birlikNarxi,
-        chegirma: 0, jami: qatorJami(s)
+        tovarId: s.tovarId,
+        miqdor: asosiyda(s),
+        birlikNarxi: s.oram ? Math.round(s.birlikNarxi / s.oram.miqdor * 100) / 100 : s.birlikNarxi,
+        chegirma: 0,
+        jami: s.miqdor * s.birlikNarxi,
+        oramNomi: s.oram?.nomi ?? null,
       }))
     }
 
@@ -1490,15 +1597,15 @@ export default function SotuvPage() {
   function sotuvTanlash(sotuv: SotuvYozuvi) {
     setQaytarishSotuv(sotuv)
     const init: Record<string, { miqdor: number; birlikNarxi: number; checked: boolean }> = {}
-    for (const t of sotuv.tarkiblar) {
-      init[t.tovarId] = { miqdor: Number(t.miqdor), birlikNarxi: Number(t.birlikNarxi), checked: true }
+    for (const t of qaytarishQatorlari(sotuv.tarkiblar)) {
+      init[t.tovarId] = { miqdor: t.miqdor, birlikNarxi: t.birlikNarxi, checked: true }
     }
     setQaytarishTanlangan(init)
   }
 
   async function qaytarishYuborish() {
     if (!qaytarishSotuv) return
-    const tarkiblar = qaytarishSotuv.tarkiblar
+    const tarkiblar = qaytarishQatorlari(qaytarishSotuv.tarkiblar)
       .filter(t => qaytarishTanlangan[t.tovarId]?.checked)
       .map(t => {
         const sel = qaytarishTanlandan(t.tovarId)
@@ -1560,10 +1667,12 @@ export default function SotuvPage() {
         body: JSON.stringify({
           mijozId: zakazMijozId || null,
           izoh: zakazIzoh,
+          // Qator o'z birligida ("2 blok × 75 000") — server asosiy birlikka o'tkazib saqlaydi
           tarkiblar: savat.map(x => ({
             tovarId: x.tovarId,
             miqdor: x.miqdor,
             birlikNarxi: x.birlikNarxi,
+            oramNomi: x.oram?.nomi ?? null,
           })),
         }),
       })
@@ -1600,25 +1709,20 @@ export default function SotuvPage() {
   async function zakazniYuklash(zakaz: SaqlanganZakaz) {
     const yangiSavat: SavatItem[] = zakaz.tarkiblar.map(t => {
       const tovar = tovarlar.find(x => x.id === t.tovarId)
-      const birlikNarxi = Number(t.birlikNarxi)
-      const miqdor = Number(t.miqdor)
-      // Zakazdagi narx o'ram narxidan chiqqan bo'lsa (1 166,67 = 70 000 / 60) — summa yana aniq
-      const paket = tovar
-        ? (['sotish', 'optom', 'bolish'] as const)
-          .map(tur => paketTuriBoyicha(tovar, tur, kursi))
-          .find(p => p && birlikNarxiga(p.narx, p.miqdor) === birlikNarxi)
-        : undefined
+      // O'ramda saqlangan qator ("2 blok") — bazada asosiy birlikda (120 dona) turadi
+      const q = chekQatori({ miqdor: t.miqdor, birlikNarxi: t.birlikNarxi, jami: t.jami ?? Number(t.miqdor) * Number(t.birlikNarxi), oramNomi: t.oramNomi, oramMiqdori: t.oramMiqdori })
+      const oram = q.oram ? { nomi: q.oram, miqdor: Number(t.oramMiqdori) } : undefined
       return {
         tovarId: t.tovarId,
         nomi: tovar?.nomi ?? t.tovar.nomi,
-        birlikNarxi,
-        miqdor,
+        birlikNarxi: q.narx,
+        miqdor: q.soni,
         birlik: tovar?.birlik ?? t.tovar.birlik,
         chegirma: 0,
-        jami: qatorSummasi(miqdor, birlikNarxi, paket),
-        mavjudQoldiq: tovar?.qoldiq ?? miqdor,
-        bonus: birlikNarxi === 0 || undefined,
-        paket,
+        jami: q.soni * q.narx,
+        mavjudQoldiq: tovar?.qoldiq ?? Number(t.miqdor),
+        bonus: Number(t.birlikNarxi) === 0 || undefined,
+        oram,
       }
     })
 
@@ -1756,8 +1860,10 @@ export default function SotuvPage() {
       }
       const bonusmi = Number(item.birlikNarxi) === 0
       const nomi = t(item.tovar?.nomi || '—') + (bonusmi ? ` (${t('Bonus')})` : '')
-      const miqdor = String(Number(item.miqdor))
-      const narx = bonusmi ? t('Bepul') : formatSum(item.birlikNarxi)
+      // O'ramda sotilgan qator — "2 blok × 75 000"
+      const q = chekQatori(item)
+      const miqdor = q.oram ? `${q.soni} ${t(q.oram)}` : String(q.soni)
+      const narx = bonusmi ? t('Bepul') : formatSum(q.narx)
       const jami = bonusmi ? t('Bepul') : formatSum(item.jami)
 
       // Truncate long names
@@ -1956,16 +2062,20 @@ export default function SotuvPage() {
                 // narx turiga qarab taqqoslanadi — ilgari faqat chakana bilan
                 // solishtirilgani uchun har bir optom qatori (va dollardagi
                 // har bir mahsulot) "o'zgartirilgan" bo'lib ko'rinardi.
-                const kutilganNarx = itemTovar ? narxTuriBoyicha(itemTovar, item.narxTuri ?? 'sotish', kursi) : Number(item.birlikNarxi)
+                const kalit = qatorKaliti(item)
+                const kutilganNarx = itemTovar ? narxTuriBoyicha(itemTovar, item.narxTuri ?? 'sotish', kursi, item.oram?.nomi) : Number(item.birlikNarxi)
                 const isNarxOzgartirilgan = Number(item.birlikNarxi) !== kutilganNarx
-                const isEditing = editNarx?.tovarId === item.tovarId
-                // Faqat narxi kiritilgan turlar ko'rsatiladi — bo'sh bo'lsa tugma chiqmaydi
+                const isEditing = editNarx?.kalit === kalit
+                // Faqat narxi bor turlar ko'rsatiladi (shu birlikda) — bo'sh bo'lsa tugma chiqmaydi
+                const qatorBirligi = itemTovar ? sotuvBirligi(itemTovar, item.oram?.nomi) : null
                 const mavjudTurlar: NarxTuri[] = ['sotish',
-                  ...(itemTovar?.optomNarxi != null ? ['optom' as const] : []),
-                  ...(itemTovar?.bolishNarxi != null ? ['bolish' as const] : []),
+                  ...(qatorBirligi?.optom != null ? ['optom' as const] : []),
+                  ...(qatorBirligi?.bolish != null ? ['bolish' as const] : []),
                 ]
+                // Mahsulot blok/karobkada ham sotilsa — qatorda birlik tanlanadi
+                const birliklar = itemTovar && !item.bonus ? sotuvBirliklari(itemTovar) : []
                 return (
-                <div key={item.tovarId + (item.bonus ? '-bonus' : '')} className="px-3 py-2.5 border-b border-gray-100 dark:border-neutral-800 last:border-b-0">
+                <div key={kalit} className="px-3 py-2.5 border-b border-gray-100 dark:border-neutral-800 last:border-b-0">
                   {/* Row 1: nomi + delete */}
                   <div className="flex items-center justify-between gap-1 mb-2">
                     <p className="text-gray-900 dark:text-gray-100 text-sm font-medium leading-tight flex-1 truncate flex items-center gap-1.5" title={item.nomi}>
@@ -1981,7 +2091,7 @@ export default function SotuvPage() {
                         </span>
                       )}
                     </p>
-                    <button onClick={() => miqdorOzgartir(item.tovarId, item.bonus, 0)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition shrink-0 ml-1">
+                    <button onClick={() => miqdorOzgartir(kalit, 0)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition shrink-0 ml-1">
                       <X size={13} />
                     </button>
                   </div>
@@ -1992,7 +2102,7 @@ export default function SotuvPage() {
                         <button
                           key={turi}
                           type="button"
-                          onClick={() => savatNarxTuriTanlash(item.tovarId, turi)}
+                          onClick={() => savatNarxTuriTanlash(kalit, turi)}
                           className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition ${
                             (item.narxTuri || 'sotish') === turi
                               ? 'bg-pos text-white'
@@ -2002,6 +2112,28 @@ export default function SotuvPage() {
                           {NARX_TURI_LABEL[turi]}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {/* Row 1.6: birlik — dona yoki o'ram, har biri o'z narxida */}
+                  {birliklar.length > 1 && (
+                    <div role="radiogroup" aria-label={`${item.nomi} — birlik`} className="flex flex-wrap items-center gap-1 mb-1.5">
+                      {birliklar.map(b => {
+                        const faol = (item.oram?.nomi ?? '') === b.nomi
+                        return (
+                          <button
+                            key={b.nomi || 'asosiy'}
+                            type="button"
+                            role="radio"
+                            aria-checked={faol}
+                            onClick={() => { if (!faol) birlikniAlmashtir(kalit, b.nomi) }}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition ${faol
+                              ? 'bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900'
+                              : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-700'}`}
+                          >
+                            {b.nomi || birlikMatni(item.birlik)}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                   {/* Row 2: [narx input] × [miqdor] = [jami] */}
@@ -2017,10 +2149,10 @@ export default function SotuvPage() {
                         type="text"
                         inputMode="numeric"
                         value={isEditing ? editNarx.val.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : String(item.birlikNarxi).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
-                        onFocus={e => { setEditNarx({ tovarId: item.tovarId, val: String(item.birlikNarxi) }); e.target.select() }}
-                        onChange={e => setEditNarx({ tovarId: item.tovarId, val: e.target.value.replace(/[^\d]/g, '') })}
-                        onBlur={() => narxTasdiqla(item.tovarId)}
-                        onKeyDown={e => { if (e.key === 'Enter') { narxTasdiqla(item.tovarId); (e.target as HTMLInputElement).blur() } if (e.key === 'Escape') setEditNarx(null) }}
+                        onFocus={e => { setEditNarx({ kalit, val: String(item.birlikNarxi) }); e.target.select() }}
+                        onChange={e => setEditNarx({ kalit, val: e.target.value.replace(/[^\d]/g, '') })}
+                        onBlur={() => narxTasdiqla(kalit)}
+                        onKeyDown={e => { if (e.key === 'Enter') { narxTasdiqla(kalit); (e.target as HTMLInputElement).blur() } if (e.key === 'Escape') setEditNarx(null) }}
                         title="Narxni o'zgartirish mumkin"
                         className={`w-full h-7 pl-2 pr-5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-blue-400 transition
                           ${isNarxOzgartirilgan
@@ -2032,22 +2164,20 @@ export default function SotuvPage() {
                     </div>
                     )}
                     <span className="text-gray-500 dark:text-gray-400 text-xs shrink-0">×</span>
-                    <MiqdorInput miqdor={item.miqdor} max={item.mavjudQoldiq} onChange={v => miqdorOzgartir(item.tovarId, item.bonus, v)} />
+                    <MiqdorInput miqdor={item.miqdor} max={qatorMaksimum(item)} onChange={v => miqdorOzgartir(kalit, v)} />
                     <span className="text-gray-500 dark:text-gray-400 text-xs shrink-0">=</span>
                     <span className={`text-sm font-bold shrink-0 min-w-[65px] text-right ${item.bonus ? 'text-violet-600 dark:text-violet-400' : 'text-green-600'}`}>{item.bonus ? 'Bepul' : formatSum(item.jami)}</span>
                   </div>
-                  {/* O'rami bor mahsulot: 65 dona → "1 blok 5 dona" */}
-                  {(() => {
-                    const oramlar = itemTovar ? oramlarniOqi(itemTovar.oramlar) : []
-                    const yoyilgan = oramlar.length > 0 ? oramdaYoz(item.miqdor, item.birlik, oramlar) : ''
-                    return yoyilgan && yoyilgan !== `${item.miqdor} ${birlikMatni(item.birlik)}`
-                      ? <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">{yoyilgan}</p>
-                      : null
-                  })()}
+                  {/* O'ramda sotilmoqda: "2 blok = 120 dona" (qoldiqdan shuncha kamayadi) */}
+                  {item.oram && (
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                      {item.miqdor} {item.oram.nomi} = {asosiyda(item)} {birlikMatni(item.birlik)}
+                    </p>
+                  )}
                   {ortiqchaTovarIdlar.has(item.tovarId) && (
                     <div className="flex items-center gap-1 mt-1.5 text-amber-600 dark:text-amber-400">
                       <AlertTriangle size={11} />
-                      <span className="text-[11px]">Qoldiq: {item.mavjudQoldiq}, yetarli emas!</span>
+                      <span className="text-[11px]">Qoldiq: {item.mavjudQoldiq} {birlikMatni(item.birlik)}, yetarli emas!</span>
                     </div>
                   )}
                 </div>
@@ -2604,7 +2734,7 @@ export default function SotuvPage() {
             {korsatiladiganTovarlar.map(t => {
               // Oddiy va bonus qatorlari birga qo'shiladi — bitta mahsulotdan
               // ikkalasi ham bo'lishi mumkin (masalan 5ta sotuv + 1ta bonus).
-              const savatdagi = savat.filter(s => s.tovarId === t.id).reduce((sum, s) => sum + s.miqdor, 0)
+              const savatdagi = miqdorYaxlitla(savat.filter(s => s.tovarId === t.id).reduce((sum, s) => sum + asosiyda(s), 0))
               const tugagan = t.qoldiq <= 0
               const kamQoldi = !tugagan && t.qoldiq <= 5
               return (
@@ -3006,6 +3136,9 @@ export default function SotuvPage() {
                 <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
                 {s.tarkiblar?.map(item => {
                   const bonusmi = Number(item.birlikNarxi) === 0
+                  // O'ramda sotilgan qator — "2 blok × 75 000"
+                  const q = chekQatori(item)
+                  const soni = q.oram ? `${q.soni} ${t(q.oram)}` : q.soni
                   return (
                   <div key={item.id} style={{ marginBottom: 4 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -3016,11 +3149,11 @@ export default function SotuvPage() {
                     </div>
                     {bonusmi ? (
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8b5cf6' }}>
-                        <span>{Number(item.miqdor)} × {t('Bepul')}</span>
+                        <span>{soni} × {t('Bepul')}</span>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#555' }}>{Number(item.miqdor)} × {formatSum(item.birlikNarxi)}</span>
+                        <span style={{ color: '#555' }}>{soni} × {formatSum(q.narx)}</span>
                         <span style={{ fontWeight: 'bold' }}>{formatSum(item.jami)}</span>
                       </div>
                     )}
@@ -3163,17 +3296,25 @@ export default function SotuvPage() {
 
       {/* Skanerlangan mahsulot — nechta qo'shilishi so'raladi */}
       {skanOyna && (() => {
-        // Savatda qatori bor bo'lsa miqdor o'sha qatorga, o'sha narxda qo'shiladi
-        const qator = savat.find(s => s.tovarId === skanOyna.tovar.id && !s.bonus)
+        const tv = skanOyna.tovar
+        // Har bir birlik narxi: savatda shu birlikda qator bo'lsa — o'sha narxda
+        // (qo'lda o'zgartirilgan bo'lishi mumkin) qo'shiladi
+        const birliklar = bonusTanlashRejimi
+          ? [{ nomi: '', miqdor: 1, narx: 0 }]
+          : sotuvBirliklari(tv).map(b => {
+            const q = savat.find(x => x.tovarId === tv.id && !x.bonus && (x.oram?.nomi ?? '') === b.nomi)
+            return { nomi: b.nomi, miqdor: b.miqdor, narx: q ? q.birlikNarxi : narxTuriBoyicha(tv, narxTuri, kursi, b.nomi) }
+          })
+        const qator = savat.find(x => x.tovarId === tv.id && !x.bonus && (x.oram?.nomi ?? '') === skanOyna.birlik)
         return (
         <SkanMiqdorOynasi
-          key={skanOyna.tovar.id}
-          tovar={skanOyna.tovar}
+          key={tv.id}
+          tovar={tv}
           bonus={bonusTanlashRejimi}
-          narx={bonusTanlashRejimi ? 0 : Number(qator?.birlikNarxi ?? narxTuriBoyicha(skanOyna.tovar, narxTuri, kursi))}
-          paket={bonusTanlashRejimi ? null : qator ? qator.paket : paketTuriBoyicha(skanOyna.tovar, narxTuri, kursi)}
-          narxYorligi={NARX_TURI_LABEL[qator ? (qator.narxTuri ?? 'sotish') : amaldagiNarxTuri(skanOyna.tovar, narxTuri)]}
-          savatda={savatdagiMiqdor(skanOyna.tovar.id, bonusTanlashRejimi)}
+          birliklar={birliklar}
+          boshlangichBirlik={bonusTanlashRejimi ? '' : skanOyna.birlik}
+          narxYorligi={NARX_TURI_LABEL[qator ? (qator.narxTuri ?? 'sotish') : amaldagiNarxTuri(tv, narxTuri, skanOyna.birlik)]}
+          savatda={savatdagiAsosiy(tv.id)}
           boshlangich={skanOyna.boshlangich}
           onTasdiq={skanMiqdorniTasdiqla}
           onYop={skanOynaniYop}
@@ -3307,7 +3448,11 @@ export default function SotuvPage() {
                       <div className="flex flex-wrap gap-1 mt-2">
                         {zakaz.tarkiblar.map(item => (
                           <span key={item.id} className="text-[11px] bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded">
-                            {item.tovar.nomi} ×{Number(item.miqdor)}
+                            {(() => {
+                              // "2 blok" — o'ramda saqlangan bo'lsa
+                              const q = chekQatori({ miqdor: item.miqdor, birlikNarxi: item.birlikNarxi, jami: item.jami ?? 0, oramNomi: item.oramNomi, oramMiqdori: item.oramMiqdori })
+                              return `${item.tovar.nomi} ×${q.oram ? `${q.soni} ${q.oram}` : q.soni}`
+                            })()}
                           </span>
                         ))}
                       </div>
@@ -3419,7 +3564,7 @@ export default function SotuvPage() {
 
                   <div className="space-y-2">
                     <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">Qaytariladigan mahsulotlar:</p>
-                    {qaytarishSotuv.tarkiblar.map(t => {
+                    {qaytarishQatorlari(qaytarishSotuv.tarkiblar).map(t => {
                       const sel = qaytarishTanlandan(t.tovarId)
                       return (
                         <div key={t.tovarId} className="border border-gray-200 dark:border-neutral-700 rounded-xl p-3">
@@ -3433,8 +3578,12 @@ export default function SotuvPage() {
                               }))}
                               className="w-4 h-4 accent-red-600"
                             />
-                            <span className="text-gray-900 dark:text-gray-100 text-sm font-medium flex-1">{t.tovar?.nomi || '—'}</span>
-                            <span className="text-gray-500 dark:text-gray-400 text-xs">max: {Number(t.miqdor)}</span>
+                            <span className="text-gray-900 dark:text-gray-100 text-sm font-medium flex-1">
+                              {t.nomi}
+                              {/* "2 blok + 5 dona" — miqdor pastda asosiy birlikda kiritiladi */}
+                              {t.oramli && <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">{t.qismlar.join(' + ')}</span>}
+                            </span>
+                            <span className="text-gray-500 dark:text-gray-400 text-xs">max: {t.miqdor}</span>
                           </div>
                           {sel.checked && (
                             <div className="grid grid-cols-2 gap-2 ml-7">
@@ -3443,7 +3592,7 @@ export default function SotuvPage() {
                                 <input
                                   type="number"
                                   min={0.001}
-                                  max={Number(t.miqdor)}
+                                  max={t.miqdor}
                                   step="any"
                                   value={sel.miqdor}
                                   onChange={e => setQaytarishTanlangan(prev => ({

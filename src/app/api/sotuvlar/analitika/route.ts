@@ -73,14 +73,16 @@ export async function GET(req: NextRequest) {
     type SotuvFoydaInput = {
       tarkiblar: Array<{
         birlikNarxi: number | string | { toNumber: () => number }
+        jami: number | string | { toNumber: () => number }
         miqdor: number | string | { toNumber: () => number }
         tovar: { kelishNarxi: number | string | { toNumber: () => number } }
       }>
     }
     const hisoblaFoyda = (sotuvlar: SotuvFoydaInput[]) =>
       sotuvlar.reduce((jami, s) => {
+        // Foyda = qator summasi − tannarx ("1 blok — 75 000" ham aniq)
         const sotuvFoyda = s.tarkiblar.reduce(
-          (f, t) => f + (Number(t.birlikNarxi) - Number(t.tovar.kelishNarxi)) * Number(t.miqdor),
+          (f, t) => f + Number(t.jami) - Number(t.tovar.kelishNarxi) * Number(t.miqdor),
           0
         )
         return jami + sotuvFoyda
@@ -124,7 +126,7 @@ export async function GET(req: NextRequest) {
       bor.sotuvSoni += 1
       bor.jami += Number(s.yakuniySumma)
       bor.foyda += s.tarkiblar.reduce(
-        (f, t) => f + (Number(t.birlikNarxi) - Number(t.tovar.kelishNarxi)) * Number(t.miqdor),
+        (f, t) => f + Number(t.jami) - Number(t.tovar.kelishNarxi) * Number(t.miqdor),
         0
       )
       kassirMap.set(key, bor)

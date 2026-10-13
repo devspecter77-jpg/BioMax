@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { xodimKontekst } from '@/lib/xodim-server'
 import { sanaOraligi, sotuvDavriOraligi } from '@/lib/xodim-mulk'
 import { toKirill, toLotin } from '@/lib/utils'
+import { chekQatori } from '@/lib/birlik'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           id: true, chekRaqami: true, sana: true, tolovUsuli: true, holati: true, manba: true, onlaynRaqam: true,
           jamiSumma: true, chegirma: true, yakuniySumma: true, ballIshlatilgan: true, keshbekIshlatilgan: true,
           mijoz: { select: { id: true, ism: true, telefon: true } },
-          tarkiblar: { select: { id: true, miqdor: true, birlikNarxi: true, jami: true, tovar: { select: { id: true, nomi: true, birlik: true } } } },
+          tarkiblar: { select: { id: true, miqdor: true, birlikNarxi: true, jami: true, oramNomi: true, oramMiqdori: true, tovar: { select: { id: true, nomi: true, birlik: true } } } },
           qaytarishlar: { select: { jamiSumma: true } },
         },
       }),
@@ -150,10 +151,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         yakuniySumma: Number(s.yakuniySumma),
         ballIshlatilgan: Number(s.ballIshlatilgan),
         keshbekIshlatilgan: Number(s.keshbekIshlatilgan),
-        tarkiblar: s.tarkiblar.map(t => ({
-          id: t.id, tovarId: t.tovar.id, nomi: t.tovar.nomi, birlik: t.tovar.birlik,
-          miqdor: Number(t.miqdor), birlikNarxi: Number(t.birlikNarxi), jami: Number(t.jami),
-        })),
+        tarkiblar: s.tarkiblar.map(t => {
+          // O'ramda sotilgan qator — "2 blok × 75 000"
+          const q = chekQatori(t)
+          return {
+            id: t.id, tovarId: t.tovar.id, nomi: t.tovar.nomi, birlik: q.oram ?? t.tovar.birlik,
+            miqdor: q.soni, birlikNarxi: q.narx, jami: Number(t.jami),
+          }
+        }),
         qaytarilgan: s.qaytarishlar.reduce((x, q) => x + Number(q.jamiSumma), 0),
         qaytarishlar: undefined,
       })),

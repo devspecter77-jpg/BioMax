@@ -2,6 +2,7 @@
 // Format thermal 80mm printer uchun.
 
 import { formatSum, formatSanaVaVaqt } from './utils'
+import { chekQatori } from './birlik'
 import { tolovLabel, tolovQisqa, tolovKanallari } from './tolov-usullari'
 
 // Lotin → Kirill transliteratsiya
@@ -33,6 +34,9 @@ export interface ChekTarkib {
   miqdor: number | string
   birlikNarxi: number | string
   jami: number | string
+  /** O'ramda sotilgan bo'lsa ("blok", 1 blok = 60) — chekda "2 blok × 75 000" */
+  oramNomi?: string | null
+  oramMiqdori?: number | string | null
 }
 
 export interface ChekData {
@@ -115,13 +119,15 @@ export function buildChekHtml(opts: ChekPrintOptions): string {
 
   const tovarlarHtml = (s.tarkiblar || []).map((item) => {
     const nomi = t(item.tovar?.nomi || item.tovarNomi || '—')
-    const miqdor = Number(item.miqdor)
+    // "2 blok" — o'ramda sotilgan bo'lsa o'ram soni va narxi
+    const q = chekQatori(item)
+    const miqdor = q.oram ? `${q.soni} ${t(q.oram)}` : q.soni
     const bonusmi = Number(item.birlikNarxi) === 0
     if (bonusmi) {
       return `<tr><td colspan="2" style="font-weight:600;padding-top:3px">${nomi} <span style="font-weight:normal">(${t('Bonus')})</span></td></tr>`
         + `<tr><td colspan="2" style="white-space:nowrap"><span style="color:#222">${miqdor} × ${t('Bepul')}</span></td></tr>`
     }
-    const narxQ = formatNum(item.birlikNarxi)
+    const narxQ = formatNum(q.narx)
     const jami = formatSum(item.jami)
     return `<tr><td colspan="2" style="font-weight:600;padding-top:3px">${nomi}</td></tr>`
       + `<tr><td colspan="2" style="white-space:nowrap"><span style="color:#222">${miqdor} × ${narxQ}</span> = <span style="font-weight:bold">${jami}</span></td></tr>`
@@ -239,7 +245,8 @@ export function buildMijozTarixHtml(opts: MijozTarixOptions): string {
     (tarkiblar || [])
       .map((item) => {
         const nomi = t(item.tovar?.nomi || item.tovarNomi || '—')
-        const miqdor = Number(item.miqdor)
+        const q = chekQatori(item)
+        const miqdor = q.oram ? `${q.soni} ${t(q.oram)}` : q.soni
         const bonusmi = Number(item.birlikNarxi) === 0
         if (bonusmi) {
           return (
@@ -249,7 +256,7 @@ export function buildMijozTarixHtml(opts: MijozTarixOptions): string {
         }
         return (
           `<tr><td colspan="2">• ${nomi}</td></tr>` +
-          `<tr><td colspan="2" style="padding-left:6px;white-space:nowrap">${miqdor} × ${formatNum(item.birlikNarxi)} = ${formatSum(item.jami)}</td></tr>`
+          `<tr><td colspan="2" style="padding-left:6px;white-space:nowrap">${miqdor} × ${formatNum(q.narx)} = ${formatSum(item.jami)}</td></tr>`
         )
       })
       .join('')

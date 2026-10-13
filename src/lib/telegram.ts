@@ -3,6 +3,7 @@ import { StringSession } from 'telegram/sessions'
 import { computeCheck } from 'telegram/Password'
 import { prisma } from './prisma'
 import { tolovQisqa } from './tolov-usullari'
+import { chekQatori } from './birlik'
 
 // ─── Yordamchi funksiyalar ───────────────────────────────────────────────────
 
@@ -790,9 +791,11 @@ async function getMahsulotlarMatni(sotuvId: string | null, maxQator: number = 10
   const qatorlar: string[] = []
   const korsatiladigan = tarkiblar.slice(0, maxQator)
   for (const t of korsatiladigan) {
-    const miqdor = Number(t.miqdor)
-    const narx = Number(t.birlikNarxi)
-    const birlik = t.tovar.birlik === 'DONA' ? 'dona' : t.tovar.birlik.toLowerCase()
+    // O'ramda sotilgan qator — "2 blok × 75 000"
+    const q = chekQatori(t)
+    const miqdor = q.soni
+    const narx = q.narx
+    const birlik = q.oram ?? (t.tovar.birlik === 'DONA' ? 'dona' : t.tovar.birlik.toLowerCase())
     if (narx === 0) {
       qatorlar.push(`  • ${t.tovar.nomi} (Bonus) — ${miqdor} ${birlik} × Bepul`)
     } else {

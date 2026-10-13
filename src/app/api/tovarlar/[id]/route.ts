@@ -8,7 +8,10 @@ import { rasmlarniSiqish } from '@/lib/rasm'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
-import { birlikTozala, musbatYokiNull, narxlarniJoyla, narxOrami, oramlarniOqi, oramlarniTekshir, oramNarxsiz } from '@/lib/birlik'
+import {
+  birlikNarxlariniJoyla, birlikTozala, kelishOrami, musbatYokiNull, narxKiritmasiniOqi, oramKelishsiz,
+  oramlarniOqi, oramlarniTekshir, oramNarxlariniKoch,
+} from '@/lib/birlik'
 import { nomKaliti } from '@/lib/utils'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -113,48 +116,43 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updateData.sotishNarxi = parseFloat(data.sotishNarxi)
     }
 
-    // Narxlar o'ram uchun kiritilgan bo'lsa ("1 blok — 75 000") — bazaga bir
-    // dona narxi, o'ramga aniq narx (lib/birlik.ts). Narx birligisiz kelsa
-    // (Ombor sahifasidagi qisqa forma) va o'zgargan bo'lsa — o'ramdagi eski
-    // aniq narx olib tashlanadi, aks holda kassa eskirgan narxni olardi.
+    // Har bir birlikning o'z narxi (1 dona — 1 300, 1 blok — 75 000): o'ramga
+    // o'z narxi, bazaga — bir asosiy birlik narxi (lib/birlik.ts). Narxsiz
+    // kelsa (Ombor sahifasidagi qisqa forma) — o'ram narxlari o'z joyida
+    // qoladi, faqat kelish narxi dona uchun o'zgarsa o'ramdagi eskisi olinadi.
     const narxKalitlari = ['kelishNarxi', 'sotishNarxi', 'optomNarxi', 'bolishNarxi'] as const
-    if (bor('narxBirligi') || narxKalitlari.some(bor)) {
+    const birlikNarxlari = bor('narxlar') || bor('narxBirligi')
+    if (birlikNarxlari || narxKalitlari.some(bor) || bor('oramlar')) {
       const joriy = await prisma.tovar.findUnique({
         where: { id },
-        select: { oramlar: true, kelishNarxi: true, sotishNarxi: true, optomNarxi: true, bolishNarxi: true },
+        select: { oramlar: true, kelishNarxi: true, sotishNarxi: true },
       })
-      const oramlar = oramlarniOqi(updateData.oramlar !== undefined ? updateData.oramlar : joriy?.oramlar)
-      if (bor('narxBirligi')) {
-        const tanlangan = oramlar.find(o => nomKaliti(o.nomi) === nomKaliti(String(data.narxBirligi ?? '').trim()))
-        const eski = narxOrami(oramlarniOqi(joriy?.oramlar))
-        // Shu hisobga yashirilgan narx formadan kelmaydi: o'sha o'ramdagi eski
-        // aniq narx olinadi, bo'lmasa bazadagi bir dona narxidan hisoblanadi
-        const yashirin = (tur: 'kelish' | 'sotish', ustun: unknown): number | null => {
-          if (eski && tanlangan && nomKaliti(eski.nomi) === nomKaliti(tanlangan.nomi) && eski.miqdor === tanlangan.miqdor && eski.narx[tur] !== null) {
-            return eski.narx[tur]
-          }
-          const b = musbatYokiNull(ustun)
-          return b === null ? null : tanlangan ? Math.round(b * tanlangan.miqdor * 100) / 100 : b
-        }
+      const eskiOramlar = oramlarniOqi(joriy?.oramlar)
+      let oramlar = updateData.oramlar !== undefined ? oramlarniOqi(updateData.oramlar) : eskiOramlar
+      if (birlikNarxlari) {
+        const kiritma = narxKiritmasiniOqi(data)
         const kelishYashirin = yashirilganMaydonlar.has('kelishNarxi')
-        const sotishYashirin = yashirilganMaydonlar.has('sotishNarxi')
-        const j = narxlarniJoyla(oramlar, data.narxBirligi, {
-          kelish: kelishYashirin ? yashirin('kelish', joriy?.kelishNarxi) : musbatYokiNull(data.kelishNarxi),
-          sotish: sotishYashirin ? yashirin('sotish', joriy?.sotishNarxi) : musbatYokiNull(data.sotishNarxi),
-          optom: musbatYokiNull(data.optomNarxi),
-          bolish: musbatYokiNull(data.bolishNarxi),
-        })
+        if (kelishYashirin) {
+          // Yashirilgan kelish narxi formadan kelmaydi — eskisi o'z birligida qoladi
+          const ko = kelishOrami(eskiOramlar)
+          const mos = ko && oramlar.some(o => nomKaliti(o.nomi) === nomKaliti(ko.nomi) && o.miqdor === ko.miqdor)
+          kiritma.kelish = mos && ko ? { birlik: ko.nomi, narx: ko.narx?.kelish ?? null } : { birlik: '', narx: musbatYokiNull(joriy?.kelishNarxi) }
+        }
+        const j = birlikNarxlariniJoyla(oramlar, kiritma.birliklar, kiritma.kelish)
+        if (j.asosiy.sotish === null && !yashirilganMaydonlar.has('sotishNarxi')) {
+          return NextResponse.json({ xato: 'Sotish narxini kiriting — 1 dona yoki o‘ram uchun' }, { status: 400 })
+        }
         updateData.oramlar = j.oramlar
         if (!kelishYashirin && j.asosiy.kelish !== null) updateData.kelishNarxi = j.asosiy.kelish
-        if (!sotishYashirin && j.asosiy.sotish !== null) updateData.sotishNarxi = j.asosiy.sotish
+        if (!yashirilganMaydonlar.has('sotishNarxi') && j.asosiy.sotish !== null) updateData.sotishNarxi = j.asosiy.sotish
         updateData.optomNarxi = j.asosiy.optom
         updateData.bolishNarxi = j.asosiy.bolish
-      } else if (narxOrami(oramlar)) {
-        const ozgardi = narxKalitlari.some(k => {
-          const yangi = updateData[k]
-          return yangi !== undefined && Number(yangi ?? 0) !== Number(joriy?.[k] ?? 0)
-        })
-        if (ozgardi) updateData.oramlar = oramNarxsiz(oramlar)
+      } else {
+        // O'ramlar narxsiz kelgan bo'lsa — nomi va hajmi bir xil o'ramga eski narxi ko'chadi
+        if (updateData.oramlar !== undefined) oramlar = oramNarxlariniKoch(eskiOramlar, oramlar)
+        const kelishOzgardi = updateData.kelishNarxi !== undefined && Number(updateData.kelishNarxi) !== Number(joriy?.kelishNarxi ?? 0)
+        if (kelishOzgardi) oramlar = oramKelishsiz(oramlar)
+        if (updateData.oramlar !== undefined || kelishOzgardi) updateData.oramlar = oramlar
       }
     }
 

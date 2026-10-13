@@ -7,7 +7,7 @@ import { sessionFilialId, sessionEgaId, sessionIsRealEga } from '@/lib/filial-sc
 import { tovarYozishRuxsatlari } from '@/lib/tovar-ruxsat'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, JoyXatosi, type KatalogDoirasi } from '@/lib/tovar-ombori-server'
-import { birlikTozala, narxOrami, oramlarniMatndan, oramlarniOqi, oramlarniTekshir, oramNarxsiz } from '@/lib/birlik'
+import { birlikTozala, kelishOrami, oramKelishsiz, oramlarniMatndan, oramlarniOqi, oramlarniTekshir, oramNarxlariniKoch } from '@/lib/birlik'
 
 const HOLATLAR = new Set(['FAOL', 'ARXIVLANGAN'])
 
@@ -115,11 +115,14 @@ export async function POST(req: NextRequest) {
         })
 
         if (mavjud) {
-          // Faylda narx (bir dona uchun) o'zgargan bo'lsa — o'ramdagi eski aniq
-          // narx ("1 blok — 75 000") olib tashlanadi, kassa yangisini olsin
+          // Faylda o'ramlarning faqat nomi va hajmi — eski narxlari ("1 blok —
+          // 75 000") nomi va hajmi bir xil o'ramga ko'chadi. Kelish narxi faylda
+          // (bir dona uchun) o'zgargan bo'lsa — o'ramdagi eski kelish narxi olinadi.
           const eskiOramlar = oramlarniOqi(mavjud.oramlar)
-          const narxOzgardi = Number(mavjud.kelishNarxi) !== kelishNarxi || Number(mavjud.sotishNarxi) !== sotishNarxi
-          const yangiOramlar = oramlar ?? (narxOrami(eskiOramlar) && narxOzgardi ? oramNarxsiz(eskiOramlar) : undefined)
+          let yangiOramlar = oramlar ? oramNarxlariniKoch(eskiOramlar, oramlar) : undefined
+          if (Number(mavjud.kelishNarxi) !== kelishNarxi && kelishOrami(yangiOramlar ?? eskiOramlar)) {
+            yangiOramlar = oramKelishsiz(yangiOramlar ?? eskiOramlar)
+          }
           await prisma.tovar.update({
             where: { id: mavjud.id },
             data: { kategoriyaId, shtrixKod, valyuta, kelishNarxi, sotishNarxi, birlik, holati, yaroqlilikMuddati, ...(yangiOramlar ? { oramlar: yangiOramlar } : {}) },

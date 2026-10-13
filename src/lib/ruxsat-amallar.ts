@@ -5,7 +5,8 @@
 // Sof mantiq: prisma import qilmaydi, sinovlarda to'g'ridan-to'g'ri ishlaydi.
 
 import { HARAKAT_MALUMOTI, type HarakatTuri } from './harakat-turlari'
-import { oramlarniOqi, paketNarxi, type SotishNarxTuri } from './birlik'
+import { sotuvBirliklari } from './birlik'
+import { nomKaliti } from './utils'
 
 export interface SotuvTanasi {
   chegirma?: unknown
@@ -15,9 +16,12 @@ export interface SotuvTanasi {
 
 /** Mahsulotning eng past ruxsat etilgan narxi, so'mda (chakana/optom/bo'lish'dan eng kichigi). */
 export interface MinNarx {
+  /** Bir asosiy birlik (dona) uchun */
   somda: number
   /** USD'da narxlangan — kurs kassada biroz boshqacha bo'lishi mumkin */
   usd: boolean
+  /** O'ramlar (blok, karobka): nomKaliti → 1 o'ramning eng past narxi va hajmi */
+  oramlar?: Map<string, { somda: number; miqdor: number }>
 }
 
 function son(q: unknown): number {
@@ -33,20 +37,19 @@ export function minNarxSomda(
   t: { sotishNarxi: unknown; optomNarxi?: unknown; bolishNarxi?: unknown; valyuta?: string | null; oramlar?: unknown },
   kursi: number,
 ): MinNarx {
-  // Narx o'ram uchun kiritilgan bo'lsa ("1 blok — 70 000") — bir dona narxi
-  // aniq (70 000 / 60), bazadagi yaxlitlangan ustundan emas
-  const oramlar = oramlarniOqi(t.oramlar)
-  const birlikda = (turi: SotishNarxTuri, ustun: unknown) => {
-    const p = paketNarxi(oramlar, turi)
-    return p ? p.narx / p.miqdor : ustun
-  }
-  const narxlar = [birlikda('sotish', t.sotishNarxi), birlikda('optom', t.optomNarxi), birlikda('bolish', t.bolishNarxi)]
-    .filter(n => n !== null && n !== undefined)
-    .map(son)
-    .filter(n => n > 0)
-  const eng = narxlar.length ? Math.min(...narxlar) : 0
   const usd = t.valyuta === 'USD'
-  return { somda: usd ? Math.round(eng * kursi) : eng, usd }
+  const somga = (n: number) => (usd ? Math.round(n * kursi) : n)
+  const eng = (b: { sotish: number | null; optom: number | null; bolish: number | null }) => {
+    const narxlar = [b.sotish, b.optom, b.bolish].filter((n): n is number => n !== null && n > 0)
+    return narxlar.length ? Math.min(...narxlar) : 0
+  }
+  // Har bir birlikning o'z narxi: 1 dona — 1 300, 1 blok — 75 000 (lib/birlik.ts)
+  const [asosiy, ...oramlar] = sotuvBirliklari(t)
+  return {
+    somda: somga(eng(asosiy)),
+    usd,
+    oramlar: new Map(oramlar.map(b => [nomKaliti(b.nomi), { somda: somga(eng(b)), miqdor: b.miqdor }])),
+  }
 }
 
 /**
@@ -68,10 +71,25 @@ export function sotuvUchunKerak(tana: SotuvTanasi, minNarxlar: Map<string, MinNa
     for (const q of tarkiblar) {
       if (son(q.chegirma) > 0.5) { chegirma = true; break }
       const min = minNarxlar.get(String(q.tovarId ?? ''))
-      if (!min || min.somda <= 0) continue
+      if (!min) continue
+      // O'ramda sotilgan qator ("2 blok"): 1 o'ram narxi = qator summasi /
+      // o'ramlar soni; hajmi bazadagi o'ramdan (brauzer yuborganidan emas).
+      // Faqat BUTUN o'ram — "0,5 blok" dona sifatida tekshiriladi.
+      const oram = q.oramNomi ? min.oramlar?.get(nomKaliti(String(q.oramNomi))) : undefined
+      const soni = oram ? son(q.miqdor) / oram.miqdor : 0
+      if (oram && soni > 0 && Math.abs(soni - Math.round(soni)) < 1e-6) {
+        if (oram.somda > 0) {
+          const chegara = min.usd ? oram.somda * 0.98 : oram.somda - 1
+          if (son(q.jami) / soni < chegara) { chegirma = true; break }
+        }
+        continue
+      }
+      if (min.somda <= 0) continue
       // USD mahsulotda kurs kun davomida yangilanishi mumkin — 2% bardosh
       const chegara = min.usd ? min.somda * 0.98 : min.somda - 1
-      if (son(q.birlikNarxi) < chegara) { chegirma = true; break }
+      // O'ram qatori butun bo'lmasa — bir dona narxi summadan olinadi
+      const birlikNarxi = oram && son(q.miqdor) > 0 ? son(q.jami) / son(q.miqdor) : son(q.birlikNarxi)
+      if (birlikNarxi < chegara) { chegirma = true; break }
     }
   }
   if (chegirma) kerak.push('sotuv.chegirma')

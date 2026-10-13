@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
           select: {
             miqdor: true,
             birlikNarxi: true,
+            jami: true,
             tovar: {
               select: { kelishNarxi: true },
             },
@@ -58,10 +59,9 @@ export async function GET(req: NextRequest) {
       existing.sotuvSoni += 1
       existing.jamiSotuv += Number(s.yakuniySumma)
 
-      // Foyda: sum((birlikNarxi - kelishNarxi) * miqdor)
+      // Foyda: sum(qator summasi − kelish narxi × miqdor)
       for (const t of s.tarkiblar) {
-        const foyda =
-          (Number(t.birlikNarxi) - Number(t.tovar.kelishNarxi)) * Number(t.miqdor)
+        const foyda = Number(t.jami) - Number(t.tovar.kelishNarxi) * Number(t.miqdor)
         existing.jamiDaromad += foyda
       }
 

@@ -12,7 +12,7 @@ import { yorliqlarHtml, yorliqSozlamasi, YORLIQ_OLCHAMLARI, type Yorliq } from '
 import { chekChopEtish } from '@/lib/chek-print'
 import { useSaqlanganQiymat } from '@/hooks/useSaqlanganQiymat'
 import YorliqNamuna from '@/components/YorliqNamuna'
-import { birlikMatni, miqdorMatni as oramdaYoz, oramlarniOqi } from '@/lib/birlik'
+import { birlikMatni, miqdorMatni as oramdaYoz, oramlarniOqi, sotuvBirliklari } from '@/lib/birlik'
 
 // Mahsulot ustiga bosilganda ochiladigan to'liq karta:
 // qayerda turgani (ombor/do'kon), qachon va kimdan kelgani, butun tarixi.
@@ -366,8 +366,8 @@ export default function TovarTafsilot({
                     belgi={<Boxes size={11} />}
                     label="O'lchov birligi"
                     qiymat={birlik}
-                    // Narx o'ram uchun kiritilgan bo'lsa — yonida: "1 blok = 60 dona — 75 000"
-                    izoh={oramlar.length > 0 ? oramlar.map(o => `1 ${o.nomi} = ${o.miqdor} ${birlik}${o.narx?.sotish != null ? ` — ${narxMatni(o.narx.sotish, t.valyuta)}` : ''}`).join(' · ') : undefined}
+                    // Har bir o'ram: hajmi va chakana narxi (kiritilgani yoki hisoblangani) — "1 blok = 60 dona — 75 000"
+                    izoh={oramlar.length > 0 ? sotuvBirliklari(t).slice(1).map(b => `1 ${b.nomi} = ${b.miqdor} ${birlik}${b.sotish !== null ? ` — ${narxMatni(b.sotish, t.valyuta)}` : ''}`).join(' · ') : undefined}
                   />
                   <Qator belgi={<AlertTriangle size={11} />} label="Minimal qoldiq" qiymat={`${t.minimalQoldiq} ${birlik}`} />
                   {t.yaroqlilikMuddati && (

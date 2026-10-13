@@ -12,7 +12,7 @@ import { joriyUsdKursi } from '@/lib/kurs'
 import { foydalanuvchiYashirilganMaydonlari, maydonlarniYashir } from '@/lib/maydon-yashirish'
 import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { tovarKategoriyasi, yangiOmborSoralgan, JoyXatosi } from '@/lib/tovar-ombori-server'
-import { birlikTozala, musbatYokiNull, narxlarniJoyla, oramlarniTekshir } from '@/lib/birlik'
+import { birlikNarxlariniJoyla, birlikTozala, narxKiritmasiniOqi, oramlarniTekshir } from '@/lib/birlik'
 
 export async function GET(req: NextRequest) {
   try {
@@ -159,14 +159,14 @@ export async function POST(req: NextRequest) {
     if (!birlik) return NextResponse.json({ xato: "O'lchov birligi noto'g'ri — 20 belgigacha nom yozing" }, { status: 400 })
     const oramTekshiruv = oramlarniTekshir(data.oramlar, birlik)
     if (!oramTekshiruv.ok) return NextResponse.json({ xato: oramTekshiruv.xato }, { status: 400 })
-    // Narxlar o'ram uchun kiritilgan bo'lsa ("1 blok — 75 000") — bazaga bir
-    // dona narxi, o'ramga aniq narx (lib/birlik.ts). `narxBirligi` bo'sh — asosiy birlik.
-    const narxlar = narxlarniJoyla(oramTekshiruv.oramlar, data.narxBirligi, {
-      kelish: musbatYokiNull(data.kelishNarxi),
-      sotish: musbatYokiNull(data.sotishNarxi),
-      optom: musbatYokiNull(data.optomNarxi),
-      bolish: musbatYokiNull(data.bolishNarxi),
-    })
+    // Har bir birlikning o'z narxi (1 dona — 1 300, 1 blok — 75 000): o'ramga
+    // o'z narxi, bazaga — bir asosiy birlik narxi (lib/birlik.ts)
+    const kiritma = narxKiritmasiniOqi(data)
+    const narxlar = birlikNarxlariniJoyla(oramTekshiruv.oramlar, kiritma.birliklar, kiritma.kelish)
+    const asosiySotish = narxlar.asosiy.sotish
+    if (asosiySotish === null) {
+      return NextResponse.json({ xato: 'Sotish narxini kiriting — 1 dona yoki o‘ram uchun' }, { status: 400 })
+    }
 
     const autoShtrixKod = data.shtrixKod?.trim() || await keyingiShtrixKod(filialId)
     const rasmlar = await rasmlarniSiqish(data.rasmlar)
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
           filialId,
           egaId,
           kelishNarxi: narxlar.asosiy.kelish ?? 0,
-          sotishNarxi: narxlar.asosiy.sotish ?? 0,
+          sotishNarxi: asosiySotish,
           optomNarxi: narxlar.asosiy.optom,
           bolishNarxi: narxlar.asosiy.bolish,
           valyuta: data.valyuta === 'USD' ? 'USD' : 'UZS',

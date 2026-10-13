@@ -90,13 +90,11 @@ export async function GET(req: NextRequest) {
     const jamiSotuv = sotuvlar.reduce((s, v) => s + Number(v.yakuniySumma), 0) - jamiQaytarish
     const jamiXarajat = xarajatlar.reduce((s, x) => s + Number(x.summa), 0)
 
-    // Foyda: (sotish narxi - kelish narxi) * miqdor
+    // Foyda = qator summasi − kelish narxi × miqdor. Summa — to'langani ("1 blok — 75 000" ham aniq), miqdor va kelish narxi asosiy birlikda
     let jamiDaromad = 0
     for (const sotuv of sotuvlar) {
       for (const tarkib of sotuv.tarkiblar) {
-        const foyda =
-          (Number(tarkib.birlikNarxi) - Number(tarkib.tovar.kelishNarxi)) *
-          Number(tarkib.miqdor)
+        const foyda = Number(tarkib.jami) - Number(tarkib.tovar.kelishNarxi) * Number(tarkib.miqdor)
         jamiDaromad += foyda
       }
     }

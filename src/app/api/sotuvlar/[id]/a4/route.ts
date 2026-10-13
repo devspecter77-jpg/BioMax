@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth'
 import { egaFilialWhere } from '@/lib/filial-scope'
 import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 import type { ChekA4Malumot } from '@/lib/chek-a4'
+import { chekQatori } from '@/lib/birlik'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         tarkiblar: {
           orderBy: { id: 'asc' },
           select: {
-            tovarId: true, miqdor: true, birlikNarxi: true, jami: true,
+            tovarId: true, miqdor: true, birlikNarxi: true, jami: true, oramNomi: true, oramMiqdori: true,
             tovar: { select: { nomi: true, birlik: true, shtrixKod: true } },
           },
         },
@@ -85,15 +86,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       chekRaqami: sotuv.chekRaqami,
       sana: sotuv.sana.toISOString(),
       holati: sotuv.holati,
-      qatorlar: sotuv.tarkiblar.map(t => ({
-        nomi: t.tovar.nomi,
-        birlik: t.tovar.birlik,
-        shtrixKod: t.tovar.shtrixKod,
-        miqdor: Number(t.miqdor),
-        birlikNarxi: Number(t.birlikNarxi),
-        jami: Number(t.jami),
-        rasm: rasmlar.get(t.tovarId) ?? null,
-      })),
+      qatorlar: sotuv.tarkiblar.map(t => {
+        // O'ramda sotilgan qator — "2 blok × 75 000"
+        const q = chekQatori(t)
+        return {
+          nomi: t.tovar.nomi,
+          birlik: q.oram ?? t.tovar.birlik,
+          shtrixKod: t.tovar.shtrixKod,
+          miqdor: q.soni,
+          birlikNarxi: q.narx,
+          jami: Number(t.jami),
+          rasm: rasmlar.get(t.tovarId) ?? null,
+        }
+      }),
       jamiSumma: Number(sotuv.jamiSumma),
       chegirma: Number(sotuv.chegirma),
       ballIshlatilgan: Number(sotuv.ballIshlatilgan),
