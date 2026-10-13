@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
       prisma.tovar.findMany({
         where: { filialId, ...(filialId ? {} : { egaId: sessionEgaId(session) }) },
         include: { kategoriya: true },
-        orderBy: { nomi: 'asc' },
+        // Sahifadagi kabi — tartib raqami bo'yicha
+        orderBy: [{ tartibRaqami: { sort: 'asc', nulls: 'last' } }, { nomi: 'asc' }],
       }),
       foydalanuvchiYashirilganMaydonlari(foydalanuvchiId),
     ])
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
     const rows = tovarlar.map(t => {
       const stock = stockMap.get(t.id)
       return {
+        '№': t.tartibRaqami ?? '',
         'Nomi': t.nomi,
         'Kategoriya': t.kategoriya.nomi,
         'Shtrix-kod': t.shtrixKod || '',
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }]
+    ws['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 13 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Tovarlar')
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 

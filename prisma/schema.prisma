@@ -218,6 +218,12 @@ model Tovar {
   nomi          String
   kategoriyaId  String
   shtrixKod     String?
+  /// Tartib raqami (№ 1, 2, 3…) — bir do'kon (Ega katalogi yoki filial) ichida
+  /// ketma-ket. Yangi mahsulotga BAZA O'ZI beradi (`tovar_tartib_raqami`
+  /// triggeri) — qayerdan qo'shilmasin (sahifa, import, o'tkazma), raqam
+  /// takrorlanmaydi. Raqam o'zgarmaydi; o'chirilgan (arxivlangan) mahsulot
+  /// raqamini saqlab qoladi — u boshqasiga berilmaydi.
+  tartibRaqami  Int?
   filialId      String?
   // Filialsiz (filialId=null) mahsulot kimning katalogiga tegishli ekanini
   // belgilaydi — Ega o'zining shu belgi bilan ulashgan adminlariga ham
@@ -275,6 +281,8 @@ model Tovar {
   namunalar        NamunaTarkibi[]
 
   @@unique([shtrixKod, filialId])
+  @@index([egaId, tartibRaqami])
+  @@index([filialId, tartibRaqami])
   @@index([holati])
   @@index([holati, qulflangan])
   @@index([kategoriyaId])

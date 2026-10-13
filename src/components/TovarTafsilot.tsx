@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   X, Package, Warehouse, Store, Boxes, Loader2, Pencil, Barcode, Tag,
-  Calendar, Truck, History, Building, AlertTriangle, TrendingUp, Clock, MapPin, DollarSign, Lock, Unlock, QrCode, Printer,
+  Calendar, Truck, History, Building, AlertTriangle, TrendingUp, Clock, MapPin, DollarSign, Lock, Unlock, Printer,
 } from 'lucide-react'
 import { formatNarx, formatSum, formatSana, formatSanaVaVaqt } from '@/lib/utils'
 import { harakatMalumoti, joyLabel } from '@/lib/harakat-turlari'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
-import { yorliqlarHtml } from '@/lib/qr-kod'
+import { yorliqlarHtml, yorliqSozlamasi, YORLIQ_OLCHAMLARI, type Yorliq } from '@/lib/yorliq'
 import { chekChopEtish } from '@/lib/chek-print'
+import { useSaqlanganQiymat } from '@/hooks/useSaqlanganQiymat'
+import YorliqNamuna from '@/components/YorliqNamuna'
 
 // Mahsulot ustiga bosilganda ochiladigan to'liq karta:
 // qayerda turgani (ombor/do'kon), qachon va kimdan kelgani, butun tarixi.
@@ -34,6 +36,8 @@ interface Harakat {
 interface Tafsilot {
   tovar: {
     id: string; nomi: string
+    /** № — do'kon ichidagi tartib raqami */
+    tartibRaqami: number | null
     kategoriya: { id: string; nomi: string } | null
     taminotchi: { id: string; nomi: string; telefon: string | null } | null
     filial: { id: string; nomi: string } | null
@@ -86,8 +90,11 @@ export default function TovarTafsilot({
   const [data, setData] = useState<Tafsilot | null>(null)
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [xato, setXato] = useState<string | null>(null)
-  const [qrRasm, setQrRasm] = useState<string | null>(null)
   const [qulfAmalda, setQulfAmalda] = useState(false)
+  // Yorliq o'lchami — Tovarlar sahifasidagi "Yorliq chop etish" bilan umumiy
+  const [yorliqOlchamXom, setYorliqOlcham] = useSaqlanganQiymat<string>('yorliq-olcham', '58x40')
+  const [yorliqUstunXom] = useSaqlanganQiymat<string>('yorliq-ustun', '4')
+  const yorliqSozlama = useMemo(() => yorliqSozlamasi(yorliqOlchamXom, yorliqUstunXom), [yorliqOlchamXom, yorliqUstunXom])
 
   useBodyScrollLock(true)
 
@@ -108,32 +115,16 @@ export default function TovarTafsilot({
     return () => { bekor = true }
   }, [tovarId])
 
-  // Shtrix-kod ma'lum bo'lgach QR yaratiladi. Rasm brauzerda hosil
-  // qilinadi — server yuki ham, tashqi xizmat ham kerak emas.
-  useEffect(() => {
-    // Shtrix-kod bo'lmasa hech narsa qilinmaydi — `qrRasm` boshlang'ich
-    // holatida (null) qoladi. Komponent `key={tovarId}` bilan qayta
-    // yaratilgani uchun eski qiymat qolib ketmaydi.
-    const kod = data?.tovar.shtrixKod?.trim()
-    if (!kod) return
-    let bekor = false
-    fetch('/api/tovarlar/qr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kodlar: [kod], origin: window.location.origin }),
-    })
-      .then(r => r.json())
-      .then(j => { if (!bekor) setQrRasm(j?.rasmlar?.[kod] ?? null) })
-      .catch(() => { if (!bekor) setQrRasm(null) })
-    return () => { bekor = true }
-  }, [data])
+  const t = data?.tovar
+  const birlik = t ? t.birlik.toLowerCase() : ''
+  const yorliq = useMemo<Yorliq | null>(() => t ? {
+    nomi: t.nomi, shtrixKod: t.shtrixKod, narx: narxMatni(t.sotishNarxi, t.valyuta), tartibRaqami: t.tartibRaqami,
+  } : null, [t])
 
-  function qrChopEt() {
-    if (!qrRasm || !t?.shtrixKod) return
-    chekChopEtish(yorliqlarHtml([{
-      id: t.id, nomi: t.nomi, shtrixKod: t.shtrixKod,
-      narx: narxMatni(t.sotishNarxi, t.valyuta), qrRasm,
-    }], { ustunlar: 3, nusxa: 1, dokonNomi: '' }))
+  function yorliqChopEt() {
+    if (!yorliq) return
+    const { html, soni } = yorliqlarHtml([yorliq], yorliqSozlama)
+    if (soni > 0) chekChopEtish(html)
   }
 
   // Esc bilan yopish — modal odatiy xatti-harakati
@@ -142,9 +133,6 @@ export default function TovarTafsilot({
     window.addEventListener('keydown', f)
     return () => window.removeEventListener('keydown', f)
   }, [onYopish])
-
-  const t = data?.tovar
-  const birlik = t ? t.birlik.toLowerCase() : ''
 
   // Yaratilgandagi USD kursi va uning bugungi kurs bilan farqi.
   // Eski mahsulotlarda kurs saqlanmagan — o'sha holat aniq aytiladi.
@@ -188,6 +176,11 @@ export default function TovarTafsilot({
           <div className="min-w-0">
             <h3 className="text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
               <Package size={18} className="text-primary shrink-0" />
+              {t && t.tartibRaqami !== null && (
+                <span className="shrink-0 px-1.5 py-0.5 rounded-md border border-gray-300 dark:border-neutral-600 text-gray-600 dark:text-gray-300 text-xs font-bold leading-none tabular-nums">
+                  № {t.tartibRaqami}
+                </span>
+              )}
               <span className="truncate">{t?.nomi ?? "Mahsulot ma'lumotlari"}</span>
             </h3>
             {t && (
@@ -353,6 +346,7 @@ export default function TovarTafsilot({
                     <Qator belgi={<Tag size={11} />} label="Bo'lish narxi" qiymat={narxMatni(t.bolishNarxi, t.valyuta)} rang="text-amber-600" />
                   )}
                   <Qator belgi={<Barcode size={11} />} label="Shtrix-kod" qiymat={t.shtrixKod || '—'} />
+                  <Qator belgi={<Tag size={11} />} label="Tartib raqami" qiymat={t.tartibRaqami !== null ? `№ ${t.tartibRaqami}` : '—'} />
                   <Qator belgi={<Boxes size={11} />} label="O'lchov birligi" qiymat={t.birlik} />
                   <Qator belgi={<AlertTriangle size={11} />} label="Minimal qoldiq" qiymat={`${t.minimalQoldiq} ${birlik}`} />
                   {t.yaroqlilikMuddati && (
@@ -361,28 +355,32 @@ export default function TovarTafsilot({
                 </div>
               </section>
 
-              {/* ── QR kod ── */}
-              {qrRasm && t.shtrixKod && (
+              {/* ── Shtrix-kod yorlig'i ── */}
+              {yorliq && (
                 <section>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                    <QrCode size={12} /> QR kod
-                  </p>
-                  <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-xl p-4 flex items-center gap-4">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={qrRasm} alt="QR" className="w-24 h-24 rounded-lg bg-white p-1 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">
-                        Skanerlanganda mahsulot nomi va narxi chiqadi.
-                        Kassa skaneri ham shu QR&apos;ni o&apos;qiydi.
-                      </p>
-                      <button
-                        onClick={qrChopEt}
-                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-gray-400 text-xs font-medium hover:border-primary/50 hover:text-primary transition"
-                      >
-                        <Printer size={13} /> Yorliqni chop etish
-                      </button>
-                    </div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+                      <Barcode size={12} /> Yorliq
+                    </p>
+                    <select
+                      id="tafsilot-yorliq-olcham"
+                      aria-label="Yorliq o'lchami"
+                      value={yorliqSozlama.olcham}
+                      onChange={e => setYorliqOlcham(e.target.value)}
+                      className="py-1 pl-2 pr-7 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-700 dark:text-gray-300 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      {YORLIQ_OLCHAMLARI.map(o => <option key={o.qiymat} value={o.qiymat}>{o.nomi}</option>)}
+                    </select>
                   </div>
+                  <YorliqNamuna yorliq={yorliq} sozlama={yorliqSozlama} engKatta={1.5} />
+                  {t.shtrixKod && (
+                    <button
+                      onClick={yorliqChopEt}
+                      className="mt-2 w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:border-primary/50 hover:text-primary transition"
+                    >
+                      <Printer size={14} /> Yorliqni chop etish
+                    </button>
+                  )}
                 </section>
               )}
 

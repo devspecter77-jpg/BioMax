@@ -86,7 +86,6 @@ export const API_QOIDALARI: ApiQoida[] = [
   Q('/api/tovarlar/import', '*', ['tovarlar.import'], 'Tovarlarni import qilish'),
   Q('/api/tovarlar/export', '*', ['tovarlar.export'], 'Tovarlarni eksport qilish'),
   Q('/api/tovarlar/keyingi-kod', OQISH, ['tovarlar.qoshish', 'tovarlar.tahrirlash'], 'Shtrix-kod yaratish'),
-  Q('/api/tovarlar/qr', ['POST'], ['tovarlar', 'ombor', 'omborlar'], 'QR kod chop etish'),
   Q('/api/tovarlar', ['POST'], ['tovarlar.qoshish'], 'Tovar qo‘shish'),
   Q('/api/tovarlar/:id', ['PUT', 'PATCH'], ['tovarlar.tahrirlash'], 'Tovarni tahrirlash'),
   Q('/api/tovarlar/:id', ['DELETE'], ['tovarlar.ochirish'], 'Tovarni o‘chirish'),

@@ -59,9 +59,12 @@ export async function GET(req: NextRequest) {
       const kirillUz = kirill.replace(/е/g, 'э').replace(/Е/g, 'Э')
       const skriptlar = Array.from(new Set([normalized, kirill, kirillRu, kirillUz, toLotin(normalized)]))
       const variantlar = skriptlar.flatMap(s => apostroflar.map(a => s.replace(/'/g, a)))
+      // "12", "№12", "#12" — yorliqdagi tartib raqami bilan ham topiladi
+      const raqam = /^\s*(?:№|#)?\s*(\d{1,9})\s*$/.exec(qidiruv)
       where.OR = [
         ...variantlar.map(v => ({ nomi: { contains: v, mode: 'insensitive' as const } })),
         { shtrixKod: { contains: normalized } },
+        ...(raqam ? [{ tartibRaqami: Number(raqam[1]) }] : []),
       ]
     }
 

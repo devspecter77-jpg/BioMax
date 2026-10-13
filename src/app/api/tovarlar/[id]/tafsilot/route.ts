@@ -121,6 +121,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       tovar: {
         id: tovar.id,
         nomi: tovar.nomi,
+        tartibRaqami: tovar.tartibRaqami,
         kategoriya: tovar.kategoriya,
         taminotchi: tovar.taminotchi,
         filial: tovar.filial,
