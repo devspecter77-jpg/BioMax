@@ -2,35 +2,41 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { ruxsatKeshiniTozala } from '@/lib/ruxsat-server'
-import { dostavchikniTekshir } from '@/lib/dostavchik'
-import { DOSTAVCHIK_DOIRASI, dostavchikTafsiloti, namunaRuxsat } from '@/lib/dostavchik-server'
+import { NAMUNA_OLUVCHILAR, dostavchikniTekshir, oluvchiYolidan } from '@/lib/dostavchik'
+import { namunaOluvchiTafsiloti, namunaRuxsat, oluvchiDoirasi } from '@/lib/dostavchik-server'
 
 export const dynamic = 'force-dynamic'
 
-type Parametr = { params: Promise<{ id: string }> }
+type Parametr = { params: Promise<{ tur: string; id: string }> }
 
-// Bitta dostavchik: profil, jonli joylashuv, joriy va yakunlangan yetkazishlar, namunalar.
+// Bitta dostavchik yoki agent: profil, jonli joylashuv, namunalar va
+// (dostavchikda) joriy va yakunlangan yetkazishlar.
 export async function GET(_req: NextRequest, { params }: Parametr) {
+  const { tur, id } = await params
+  const rol = oluvchiYolidan(tur)
+  if (!rol) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
   const r = await namunaRuxsat()
   if (!r.ok) return r.javob
   try {
-    const t = await dostavchikTafsiloti((await params).id)
-    if (!t) return NextResponse.json({ xato: 'Dostavchik topilmadi' }, { status: 404 })
+    const t = await namunaOluvchiTafsiloti(id, rol)
+    if (!t) return NextResponse.json({ xato: `${NAMUNA_OLUVCHILAR[rol].nomi} topilmadi` }, { status: 404 })
     return NextResponse.json(t)
   } catch (e) {
-    console.error('[namuna-tovar/dostavchik GET]', e)
+    console.error('[namuna-tovar/oluvchi GET]', rol, e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
 }
 
 /**
  * Tahrirlash: ism, raqamlar, transport, faolligi. `parol` berilsa — yangi parol.
- * Login o'zgarmaydi (dostavchik u bilan kiradi va boshqa yozuvlarda ko'rinadi).
+ * Login o'zgarmaydi (xodim u bilan kiradi va boshqa yozuvlarda ko'rinadi).
  */
 export async function PUT(req: NextRequest, { params }: Parametr) {
-  const r = await namunaRuxsat('namuna-tovar.dostavchik')
+  const { tur, id } = await params
+  const rol = oluvchiYolidan(tur)
+  if (!rol) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
+  const r = await namunaRuxsat(NAMUNA_OLUVCHILAR[rol].ruxsat)
   if (!r.ok) return r.javob
-  const id = (await params).id
 
   let tana: Record<string, unknown>
   try {
@@ -49,8 +55,8 @@ export async function PUT(req: NextRequest, { params }: Parametr) {
   }
 
   try {
-    const mavjud = await prisma.foydalanuvchi.findFirst({ where: { id, ...DOSTAVCHIK_DOIRASI }, select: { id: true } })
-    if (!mavjud) return NextResponse.json({ xato: 'Dostavchik topilmadi' }, { status: 404 })
+    const mavjud = await prisma.foydalanuvchi.findFirst({ where: { id, ...oluvchiDoirasi(rol) }, select: { id: true } })
+    if (!mavjud) return NextResponse.json({ xato: `${NAMUNA_OLUVCHILAR[rol].nomi} topilmadi` }, { status: 404 })
 
     const profil = {
       transportTuri: m.transportTuri,
@@ -76,9 +82,9 @@ export async function PUT(req: NextRequest, { params }: Parametr) {
     // Faolligi o'zgarsa sessiya qorovuli darhol sezsin
     if (faol !== undefined) ruxsatKeshiniTozala(id)
 
-    return NextResponse.json(await dostavchikTafsiloti(id))
+    return NextResponse.json(await namunaOluvchiTafsiloti(id, rol))
   } catch (e) {
-    console.error('[namuna-tovar/dostavchik PUT]', e)
+    console.error('[namuna-tovar/oluvchi PUT]', rol, e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
 }

@@ -1,22 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { namunalarniTekshir } from '@/lib/dostavchik'
-import { DOSTAVCHIK_DOIRASI, namunaRuxsat } from '@/lib/dostavchik-server'
+import { NAMUNA_OLUVCHILAR, namunalarniTekshir, oluvchiYolidan } from '@/lib/dostavchik'
+import { namunaRuxsat, oluvchiDoirasi } from '@/lib/dostavchik-server'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Dostavchikka namuna berish — bir martada bir nechta tovar.
+ * Dostavchik yoki agentga namuna berish — bir martada bir nechta tovar.
  *
  * Tana: `{ izoh?, qatorlar: [{ tovarId?, nomi?, miqdor? }] }`. Katalogdan
  * tanlanganining nomi va birligi bazadan olinadi (brauzer yuborganiga
  * ishonilmaydi); katalogda yo'q narsa qo'lda yozilgan nomi bilan saqlanadi.
  * Ombor qoldig'i o'zgarmaydi: namuna vaqtincha chiqib, qaytib keladi.
  */
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ tur: string; id: string }> }) {
+  const { tur, id: dostavchikId } = await params
+  const rol = oluvchiYolidan(tur)
+  if (!rol) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
   const r = await namunaRuxsat('namuna-tovar.berish')
   if (!r.ok) return r.javob
-  const dostavchikId = (await params).id
+  const nomi = NAMUNA_OLUVCHILAR[rol].nomi
 
   let tana: Record<string, unknown>
   try {
@@ -30,12 +33,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const izoh = typeof tana.izoh === 'string' ? tana.izoh.trim().slice(0, 300) || null : null
 
   try {
-    const dostavchik = await prisma.foydalanuvchi.findFirst({
-      where: { id: dostavchikId, ...DOSTAVCHIK_DOIRASI },
+    const oluvchi = await prisma.foydalanuvchi.findFirst({
+      where: { id: dostavchikId, ...oluvchiDoirasi(rol) },
       select: { id: true, faol: true },
     })
-    if (!dostavchik) return NextResponse.json({ xato: 'Dostavchik topilmadi' }, { status: 404 })
-    if (!dostavchik.faol) return NextResponse.json({ xato: 'Dostavchik faol emas — avval uni faollashtiring' }, { status: 409 })
+    if (!oluvchi) return NextResponse.json({ xato: `${nomi} topilmadi` }, { status: 404 })
+    if (!oluvchi.faol) return NextResponse.json({ xato: `${nomi} faol emas — avval uni faollashtiring` }, { status: 409 })
 
     const tovarIdlar = qatorlar.flatMap(q => (q.tovarId ? [q.tovarId] : []))
     const tovarlar = tovarIdlar.length

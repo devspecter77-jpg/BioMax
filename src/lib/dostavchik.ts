@@ -1,4 +1,4 @@
-// Dostavchiklar, ularning yetkazishlari va namuna tovarlar — sof mantiq.
+// Dostavchiklar va agentlar, yetkazishlar va namuna tovarlar — sof mantiq.
 //
 // Bazaga ham, tarmoqqa ham bog'liq emas: sahifa, API va sinovlar bitta
 // qoidadan foydalanadi (formani tekshirish, yorliqlar, masofa).
@@ -11,6 +11,32 @@ import { koordinataTogrimi } from '@/lib/xarita-havola'
 export type TransportTuri = 'PIYODA' | 'VELOSIPED' | 'SKUTER' | 'MOTOTSIKL' | 'AVTOMOBIL' | 'YUK_AVTOMOBILI' | 'BOSHQA'
 export type YetkazishHolati = 'TAYINLANGAN' | 'YOLDA' | 'YETIB_KELDI' | 'TOPSHIRILDI' | 'BEKOR'
 export type NamunaHolati = 'BERILGAN' | 'TOPSHIRILGAN'
+
+/**
+ * Namuna oladigan xodim turlari ("Namuna tovar" bo'limidagi kichik bo'limlar).
+ * Dostavchik onlayn buyurtmalarni ham yetkazadi; agent — faqat namuna
+ * oladi va do'konlarga olib boradi. Ikkalasining hisobi, profili, jonli
+ * joylashuvi va namunalari bir xil yuritiladi.
+ */
+export type NamunaOluvchiRoli = 'DOSTAVCHIK' | 'AGENT'
+
+export const NAMUNA_OLUVCHILAR: Record<NamunaOluvchiRoli, {
+  /** API yo'li: `/api/namuna-tovar/<yol>/…` */
+  yol: string
+  nomi: string
+  kopligi: string
+  /** Qo'shish va tahrirlash ruxsati */
+  ruxsat: string
+}> = {
+  DOSTAVCHIK: { yol: 'dostavchiklar', nomi: 'Dostavchik', kopligi: 'Dostavchiklar', ruxsat: 'namuna-tovar.dostavchik' },
+  AGENT: { yol: 'agentlar', nomi: 'Agent', kopligi: 'Agentlar', ruxsat: 'namuna-tovar.agent' },
+}
+
+/** `/api/namuna-tovar/agentlar` → `AGENT`; noma'lum yo'l — `null`. */
+export function oluvchiYolidan(yol: string): NamunaOluvchiRoli | null {
+  const r = (Object.keys(NAMUNA_OLUVCHILAR) as NamunaOluvchiRoli[]).find(k => NAMUNA_OLUVCHILAR[k].yol === yol)
+  return r ?? null
+}
 
 export const TRANSPORT_TURLARI: { qiymat: TransportTuri; nomi: string }[] = [
   { qiymat: 'AVTOMOBIL', nomi: 'Avtomobil' },
@@ -62,6 +88,8 @@ export interface YetkazishQator {
 
 export interface DostavchikQisqa {
   id: string
+  /** Dostavchik yoki agent */
+  rol: NamunaOluvchiRoli
   ism: string
   login: string
   faol: boolean
@@ -122,6 +150,9 @@ export interface NamunaBerishQator {
 export interface DostavchikTafsilot extends DostavchikQisqa {
   izoh: string | null
   yaratilgan: string
+  /** Hamma vaqt davomida berilgan va qaytarilgan namunalar soni */
+  namunaJami: number
+  namunaQaytgan: number
   yetkazishlar: YetkazishQator[]
   namunalar: NamunaBerishQator[]
 }

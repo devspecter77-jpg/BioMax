@@ -7,10 +7,10 @@ import PhoneInput from '@/components/ui/phone-input'
 import LokatsiyaTanlash from '@/components/LokatsiyaTanlash'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { MAX_TELEFON } from '@/lib/mijoz-telefon'
-import { TRANSPORT_TURLARI, type DostavchikQisqa, type TransportTuri } from '@/lib/dostavchik'
+import { NAMUNA_OLUVCHILAR, TRANSPORT_TURLARI, type DostavchikQisqa, type NamunaOluvchiRoli, type TransportTuri } from '@/lib/dostavchik'
 
-// Dostavchik qo'shish yoki tahrirlash. Yaratishda tizimga kirish uchun login
-// va parol so'raladi; tahrirlashda parol ixtiyoriy (bo'sh — o'zgarmaydi).
+// Dostavchik yoki agent qo'shish va tahrirlash. Yaratishda tizimga kirish
+// uchun login va parol so'raladi; tahrirlashda parol ixtiyoriy (bo'sh — o'zgarmaydi).
 
 const inputCls =
   'w-full px-3 py-2.5 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500'
@@ -20,13 +20,16 @@ type Tahrir = Pick<
   'id' | 'ism' | 'login' | 'faol' | 'telefon' | 'qoshimchaTelefonlar' | 'transportTuri' | 'transportNomi' | 'davlatRaqami' | 'manzil' | 'manzilLat' | 'manzilLng'
 > & { izoh?: string | null }
 
-export default function DostavchikForma({ tahrir, onYopish, onSaqlandi }: {
+export default function DostavchikForma({ rol = 'DOSTAVCHIK', tahrir, onYopish, onSaqlandi }: {
+  /** Kim: dostavchik yoki agent */
+  rol?: NamunaOluvchiRoli
   /** Berilsa — tahrirlash rejimi */
   tahrir?: Tahrir | null
   onYopish: () => void
   onSaqlandi: (id: string) => void
 }) {
   useBodyScrollLock(true)
+  const { yol, nomi } = NAMUNA_OLUVCHILAR[rol]
   const [ism, setIsm] = useState(tahrir?.ism ?? '')
   const [login, setLogin] = useState(tahrir?.login ?? '')
   const [parol, setParol] = useState('')
@@ -53,7 +56,7 @@ export default function DostavchikForma({ tahrir, onYopish, onSaqlandi }: {
     e.preventDefault()
     setBand(true)
     try {
-      const j = await fetch(tahrir ? `/api/namuna-tovar/dostavchiklar/${tahrir.id}` : '/api/namuna-tovar/dostavchiklar', {
+      const j = await fetch(tahrir ? `/api/namuna-tovar/${yol}/${tahrir.id}` : `/api/namuna-tovar/${yol}`, {
         method: tahrir ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,7 +70,7 @@ export default function DostavchikForma({ tahrir, onYopish, onSaqlandi }: {
         toast.error(d.xato ?? 'Saqlanmadi')
         return
       }
-      toast.success(tahrir ? 'Dostavchik ma’lumotlari saqlandi' : `${d.ism} qo‘shildi — «${d.login}» bilan kira oladi`)
+      toast.success(tahrir ? `${nomi} ma’lumotlari saqlandi` : `${d.ism} qo‘shildi — «${d.login}» bilan kira oladi`)
       onSaqlandi(tahrir?.id ?? d.id)
     } catch {
       toast.error('Internet aloqasini tekshiring')
@@ -84,7 +87,7 @@ export default function DostavchikForma({ tahrir, onYopish, onSaqlandi }: {
         className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:border dark:border-neutral-800 w-full max-w-lg max-h-[92dvh] flex flex-col"
       >
         <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-          <h3 className="text-gray-900 dark:text-gray-100 font-semibold">{tahrir ? 'Dostavchikni tahrirlash' : 'Yangi dostavchik'}</h3>
+          <h3 className="text-gray-900 dark:text-gray-100 font-semibold">{tahrir ? `${nomi}ni tahrirlash` : `Yangi ${nomi.toLowerCase()}`}</h3>
           <button type="button" onClick={onYopish} aria-label="Yopish"
             className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">
             <X size={18} />
@@ -176,11 +179,11 @@ export default function DostavchikForma({ tahrir, onYopish, onSaqlandi }: {
               lat={nuqta.lat}
               lng={nuqta.lng}
               onChange={(lat, lng) => setNuqta({ lat, lng })}
-              nomi={ism.trim() || 'Dostavchik manzili'}
+              nomi={ism.trim() || `${nomi} manzili`}
               turi="xodim"
             />
             <p className="text-[11.5px] text-gray-500 dark:text-gray-400">
-              Bu — doimiy manzil. Dostavchikning <b>hozirgi</b> joylashuvi esa u ilovani telefonida ochganda o‘zi yangilanadi.
+              Bu — doimiy manzil. {nomi}ning <b>hozirgi</b> joylashuvi esa u ilovani telefonida ochganda o‘zi yangilanadi.
             </p>
           </div>
 
@@ -199,7 +202,9 @@ export default function DostavchikForma({ tahrir, onYopish, onSaqlandi }: {
                 <input type="checkbox" checked={faol} onChange={e => setFaol(e.target.checked)} className="mt-0.5 h-4 w-4 accent-red-600" />
                 <span className="text-sm">
                   <span className="font-medium text-gray-900 dark:text-gray-100">Faol</span>
-                  <span className="block text-gray-500 dark:text-gray-400">O‘chirilsa tizimga kira olmaydi va unga buyurtma biriktirilmaydi. Tarixi saqlanadi.</span>
+                  <span className="block text-gray-500 dark:text-gray-400">
+                    O‘chirilsa tizimga kira olmaydi va unga {rol === 'AGENT' ? 'namuna berilmaydi' : 'buyurtma biriktirilmaydi'}. Tarixi saqlanadi.
+                  </span>
                 </span>
               </label>
             </>
@@ -213,7 +218,7 @@ export default function DostavchikForma({ tahrir, onYopish, onSaqlandi }: {
           </button>
           <button type="submit" disabled={band}
             className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
-            {band && <Loader2 size={15} className="animate-spin" />} {tahrir ? 'Saqlash' : 'Dostavchik qo‘shish'}
+            {band && <Loader2 size={15} className="animate-spin" />} {tahrir ? 'Saqlash' : `${nomi} qo‘shish`}
           </button>
         </div>
       </form>

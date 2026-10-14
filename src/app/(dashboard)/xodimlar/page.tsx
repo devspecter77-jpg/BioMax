@@ -15,6 +15,7 @@ import XodimMulkPanel from '@/components/xodim/XodimMulkPanel'
 import XodimSotuvlarPanel from '@/components/xodim/XodimSotuvlarPanel'
 import XodimUmumiyPanel, { type XodimTafsiloti } from '@/components/xodim/XodimUmumiyPanel'
 import XodimSmenaPanel from '@/components/xodim/XodimSmenaPanel'
+import { ROLLAR } from '@/lib/rollar'
 import SmenaBelgisi, { type SmenaHolatQisqa } from '@/components/smena/SmenaBelgisi'
 import {
   TOLOV_TURLARI, TOLOV_MALUMOTI, tolovMalumoti, davrKaliti,
@@ -89,13 +90,13 @@ interface Tolov {
   yaratgan: { ism: string } | null
 }
 
-const ROLLAR = ['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK'] as const
 const ROL_RANG: Record<string, string> = {
   ADMIN: 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400',
   KASSIR: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400',
   OMBORCHI: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400',
   SOTUVCHI: 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400',
   DOSTAVCHIK: 'bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400',
+  AGENT: 'bg-teal-50 dark:bg-teal-950/30 text-teal-600 dark:text-teal-400',
 }
 
 const inputCls =

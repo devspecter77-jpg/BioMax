@@ -14,8 +14,8 @@ import { formatSanaVaVaqt } from '@/lib/utils'
 import { vaqtMatni, yangilikAniqla } from '@/lib/lokatsiya-vaqt'
 import { googleXarita, googleYonalish, yandexXarita } from '@/lib/xarita-havola'
 import {
-  YETKAZISH_NOMI, masofaMatni, miqdorMatni, transportNomi,
-  type DostavchikTafsilot, type NamunaQator, type YetkazishHolati, type YetkazishQator,
+  NAMUNA_OLUVCHILAR, YETKAZISH_NOMI, masofaMatni, miqdorMatni, transportNomi,
+  type DostavchikTafsilot, type NamunaOluvchiRoli, type NamunaQator, type YetkazishHolati, type YetkazishQator,
 } from '@/lib/dostavchik'
 import type { XaritaChiziq, XaritaNuqta } from '@/components/Xarita'
 import { YETKAZISH_XARITA_RANGI, qolganYol, transportProfili, type Nuqta } from '@/lib/yonalish'
@@ -52,15 +52,20 @@ export function YetkazishBelgisi({ holat }: { holat: YetkazishHolati }) {
   )
 }
 
-export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, onOzgardi }: {
+export default function DostavchikOynasi({ rol = 'DOSTAVCHIK', id, yangilanish, ruxsat, onYopish, onOzgardi }: {
+  /** Dostavchik yoki agent (agentda yetkazishlar yo'q — u buyurtma olmaydi) */
+  rol?: NamunaOluvchiRoli
   id: string
   /** Jonli belgi o'zgarganda ota komponent oshiradi — oyna ham qayta yuklanadi */
   yangilanish: number
-  ruxsat: { berish: boolean; dostavchik: boolean }
+  /** `tahrir` — shu turdagi xodimni tahrirlash ruxsati */
+  ruxsat: { berish: boolean; tahrir: boolean }
   onYopish: () => void
   onOzgardi: () => void
 }) {
   useBodyScrollLock(true)
+  const { yol, nomi } = NAMUNA_OLUVCHILAR[rol]
+  const agent = rol === 'AGENT'
   const confirm = useConfirm()
   const [t, setT] = useState<DostavchikTafsilot | null>(null)
   const [xato, setXato] = useState<string | null>(null)
@@ -74,7 +79,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
 
   const yukla = useCallback(async () => {
     try {
-      const j = await fetch(`/api/namuna-tovar/dostavchiklar/${id}`, { cache: 'no-store' })
+      const j = await fetch(`/api/namuna-tovar/${yol}/${id}`, { cache: 'no-store' })
       const d = await j.json().catch(() => ({}))
       if (!j.ok) { setXato(d.xato ?? 'Ma’lumot yuklanmadi'); return }
       setXato(null)
@@ -82,7 +87,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
     } catch {
       setXato('Internet aloqasini tekshiring')
     }
-  }, [id])
+  }, [id, yol])
 
   useEffect(() => { void yukla() }, [yukla, yangilanish])
 
@@ -123,7 +128,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
     if (t.lokatsiya) {
       n.push({
         id: t.id, lat: t.lokatsiya.lat, lng: t.lokatsiya.lng, turi: t.joriy ? 'kuryer' : 'xodim', nomi: t.ism,
-        tavsif: t.joriy ? `${YETKAZISH_NOMI[t.joriy.holati]}: ${t.joriy.raqam}` : 'Bo‘sh',
+        tavsif: t.joriy ? `${YETKAZISH_NOMI[t.joriy.holati]}: ${t.joriy.raqam}` : agent ? `Qo‘lida ${t.qolganNamuna} ta namuna` : 'Bo‘sh',
         rang: YETKAZISH_XARITA_RANGI[t.joriy?.holati ?? 'TAYINLANGAN'],
         yangilik: yangilikAniqla(t.lokatsiya.yangilangan), vaqtMatni: vaqtMatni(t.lokatsiya.yangilangan),
       })
@@ -142,14 +147,14 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
       })
     }
     return n
-  }, [t])
+  }, [t, agent])
 
   async function namunaAmal(yol: 'topshirish' | 'ochirish', idlar: string[]) {
     if (idlar.length === 0) return
     if (yol === 'ochirish') {
       const ok = await confirm({
         title: 'Namunani o‘chirish',
-        message: `${idlar.length} ta yozuv butunlay o‘chiriladi. Faqat xato yozilgan bo‘lsa o‘chiring — dostavchik qaytargan bo‘lsa «Topshirdi»ni bosing, shunda tarix saqlanadi.`,
+        message: `${idlar.length} ta yozuv butunlay o‘chiriladi. Faqat xato yozilgan bo‘lsa o‘chiring — ${nomi.toLowerCase()} qaytargan bo‘lsa «Topshirdi»ni bosing, shunda tarix saqlanadi.`,
         confirmText: 'O‘chirish',
         danger: true,
       })
@@ -180,7 +185,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget && !band) onYopish() }}>
-      <div role="dialog" aria-modal="true" aria-label={t ? `Dostavchik ${t.ism}` : 'Dostavchik'}
+      <div role="dialog" aria-modal="true" aria-label={t ? `${nomi} ${t.ism}` : nomi}
         className="bg-white dark:bg-neutral-900 w-full sm:max-w-3xl h-[94dvh] sm:h-auto sm:max-h-[92dvh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl">
 
         {/* Sarlavha */}
@@ -208,7 +213,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
             </div>
           ) : <div className="h-14" />}
           <div className="flex items-center gap-1 shrink-0">
-            {t && ruxsat.dostavchik && (
+            {t && ruxsat.tahrir && (
               <button onClick={() => setTahrirOchiq(true)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800">
                 <Pencil size={14} /> <span className="hidden sm:inline">Tahrirlash</span>
@@ -224,13 +229,13 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
             {([
               ['holat', 'Joylashuv va holat', null],
               ['namuna', 'Namunalar', qolida.length],
-              ['yetkazish', 'Yetkazishlar', faollar.length],
-            ] as [Tab, string, number | null][]).map(([k, nomi, soni]) => (
+              ...(agent ? [] : [['yetkazish', 'Yetkazishlar', faollar.length] as [Tab, string, number | null]]),
+            ] as [Tab, string, number | null][]).map(([k, sarlavha, soni]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                 className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition ${
                   tab === k ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800'
                 }`}>
-                {nomi}
+                {sarlavha}
                 {!!soni && <span className={`min-w-5 px-1.5 rounded-full text-xs tabular-nums ${tab === k ? 'bg-white/20 dark:bg-black/10' : 'bg-gray-100 dark:bg-neutral-800'}`}>{soni}</span>}
               </button>
             ))}
@@ -254,7 +259,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
                   <div className="h-40 flex flex-col items-center justify-center gap-2 px-6 text-center bg-gray-50 dark:bg-neutral-800/30">
                     <MapPin size={24} className="text-gray-300 dark:text-neutral-600" />
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Joylashuv hali kelmagan. Dostavchik ERP’ni telefonida ochib, joylashuvga ruxsat berishi kerak.
+                      Joylashuv hali kelmagan. {nomi} ERP’ni telefonida ochib, joylashuvga ruxsat berishi kerak.
                     </p>
                   </div>
                 )}
@@ -278,18 +283,26 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
                 </div>
               )}
 
-              {/* Joriy yetkazish */}
-              {t.joriy ? <JoriyKarta y={t.joriy} /> : (
+              {/* Joriy yetkazish — faqat dostavchikda (agent buyurtma olmaydi) */}
+              {agent ? null : t.joriy ? <JoriyKarta y={t.joriy} /> : (
                 <div className="rounded-2xl border border-dashed border-gray-300 dark:border-neutral-700 p-4 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
                   <Route size={16} className="shrink-0" /> Hozir biriktirilgan buyurtma yo‘q — bo‘sh.
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-2">
-                <Korsatkich nomi="Bugun topshirdi" qiymat={t.bugunTopshirgan} />
-                <Korsatkich nomi="Jami topshirgan" qiymat={t.jamiTopshirgan} />
-                <Korsatkich nomi="Qo‘lida namuna" qiymat={t.qolganNamuna} />
-              </div>
+              {agent ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <Korsatkich nomi="Qo‘lida namuna" qiymat={t.qolganNamuna} />
+                  <Korsatkich nomi="Jami berilgan" qiymat={t.namunaJami} />
+                  <Korsatkich nomi="Qaytarilgan" qiymat={t.namunaQaytgan} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  <Korsatkich nomi="Bugun topshirdi" qiymat={t.bugunTopshirgan} />
+                  <Korsatkich nomi="Jami topshirgan" qiymat={t.jamiTopshirgan} />
+                  <Korsatkich nomi="Qo‘lida namuna" qiymat={t.qolganNamuna} />
+                </div>
+              )}
 
               {faollar.length > 1 && (
                 <div>
@@ -302,6 +315,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
             <div className="space-y-4">
               {ruxsat.berish && (berishOchiq ? (
                 <NamunaBerishForma
+                  rol={rol}
                   dostavchikId={t.id}
                   dostavchikIsmi={t.ism}
                   onBekor={() => setBerishOchiq(false)}
@@ -354,6 +368,7 @@ export default function DostavchikOynasi({ id, yangilanish, ruxsat, onYopish, on
 
       {tahrirOchiq && t && (
         <DostavchikForma
+          rol={rol}
           tahrir={t}
           onYopish={() => setTahrirOchiq(false)}
           onSaqlandi={() => { setTahrirOchiq(false); void yukla(); onOzgardi() }}
@@ -488,7 +503,7 @@ function NamunaRoyxati({ t, faqatQolida, boshqarish, tanlangan, setTanlangan, ba
     return (
       <div className="text-center py-10 text-gray-500 dark:text-gray-400">
         <Package size={30} className="mx-auto text-gray-300 dark:text-neutral-700" />
-        <p className="mt-2 text-sm">{faqatQolida ? 'Dostavchikning qo‘lida namuna yo‘q' : 'Hali namuna berilmagan'}</p>
+        <p className="mt-2 text-sm">{faqatQolida ? `${NAMUNA_OLUVCHILAR[t.rol].nomi}ning qo‘lida namuna yo‘q` : 'Hali namuna berilmagan'}</p>
       </div>
     )
   }

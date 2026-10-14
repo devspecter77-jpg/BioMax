@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { DOSTAVCHIK_DOIRASI, namunaRuxsat } from '@/lib/dostavchik-server'
+import { NAMUNA_OLUVCHI_DOIRASI, namunaRuxsat } from '@/lib/dostavchik-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const qatorlar = await prisma.namunaTarkibi.findMany({
-      where: { id: { in: idlar }, holati: 'BERILGAN', berish: { dostavchik: DOSTAVCHIK_DOIRASI } },
+      where: { id: { in: idlar }, holati: 'BERILGAN', berish: { dostavchik: NAMUNA_OLUVCHI_DOIRASI } },
       select: { id: true, berishId: true },
     })
     if (qatorlar.length === 0) return NextResponse.json({ ok: true, soni: 0 })

@@ -6,7 +6,8 @@ import { amalRuxsatiBormi } from '@/lib/ruxsat-server'
 import { sessionFilialId } from '@/lib/filial-scope'
 import {
   FAOL_YETKAZISH, joriyYetkazish, masofaM,
-  type DostavchikQisqa, type DostavchikTafsilot, type KuryerYetkazish, type Lokatsiya, type NamunaBerishQator, type YetkazishHolati, type YetkazishQator,
+  type DostavchikQisqa, type DostavchikTafsilot, type KuryerYetkazish, type Lokatsiya, type NamunaBerishQator,
+  type NamunaOluvchiRoli, type YetkazishHolati, type YetkazishQator,
 } from '@/lib/dostavchik'
 import type { BuyurtmaDostavchigi, OnlaynHolat, OnlaynRoyxat } from '@/lib/onlayn-buyurtma'
 import { mpSorov } from '@/lib/marketplace-mijoz'
@@ -14,6 +15,12 @@ import { mpSorov } from '@/lib/marketplace-mijoz'
 // Dostavchiklar — markaziy do'konniki (onlayn buyurtmalar kabi): filialga
 // bog'langan xodim ularni ko'rmaydi va boshqarmaydi.
 export const DOSTAVCHIK_DOIRASI = { rol: 'DOSTAVCHIK' as const, filialId: null }
+
+/** Shu turdagi namuna oluvchilar (dostavchik yoki agent) — markaziy do'kon. */
+export const oluvchiDoirasi = (rol: NamunaOluvchiRoli) => ({ rol, filialId: null })
+
+/** Namuna oluvchilarning hammasi: dostavchiklar va agentlar. */
+export const NAMUNA_OLUVCHI_DOIRASI = { rol: { in: ['DOSTAVCHIK', 'AGENT'] as NamunaOluvchiRoli[] }, filialId: null }
 
 export type Kontekst = { ok: true; session: Session; meId: string; rol: string } | { ok: false; javob: NextResponse }
 
@@ -64,7 +71,7 @@ function yetkazishQator(y: YetkazishXom, lok: Lokatsiya | null): YetkazishQator 
 }
 
 const FOYDALANUVCHI_SELECT = {
-  id: true, ism: true, login: true, faol: true, telefon: true, yaratilgan: true,
+  id: true, rol: true, ism: true, login: true, faol: true, telefon: true, yaratilgan: true,
   lokatsiyaLat: true, lokatsiyaLng: true, lokatsiyaYangilangan: true,
   dostavchikProfili: {
     select: {
@@ -75,7 +82,7 @@ const FOYDALANUVCHI_SELECT = {
 } as const
 
 type FoydalanuvchiXom = {
-  id: string; ism: string; login: string; faol: boolean; telefon: string | null; yaratilgan: Date
+  id: string; rol: string; ism: string; login: string; faol: boolean; telefon: string | null; yaratilgan: Date
   lokatsiyaLat: number | null; lokatsiyaLng: number | null; lokatsiyaYangilangan: Date | null
   dostavchikProfili: {
     transportTuri: DostavchikQisqa['transportTuri']; transportNomi: string | null; davlatRaqami: string | null
@@ -98,30 +105,32 @@ export function bugunBoshi(): Date {
 
 // ─── Ro'yxat ─────────────────────────────────────────────────────────────────
 
-export async function dostavchiklarRoyxati(): Promise<DostavchikQisqa[]> {
+/** Dostavchiklar yoki agentlar ro'yxati (agentda yetkazishlar so'ralmaydi — ular buyurtma olmaydi). */
+export async function namunaOluvchilarRoyxati(rol: NamunaOluvchiRoli): Promise<DostavchikQisqa[]> {
   const foydalanuvchilar = await prisma.foydalanuvchi.findMany({
-    where: DOSTAVCHIK_DOIRASI,
+    where: oluvchiDoirasi(rol),
     select: FOYDALANUVCHI_SELECT,
     orderBy: { ism: 'asc' },
   })
   if (foydalanuvchilar.length === 0) return []
   const idlar = foydalanuvchilar.map(f => f.id)
+  const yetkazadi = rol === 'DOSTAVCHIK'
 
   const [faollar, bugun, jami, namunalar] = await Promise.all([
-    prisma.onlaynYetkazish.findMany({
+    yetkazadi ? prisma.onlaynYetkazish.findMany({
       where: { dostavchikId: { in: idlar }, holati: { in: FAOL_YETKAZISH } },
       select: { ...YETKAZISH_SELECT, dostavchikId: true },
-    }),
-    prisma.onlaynYetkazish.groupBy({
+    }) : [],
+    yetkazadi ? prisma.onlaynYetkazish.groupBy({
       by: ['dostavchikId'],
       where: { dostavchikId: { in: idlar }, holati: 'TOPSHIRILDI', topshirildi: { gte: bugunBoshi() } },
       _count: { _all: true },
-    }),
-    prisma.onlaynYetkazish.groupBy({
+    }) : [],
+    yetkazadi ? prisma.onlaynYetkazish.groupBy({
       by: ['dostavchikId'],
       where: { dostavchikId: { in: idlar }, holati: 'TOPSHIRILDI' },
       _count: { _all: true },
-    }),
+    }) : [],
     prisma.namunaTarkibi.findMany({
       where: { holati: 'BERILGAN', berish: { dostavchikId: { in: idlar } } },
       select: { berish: { select: { dostavchikId: true } } },
@@ -156,6 +165,7 @@ function asosiy(f: FoydalanuvchiXom, lok: Lokatsiya | null) {
   const p = f.dostavchikProfili
   return {
     id: f.id,
+    rol: f.rol as NamunaOluvchiRoli,
     ism: f.ism,
     login: f.login,
     faol: f.faol,
@@ -228,25 +238,27 @@ export async function yoldagiKuryerlar(): Promise<KuryerYetkazish[]> {
 
 // ─── Tafsilot ────────────────────────────────────────────────────────────────
 
-export async function dostavchikTafsiloti(id: string): Promise<DostavchikTafsilot | null> {
-  const f = await prisma.foydalanuvchi.findFirst({ where: { id, ...DOSTAVCHIK_DOIRASI }, select: FOYDALANUVCHI_SELECT })
+/** Bitta dostavchik yoki agent — profil, joylashuv, (dostavchikda) yetkazishlar va namunalar. */
+export async function namunaOluvchiTafsiloti(id: string, rol: NamunaOluvchiRoli): Promise<DostavchikTafsilot | null> {
+  const f = await prisma.foydalanuvchi.findFirst({ where: { id, ...oluvchiDoirasi(rol) }, select: FOYDALANUVCHI_SELECT })
   if (!f) return null
   const lok = lokatsiya(f)
+  const yetkazadi = rol === 'DOSTAVCHIK'
 
-  const [faollar, oxirgilar, bugun, jami, berishlar] = await Promise.all([
-    prisma.onlaynYetkazish.findMany({
+  const [faollar, oxirgilar, bugun, jami, berishlar, namunaSanoq] = await Promise.all([
+    yetkazadi ? prisma.onlaynYetkazish.findMany({
       where: { dostavchikId: id, holati: { in: FAOL_YETKAZISH } },
       select: YETKAZISH_SELECT,
       orderBy: { tayinlangan: 'asc' },
-    }),
-    prisma.onlaynYetkazish.findMany({
+    }) : [],
+    yetkazadi ? prisma.onlaynYetkazish.findMany({
       where: { dostavchikId: id, holati: { notIn: FAOL_YETKAZISH } },
       select: YETKAZISH_SELECT,
       orderBy: { yangilangan: 'desc' },
       take: 100,
-    }),
-    prisma.onlaynYetkazish.count({ where: { dostavchikId: id, holati: 'TOPSHIRILDI', topshirildi: { gte: bugunBoshi() } } }),
-    prisma.onlaynYetkazish.count({ where: { dostavchikId: id, holati: 'TOPSHIRILDI' } }),
+    }) : [],
+    yetkazadi ? prisma.onlaynYetkazish.count({ where: { dostavchikId: id, holati: 'TOPSHIRILDI', topshirildi: { gte: bugunBoshi() } } }) : 0,
+    yetkazadi ? prisma.onlaynYetkazish.count({ where: { dostavchikId: id, holati: 'TOPSHIRILDI' } }) : 0,
     prisma.namunaBerish.findMany({
       where: { dostavchikId: id },
       orderBy: { yaratilgan: 'desc' },
@@ -263,6 +275,8 @@ export async function dostavchikTafsiloti(id: string): Promise<DostavchikTafsilo
         },
       },
     }),
+    // Ro'yxat oxirgi 100 ta berish bilan cheklangan — jami sonlar alohida
+    prisma.namunaTarkibi.groupBy({ by: ['holati'], where: { berish: { dostavchikId: id } }, _count: { _all: true } }),
   ])
 
   const faolQatorlar = faollar.map(y => yetkazishQator(y, lok))
@@ -291,7 +305,9 @@ export async function dostavchikTafsiloti(id: string): Promise<DostavchikTafsilo
     navbatda: faolQatorlar.filter(q => q.holati === 'TAYINLANGAN').length,
     bugunTopshirgan: bugun,
     jamiTopshirgan: jami,
-    qolganNamuna: namunalar.reduce((s, b) => s + b.tarkiblar.filter(t => t.holati === 'BERILGAN').length, 0),
+    qolganNamuna: namunaSanoq.find(n => n.holati === 'BERILGAN')?._count._all ?? 0,
+    namunaJami: namunaSanoq.reduce((s, n) => s + n._count._all, 0),
+    namunaQaytgan: namunaSanoq.find(n => n.holati === 'TOPSHIRILGAN')?._count._all ?? 0,
     yetkazishlar: [...faolQatorlar, ...oxirgilar.map(y => yetkazishQator(y, lok))],
     namunalar,
   }
@@ -310,13 +326,13 @@ export async function dostavchikTafsiloti(id: string): Promise<DostavchikTafsilo
 export async function namunaBelgisi(): Promise<string> {
   const [q] = await prisma.$queryRaw<{ a: Date | null; b: Date | null; c: Date | null; d: Date | null; e: bigint; f: bigint; g: bigint }[]>`
     SELECT
-      (SELECT max(GREATEST(COALESCE("lokatsiyaYangilangan", 'epoch'::timestamp), "yangilangan")) FROM public.foydalanuvchilar WHERE rol = 'DOSTAVCHIK') AS a,
+      (SELECT max(GREATEST(COALESCE("lokatsiyaYangilangan", 'epoch'::timestamp), "yangilangan")) FROM public.foydalanuvchilar WHERE rol::text IN ('DOSTAVCHIK', 'AGENT')) AS a,
       (SELECT max("yangilangan") FROM public.dostavchik_profillari) AS b,
       (SELECT max("yangilangan") FROM public.onlayn_yetkazishlar) AS c,
       (SELECT max("yangilangan") FROM public.namuna_tarkiblari) AS d,
       (SELECT count(*) FROM public.namuna_tarkiblari) AS e,
       (SELECT count(*) FROM public.onlayn_yetkazishlar) AS f,
-      (SELECT count(*) FROM public.foydalanuvchilar WHERE rol = 'DOSTAVCHIK') AS g`
+      (SELECT count(*) FROM public.foydalanuvchilar WHERE rol::text IN ('DOSTAVCHIK', 'AGENT')) AS g`
   const t = (d: Date | null) => (d ? d.getTime() : 0)
   return [t(q.a), t(q.b), t(q.c), t(q.d), q.e, q.f, q.g].join('.')
 }

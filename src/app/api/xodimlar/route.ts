@@ -9,6 +9,7 @@ import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
 import { xodimlarDoirasi, xodimAmallari, ARXIV_PREFIKS } from '@/lib/xodim-hisob'
 import { smenaHolatlari } from '@/lib/smena-server'
 import { loginTozala, loginXatosi } from '@/lib/login'
+import { rolmi } from '@/lib/rollar'
 
 // Xodimlar bo'limi — oylik, bonus va yangi xodim yaratish.
 //
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
     if (loginXato) return NextResponse.json({ xato: loginXato }, { status: 400 })
     if (login.startsWith(ARXIV_PREFIKS)) return NextResponse.json({ xato: 'Bu login ishlatib bo‘lmaydi' }, { status: 400 })
     if (parol.length < 6) return NextResponse.json({ xato: 'Parol kamida 6 belgi' }, { status: 400 })
-    if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK'].includes(rol)) {
+    if (!rolmi(rol)) {
       return NextResponse.json({ xato: 'Rol noto‘g‘ri' }, { status: 400 })
     }
     // Ruxsat berilgan xodim ham administrator hisobini yarata olmaydi —
@@ -178,7 +179,7 @@ export async function POST(req: NextRequest) {
 
     const xodim = await prisma.foydalanuvchi.create({
       data: {
-        ism, login, parolHash, rol: rol as 'ADMIN' | 'KASSIR' | 'OMBORCHI' | 'SOTUVCHI' | 'DOSTAVCHIK',
+        ism, login, parolHash, rol,
         telefon: String(data.telefon ?? '').replace(/\D/g, '') || null,
         filialId,
         ulashilganEgaId,

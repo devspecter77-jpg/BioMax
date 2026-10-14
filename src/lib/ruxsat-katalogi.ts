@@ -60,9 +60,10 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
     ],
   },
   {
-    kalit: 'namuna-tovar', label: 'Namuna tovar', izoh: 'Dostavchiklar, ularga berilgan namuna tovarlar, joylashuvi va yetkazishlari', children: [
-      { kalit: 'namuna-tovar.berish', label: 'Namuna berish va qaytib olish', izoh: 'Dostavchikka namuna yozish, «topshirdi» deb belgilash' },
+    kalit: 'namuna-tovar', label: 'Namuna tovar', izoh: 'Dostavchiklar va agentlar: ularga berilgan namuna tovarlar, joylashuvi, dostavchik yetkazishlari', children: [
+      { kalit: 'namuna-tovar.berish', label: 'Namuna berish va qaytib olish', izoh: 'Dostavchik yoki agentga namuna yozish, «topshirdi» deb belgilash' },
       { kalit: 'namuna-tovar.dostavchik', label: 'Dostavchik qo‘shish va tahrirlash', izoh: 'Tizimga kiradigan yangi hisob ochiladi', xavfli: true },
+      { kalit: 'namuna-tovar.agent', label: 'Agent qo‘shish va tahrirlash', izoh: 'Tizimga kiradigan yangi hisob ochiladi (rol — Agent)', xavfli: true },
     ],
   },
   {
@@ -209,6 +210,9 @@ const ROL_STANDART: Record<string, string[]> = {
   // Dostavchik — faqat buyurtmalar; ichida ham faqat o'ziga biriktirilganlar
   // (`onlayn-buyurtmalar` API'si rolga qarab filtrlaydi). Qolganini Ega ochadi.
   DOSTAVCHIK: ['bosh', 'onlayn-buyurtmalar'],
+  // Agent — bosh sahifa (ish smenasi); joylashuvi va namunalari Namuna tovar
+  // bo'limida kuzatiladi. Qolganini (masalan tovarlar narxi) Ega ochadi.
+  AGENT: ['bosh'],
 }
 
 /**
@@ -217,11 +221,11 @@ const ROL_STANDART: Record<string, string[]> = {
  * `kalit:ROL` — faqat shu rol uchun yopiq.
  */
 const STANDART_YOPIQ = new Set([
-  'bosh.statistika:OMBORCHI', 'bosh.statistika:SOTUVCHI', 'bosh.statistika:DOSTAVCHIK',
+  'bosh.statistika:OMBORCHI', 'bosh.statistika:SOTUVCHI', 'bosh.statistika:DOSTAVCHIK', 'bosh.statistika:AGENT',
   // Dostavchik buyurtmani tasdiqlamaydi, bekor qilmaydi va boshqalarga taqsimlamaydi —
   // faqat o'ziga biriktirilganini yetkazadi
   'onlayn-buyurtmalar.boshqarish:DOSTAVCHIK', 'onlayn-buyurtmalar.bekor:DOSTAVCHIK', 'onlayn-buyurtmalar.kuryer:DOSTAVCHIK',
-  'namuna-tovar.dostavchik', 'ilova-qr.manzil',
+  'namuna-tovar.dostavchik', 'namuna-tovar.agent', 'ilova-qr.manzil',
   'tovarlar.ochirish', 'tovarlar.import', 'mijozlar.ochirish', 'mijozlar.import', 'mijozlar.export',
   // Xodim boshqalarning mijozini ko'rmaydi — faqat Ega ochib beradi. Onlayn
   // do'kon mijozlarini ham (ularni xodim kiritmagan — do'konning umumiy bazasi)

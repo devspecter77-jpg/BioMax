@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { AlertTriangle, Check, Loader2, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import Modal from '@/components/ui/modal'
+import { ROL_NOMI } from '@/lib/rollar'
 import { useConfirm } from '@/components/ConfirmProvider'
 import {
   RANGLAR, RANG_NOMI, rangKlassi,
@@ -14,7 +15,6 @@ import {
 // KIMGA KO'RINISHI (barcha xodimlarga yoki tanlanganlarga). Xodim o'zi
 // kiritgan mijozlarni doim ko'radi — bu yerda faqat qo'shimcha ochiladi.
 
-const ROL_NOMI: Record<string, string> = { KASSIR: 'Kassir', OMBORCHI: 'Omborchi', SOTUVCHI: 'Sotuvchi', DOSTAVCHIK: 'Dostavchik' }
 
 interface Forma { nomi: string; rang: KategoriyaRangi; hammaga: boolean; xodimIdlar: string[] }
 const BOSH_FORMA: Forma = { nomi: '', rang: 'kok', hammaga: false, xodimIdlar: [] }

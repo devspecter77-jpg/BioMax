@@ -139,6 +139,9 @@ enum Rol {
   // Onlayn buyurtmalarni yetkazadi va mijozlarga namuna tovar ko'rsatadi.
   // Standart holatda faqat "Onlayn buyurtmalar" ochiq (ruxsat-katalogi.ts).
   DOSTAVCHIK
+  // Savdo agenti: do'konlarga namuna tovar olib boradi (Namuna tovar ›
+  // Agentlar). Onlayn buyurtma yetkazmaydi. Standart — faqat bosh sahifa.
+  AGENT
 }
 
 // ========================
@@ -1613,6 +1616,7 @@ enum TransportTuri {
 
 // Dostavchikning tizimga kirish hisobi — oddiy `Foydalanuvchi` (rol DOSTAVCHIK).
 // Bu yerda faqat unga xos narsalar: nima haydaydi va qo'shimcha raqamlari.
+// Agent (rol AGENT) ham xuddi shu profildan foydalanadi.
 // Profil ixtiyoriy: Xodimlar bo'limida DOSTAVCHIK roli bilan yaratilgan
 // xodimda u bo'lmasligi mumkin — "Namuna tovar" bo'limi baribir ko'rsatadi.
 model DostavchikProfil {
@@ -1710,6 +1714,8 @@ enum NamunaHolati {
 //
 // Ombor qoldig'iga tegmaydi: namuna do'kondan vaqtincha chiqib, qaytib
 // keladi. Qayerdaligi shu jadvalda — "hozir dostavchiklarda nima bor".
+// Agentga berilgan namuna ham shu yerda: `dostavchikId` — namuna olgan
+// xodim (rol DOSTAVCHIK yoki AGENT).
 model NamunaBerish {
   id           String   @id @default(cuid())
   dostavchikId String

@@ -1,6 +1,8 @@
 // Mijoz KIM tomonidan va QAYERDAN qo'shilgani — kartada ko'rsatish uchun
 // (brauzer va server uchun umumiy).
 
+import { ROL_NOMI } from './rollar'
+
 export const MIJOZ_MANBALARI = ['mijozlar', 'kassa', 'nasiya', 'import', 'nasiya_import', 'onlayn'] as const
 export type MijozManbasi = (typeof MIJOZ_MANBALARI)[number]
 
@@ -13,9 +15,8 @@ const MANBA_NOMI: Record<MijozManbasi, string> = {
   onlayn: 'Onlayn do‘kon (sayt) orqali',
 }
 
-export const ROL_NOMI: Record<string, string> = {
-  ADMIN: 'Administrator', KASSIR: 'Kassir', OMBORCHI: 'Omborchi', SOTUVCHI: 'Sotuvchi', DOSTAVCHIK: 'Dostavchik',
-}
+// Rollar nomi — `lib/rollar.ts` da (bu yerdan ham olinadi)
+export { ROL_NOMI }
 
 /** API qaytaradigan "kim qo'shgan" — login oshkor qilinmaydi. */
 export interface MijozKiritgan {

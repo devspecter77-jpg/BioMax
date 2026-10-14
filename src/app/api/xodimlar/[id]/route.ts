@@ -7,6 +7,7 @@ import { amalRuxsatiBormi, bolimRuxsatiBormi, ruxsatKeshiniTozala } from '@/lib/
 import { davrKaliti, tolovlarniYigindi } from '@/lib/xodim-oylik'
 import { sotuvDavriOraligi } from '@/lib/xodim-mulk'
 import { xodimlarDoirasi, xodimAmallari, xodimniOchir, ARXIV_PREFIKS } from '@/lib/xodim-hisob'
+import { rolmi } from '@/lib/rollar'
 import { loginTozala, loginXatosi } from '@/lib/login'
 
 // Bitta xodim: ma'lumoti va to'lovlar tarixi
@@ -181,7 +182,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     if (bor('rol')) {
       const rol = String(data.rol)
-      if (!['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK'].includes(rol)) {
+      if (!rolmi(rol)) {
         return NextResponse.json({ xato: 'Rol noto‘g‘ri' }, { status: 400 })
       }
       yangi.rol = rol

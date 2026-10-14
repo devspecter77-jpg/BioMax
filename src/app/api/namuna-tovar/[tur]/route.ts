@@ -2,21 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { sessionEgaId } from '@/lib/filial-scope'
-import { dostavchikniTekshir } from '@/lib/dostavchik'
+import { NAMUNA_OLUVCHILAR, dostavchikniTekshir, oluvchiYolidan } from '@/lib/dostavchik'
 import { namunaRuxsat } from '@/lib/dostavchik-server'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Yangi dostavchik: tizimga kiradigan hisob (rol DOSTAVCHIK) va profili —
- * bitta so'rovda. Hisob va profil ichma-ich yaratiladi, ya'ni ikkalasi birga
- * yoziladi yoki hech biri yozilmaydi.
+ * Yangi dostavchik (`/api/namuna-tovar/dostavchiklar`) yoki agent
+ * (`/api/namuna-tovar/agentlar`): tizimga kiradigan hisob (rol DOSTAVCHIK
+ * yoki AGENT) va profili — bitta so'rovda. Hisob va profil ichma-ich
+ * yaratiladi, ya'ni ikkalasi birga yoziladi yoki hech biri yozilmaydi.
  *
- * Standart holatda dostavchikka faqat "Onlayn buyurtmalar" ochiq
- * (`ruxsat-katalogi.ts`), boshqasini Ega Ruxsatlar bo'limidan beradi.
+ * Standart holatda dostavchikka faqat "Onlayn buyurtmalar", agentga faqat
+ * bosh sahifa ochiq (`ruxsat-katalogi.ts`), boshqasini Ega Ruxsatlar
+ * bo'limidan beradi.
  */
-export async function POST(req: NextRequest) {
-  const r = await namunaRuxsat('namuna-tovar.dostavchik')
+export async function POST(req: NextRequest, { params }: { params: Promise<{ tur: string }> }) {
+  const rol = oluvchiYolidan((await params).tur)
+  if (!rol) return NextResponse.json({ xato: 'Topilmadi' }, { status: 404 })
+  const r = await namunaRuxsat(NAMUNA_OLUVCHILAR[rol].ruxsat)
   if (!r.ok) return r.javob
 
   let tana: Record<string, unknown>
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
         ism: m.ism,
         login,
         parolHash: await bcrypt.hash(parol, 10),
-        rol: 'DOSTAVCHIK',
+        rol,
         telefon: m.telefon,
         filialId: null,
         // Markaziy do'kon katalogini ko'rsin (xodimlar bo'limidagi qoida bilan bir xil)
@@ -71,7 +75,7 @@ export async function POST(req: NextRequest) {
     if ((e as { code?: string })?.code === 'P2002') {
       return NextResponse.json({ xato: 'Bu login band — boshqasini tanlang' }, { status: 409 })
     }
-    console.error('[namuna-tovar/dostavchiklar POST]', e)
+    console.error('[namuna-tovar/oluvchi POST]', rol, e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
   }
 }

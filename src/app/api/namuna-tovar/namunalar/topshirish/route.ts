@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { DOSTAVCHIK_DOIRASI, namunaRuxsat } from '@/lib/dostavchik-server'
+import { NAMUNA_OLUVCHI_DOIRASI, namunaRuxsat } from '@/lib/dostavchik-server'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Dostavchik namunalarni qaytarib topshirdi. Tana: `{ idlar: string[] }`.
+ * Dostavchik yoki agent namunalarni qaytarib topshirdi. Tana: `{ idlar: string[] }`.
  *
  * Faqat hali qaytarilmaganlari belgilanadi — ikki xodim bir vaqtda bossa
  * ham qabul qilgan odam va vaqt birinchi bosgandan qoladi.
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const n = await prisma.namunaTarkibi.updateMany({
-      where: { id: { in: idlar }, holati: 'BERILGAN', berish: { dostavchik: DOSTAVCHIK_DOIRASI } },
+      where: { id: { in: idlar }, holati: 'BERILGAN', berish: { dostavchik: NAMUNA_OLUVCHI_DOIRASI } },
       data: { holati: 'TOPSHIRILGAN', topshirilganVaqt: new Date(), qabulQilganId: r.meId },
     })
     return NextResponse.json({ ok: true, soni: n.count })

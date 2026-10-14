@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useSidebar } from '@/components/SidebarContext'
 import { useTheme } from '@/components/ThemeContext'
 import { Menu, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ROL_NOMI } from '@/lib/rollar'
 
 const sahifaNomlar: Record<string, string> = {
   '/': 'Bosh sahifa',
@@ -22,7 +23,6 @@ const sahifaNomlar: Record<string, string> = {
 
 // Sessiya yuklanguncha rol yozilmaydi — ilgari hamma (administrator ham) bir lahza
 // "Kassir" bo'lib ko'rinardi, SOTUVCHI esa doim "Kassir" deb chiqardi
-const ROL_NOMI: Record<string, string> = { ADMIN: 'Administrator', KASSIR: 'Kassir', OMBORCHI: 'Omborchi', SOTUVCHI: 'Sotuvchi', DOSTAVCHIK: 'Dostavchik' }
 
 export default function Header() {
   const { data: session } = useSession()

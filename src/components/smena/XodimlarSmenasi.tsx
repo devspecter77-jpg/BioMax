@@ -5,12 +5,12 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { AlertTriangle, ChevronRight, Clock } from 'lucide-react'
 import SmenaBelgisi, { type SmenaHolatQisqa } from './SmenaBelgisi'
+import { ROL_NOMI } from '@/lib/rollar'
 
 interface Xodim { id: string; ism: string; rol: string; ovoz: boolean; smena: SmenaHolatQisqa | null }
 /** Faqat administratorga keladi */
 interface OmborHolati { tayyor: boolean; yetishmaydi: string[] }
 
-const ROL_NOMI: Record<string, string> = { KASSIR: 'Kassir', OMBORCHI: 'Omborchi', SOTUVCHI: 'Sotuvchi', DOSTAVCHIK: 'Dostavchik' }
 
 // Bosh sahifa (administrator): smena yurituvchi xodimlar — kuryerlar va ovoz
 // yozish ruxsati ochiqlar — hozir ishdami, qachondan, ovoz yozilyaptimi.

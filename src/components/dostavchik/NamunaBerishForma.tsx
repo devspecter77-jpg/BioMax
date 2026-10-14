@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Minus, PackagePlus, PenLine, Plus, Search, Trash2 } from 'lucide-react'
-import { miqdorMatni } from '@/lib/dostavchik'
+import { NAMUNA_OLUVCHILAR, miqdorMatni, type NamunaOluvchiRoli } from '@/lib/dostavchik'
 
-// Namuna berish: tovarni katalogdan qidirib tanlash yoki katalogda yo'q
-// narsani qo'lda yozish. Bir xil tovar ikki marta tanlansa miqdori oshadi.
+// Namuna berish (dostavchik yoki agentga): tovarni katalogdan qidirib tanlash
+// yoki katalogda yo'q narsani qo'lda yozish. Bir xil tovar ikki marta
+// tanlansa miqdori oshadi.
 
 interface Qator {
   kalit: string
@@ -30,7 +31,9 @@ const inputCls =
 let kalitSanoq = 0
 const yangiKalit = () => `q${++kalitSanoq}`
 
-export default function NamunaBerishForma({ dostavchikId, dostavchikIsmi, onBerildi, onBekor }: {
+export default function NamunaBerishForma({ rol, dostavchikId, dostavchikIsmi, onBerildi, onBekor }: {
+  /** Kimga: dostavchik yoki agent */
+  rol: NamunaOluvchiRoli
   dostavchikId: string
   dostavchikIsmi: string
   onBerildi: () => void
@@ -98,7 +101,7 @@ export default function NamunaBerishForma({ dostavchikId, dostavchikIsmi, onBeri
     }
     setBand(true)
     try {
-      const j = await fetch(`/api/namuna-tovar/dostavchiklar/${dostavchikId}/namuna`, {
+      const j = await fetch(`/api/namuna-tovar/${NAMUNA_OLUVCHILAR[rol].yol}/${dostavchikId}/namuna`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ izoh, qatorlar: qatorlar.map(({ tovarId, nomi, miqdor }) => ({ tovarId, nomi, miqdor })) }),

@@ -5,6 +5,7 @@ import {
   ShoppingBag, Building, Gift, ArrowRightLeft, MapPin, Truck, Wallet, ClipboardList, UsersRound, Boxes, Globe, LayoutGrid, ShieldCheck, PackageOpen, QrCode,
 } from 'lucide-react'
 import { barchaRuxsatKalitlari } from '@/lib/ruxsat-katalogi'
+import { ROLLAR } from '@/lib/rollar'
 
 export interface NavItem {
   href: string
@@ -22,7 +23,7 @@ export const navSections = ['SAVDO', 'OMBOR', "MIJOZ VA NASIYA", "TA'MINOT", 'TI
 // Ruxsatlar bo'limi hal qiladi (rol faqat standart qiymatni beradi). Ilgari
 // bu yerda rollar qattiq yozilgan edi: Ega sotuvchiga «Tovarlar»ni ochib bersa
 // ham menyuda chiqmasdi, SOTUVCHI esa umuman hech narsa ko'rmasdi.
-const HAMMA = ['ADMIN', 'KASSIR', 'OMBORCHI', 'SOTUVCHI', 'DOSTAVCHIK']
+const HAMMA: string[] = [...ROLLAR]
 
 export const navItems: NavItem[] = [
   { href: '/', label: 'Bosh sahifa', icon: LayoutDashboard, roles: HAMMA },

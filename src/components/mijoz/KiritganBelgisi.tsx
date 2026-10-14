@@ -18,6 +18,7 @@ const ROL_RANGI: Record<string, string> = {
   Sotuvchi: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
   Omborchi: 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
   Dostavchik: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
+  Agent: 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300',
 }
 
 export default function KiritganBelgisi({ m, ixcham = false }: Props) {
