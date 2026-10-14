@@ -6,7 +6,8 @@ import { auth } from '@/lib/auth'
 // `telegram_session` — GramJS StringSession, ya'ni Ega Telegram hisobiga
 // TO'LIQ kirish. Ilgari bu marshrut barcha sozlamalarni qaytarardi va
 // istalgan kassir uni o'qib, hisobni egallashi mumkin edi.
-const MAXFIY_PREFIKSLAR = ['telegram_session', 'telegram_api_', 'telegram_entity_cache']
+// `telegram_temp_session` — ulanish paytidagi (kod kutilayotgan) vaqtinchalik sessiya.
+const MAXFIY_PREFIKSLAR = ['telegram_session', 'telegram_temp_session', 'telegram_api_', 'telegram_entity_cache']
 
 function MAXFIY_KALIT(kalit: string): boolean {
   return MAXFIY_PREFIKSLAR.some(p => kalit.startsWith(p))
@@ -33,6 +34,12 @@ export async function PUT(req: NextRequest) {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
     const data: Record<string, string> = await req.json()
+    // Telegram hisobi faqat /api/telegram orqali (faqat bosh Ega) boshqariladi —
+    // bu umumiy marshrut orqali filial yoki ulashilgan administrator sessiyani
+    // almashtirib, mijozlarga boshqa raqamdan xabar yubora olmasin
+    if (Object.keys(data).some(k => k.startsWith('telegram_'))) {
+      return NextResponse.json({ xato: 'Telegram sozlamalari faqat Telegram bo‘limidan o‘zgartiriladi' }, { status: 403 })
+    }
     for (const [kalit, qiymat] of Object.entries(data)) {
       await prisma.sozlama.upsert({
         where: { kalit },

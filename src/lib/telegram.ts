@@ -53,6 +53,22 @@ async function isTelegramEnabled(): Promise<boolean> {
 let _client: TelegramClient | null = null
 let _clientReady = false
 let _connectPromise: Promise<TelegramClient | null> | null = null
+/** Klient qaysi sessiya bilan ochilgan — bazadagisi o'zgarsa (hisob almashtirildi yoki uzildi) qayta ulanadi */
+let _clientSession: string | null = null
+let _sessiyaTekshirildi = 0
+/**
+ * Bazadagi sessiya shu oraliqda bir marta solishtiriladi. Vercel'da bir nechta
+ * server nusxasi ishlaydi: hisob almashtirilganda faqat o'sha so'rovni bajargan
+ * nusxa o'z klientini yangilaydi — qolganlari shu tekshiruv bilan ko'pi bilan
+ * bir daqiqada yangi hisobga o'tadi (aks holda eski raqamdan yuborishda davom etardi).
+ */
+const SESSIYA_TEKSHIRISH_MS = 60_000
+
+/**
+ * Hisobga bog'liq keshlar: kontaktlarning access hash'lari va flood taymerlari
+ * faqat o'sha Telegram hisobiga tegishli — boshqa hisob ulanganda yaroqsiz.
+ */
+const HISOB_KESHLARI = ['telegram_entity_cache', 'telegram_flood_until', 'telegram_cache_only_until']
 
 // Entity cache — telefon raqamdan Telegram user ID ga (DB da saqlanadi).
 // CACHE ABADIY: bir marta resolve qilingan mijoz keyin hech qachon qayta resolve qilinmaydi.
@@ -177,7 +193,31 @@ function isPhoneCached(telefon: string | null | undefined): boolean {
   return _entityCache.has(normalizePhone(telefon))
 }
 
+/** Xotiradagi eski hisob holatini tashlaydi: klient, kontakt keshi, flood taymerlari. */
+async function klientniTashla(): Promise<void> {
+  const eski = _client
+  _client = null
+  _clientReady = false
+  _clientSession = null
+  _entityCache.clear()
+  _entityCacheLoaded = false
+  _floodUntil = 0
+  _cacheOnlyUntil = 0
+  if (eski) await eski.disconnect().catch(() => {})
+}
+
 async function getClient(): Promise<TelegramClient | null> {
+  // Hisob boshqa joyda (Sozlamalar yoki boshqa server nusxasi) almashtirilgan
+  // yoki uzilgan bo'lsa — eski klient tashlanadi va bazadagi sessiya bilan ochiladi
+  if (_client && _clientReady && Date.now() - _sessiyaTekshirildi > SESSIYA_TEKSHIRISH_MS) {
+    _sessiyaTekshirildi = Date.now()
+    const joriy = await getSozlama('telegram_session').catch(() => _clientSession)
+    if (joriy !== _clientSession) {
+      console.log('[Telegram] Hisob almashtirilgan yoki uzilgan — klient qayta ochiladi')
+      await klientniTashla()
+    }
+  }
+
   // Agar client tayyor bo'lsa — qaytarish
   if (_client && _clientReady) {
     try {
@@ -213,6 +253,8 @@ async function getClient(): Promise<TelegramClient | null> {
       await client.connect()
       _client = client
       _clientReady = true
+      _clientSession = session
+      _sessiyaTekshirildi = Date.now()
       // Entity cache, flood timer va cache-only rejim DB dan yuklash
       await Promise.all([loadEntityCache(), loadFloodTimer(), loadCacheOnlyMode()])
       console.log('[Telegram] Client ulandi (singleton)')
@@ -688,8 +730,13 @@ export async function telegramVerify(
     const sessionStr = client.session.save() as unknown as string
     const me = await client.getMe()
     const tgIsm = me instanceof Api.User ? `${me.firstName || ''} ${me.lastName || ''}`.trim() : ''
+    // Boshqa raqam ulandi — oldingi hisobning kontakt keshi va flood taymerlari
+    // yangi hisobga to'g'ri kelmaydi (bir xil raqam qayta ulansa — saqlanadi)
+    const raqam = (s: string | null) => String(s ?? '').replace(/\D/g, '')
+    const hisobAlmashdi = raqam(await getSozlama('telegram_phone')) !== raqam(phone)
 
     await Promise.all([
+      ...(hisobAlmashdi ? [prisma.sozlama.deleteMany({ where: { kalit: { in: HISOB_KESHLARI } } })] : []),
       prisma.sozlama.upsert({
         where: { kalit: 'telegram_session' },
         update: { qiymat: sessionStr },
@@ -718,9 +765,8 @@ export async function telegramVerify(
       prisma.sozlama.deleteMany({ where: { kalit: 'telegram_temp_session' } }),
     ])
 
-    // Singleton client ni yangilash
-    _client = null
-    _clientReady = false
+    // Shu server nusxasidagi eski klient darhol tashlanadi (qolganlari — `getClient` tekshiruvi bilan)
+    await klientniTashla()
 
     return { ok: true }
   } catch (e) {
@@ -748,16 +794,8 @@ export async function telegramStatus(): Promise<{
 // ─── Uzish ───────────────────────────────────────────────────────────────────
 
 export async function telegramDisconnect(): Promise<{ ok: boolean }> {
-  // Singleton client ni tozalash
-  if (_client) {
-    await _client.disconnect().catch(() => {})
-    _client = null
-    _clientReady = false
-  }
-  _entityCache.clear()
-  _entityCacheLoaded = false
-  _floodUntil = 0
-  _cacheOnlyUntil = 0
+  // Singleton client va xotiradagi keshlarni tozalash
+  await klientniTashla()
   _lastSendTime = 0
 
   // Entity cache, flood-timer va cache-only rejim shu (eskirayotgan) hisobga
@@ -770,7 +808,7 @@ export async function telegramDisconnect(): Promise<{ ok: boolean }> {
         in: [
           'telegram_session', 'telegram_api_id', 'telegram_api_hash',
           'telegram_phone', 'telegram_user_name', 'telegram_temp_session',
-          'telegram_entity_cache', 'telegram_flood_until', 'telegram_cache_only_until',
+          ...HISOB_KESHLARI,
         ],
       },
     },
