@@ -12,9 +12,10 @@ export interface SmenaHolatQisqa {
 }
 
 /**
- * Kuryerning bugungi holati bir qarashda: ishda (yozuv ketyapti), ishda
+ * Xodimning bugungi holati bir qarashda: ishda (yozuv ketyapti), ishda
  * lekin muammo (aloqa yo'q / yozuv to'xtagan), yoki ishni tugatgan.
- * Holat rang bilan birga matn va belgi bilan ham beriladi.
+ * Holat rang bilan birga matn va belgi bilan ham beriladi. Ovoz yozish
+ * Ega tomonidan o'chirilgan smena — muammo emas, oddiy "ishda" ko'rinadi.
  */
 export default function SmenaBelgisi({ smena, bosh }: { smena: SmenaHolatQisqa | null; bosh?: string }) {
   if (!smena) {
@@ -42,12 +43,12 @@ export default function SmenaBelgisi({ smena, bosh }: { smena: SmenaHolatQisqa |
   if (smena.yozuvHolati === 'ovoz_yoq') {
     return (
       <span className="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400"
-        title="Yozuv ketyapti, lekin kuryer mikrofonidan ovoz kelmayapti — yozuvlar jim chiqadi">
+        title="Yozuv ketyapti, lekin xodim mikrofonidan ovoz kelmayapti — yozuvlar jim chiqadi">
         <MicOff size={11} aria-hidden /> Ishda · mikrofon jim
       </span>
     )
   }
-  if (smena.yozuvHolati && smena.yozuvHolati !== 'yozilmoqda') {
+  if (smena.yozuvHolati && smena.yozuvHolati !== 'yozilmoqda' && smena.yozuvHolati !== 'ochirilgan') {
     return (
       <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-400"
         title="Smena ochiq, lekin ovoz yozilmayapti">
@@ -56,7 +57,8 @@ export default function SmenaBelgisi({ smena, bosh }: { smena: SmenaHolatQisqa |
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400"
+      title={smena.yozuvHolati === 'ochirilgan' ? 'Ovoz yozish bu xodimga o‘chirilgan (Ruxsatlar)' : undefined}>
       <span className="relative flex h-1.5 w-1.5">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
         <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />

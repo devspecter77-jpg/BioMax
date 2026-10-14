@@ -16,7 +16,6 @@ import XodimSotuvlarPanel from '@/components/xodim/XodimSotuvlarPanel'
 import XodimUmumiyPanel, { type XodimTafsiloti } from '@/components/xodim/XodimUmumiyPanel'
 import XodimSmenaPanel from '@/components/xodim/XodimSmenaPanel'
 import SmenaBelgisi, { type SmenaHolatQisqa } from '@/components/smena/SmenaBelgisi'
-import { smenaRolimi } from '@/lib/smena'
 import {
   TOLOV_TURLARI, TOLOV_MALUMOTI, tolovMalumoti, davrKaliti,
   type DavrYigindisi, type TolovTuri,
@@ -49,7 +48,7 @@ interface Xodim {
   mulk: { soni: number; qiymati: number }
   /** Tanlangan davrdagi sotuvlari — ko'rish ruxsati bo'lmasa `null` */
   davrSotuv: { soni: number; summa: number } | null
-  /** Kuryerning bugungi smenasi (ishda / tugatgan) — ko'rish ruxsati bo'lmasa yo'q */
+  /** Xodimning bugungi smenasi (ishda / tugatgan) — ko'rish ruxsati bo'lmasa yo'q */
   smena?: SmenaHolatQisqa | null
   /** Shu hisobni tahrirlash / o'chirish mumkinmi (server hal qiladi) */
   amallar?: { tahrir: boolean; ochirish: boolean }
@@ -824,7 +823,8 @@ export default function XodimlarPage() {
                   ['oylik', 'Oylik', 'Oylik', Wallet, null],
                   ['mulk', 'Biriktirilgan mulk', 'Mulk', Package, tanlangan.mulk?.soni || null],
                   ...(sotuvlarKoraOladi ? [['sotuvlar', 'Sotuvlar', 'Sotuvlar', ShoppingBag, null] as const] : []),
-                  ...(smenaKoraOladi && smenaRolimi(tanlangan.rol) ? [['smena', 'Ish va ovozlar', 'Ovozlar', Mic, null] as const] : []),
+                  // Ovoz yozuvi har qanday xodimda bo'lishi mumkin (Ruxsatlar › «Ish vaqtida ovoz yozish»); administratorda yo'q
+                  ...(smenaKoraOladi && tanlangan.rol !== 'ADMIN' ? [['smena', 'Ish va ovozlar', 'Ovozlar', Mic, null] as const] : []),
                 ] as const).map(([k, nomi, qisqa, Belgi, son]) => (
                   <button
                     key={k} type="button" role="tab" aria-selected={varaq === k} onClick={() => setVaraq(k)}

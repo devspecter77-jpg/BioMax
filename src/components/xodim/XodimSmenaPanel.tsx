@@ -14,7 +14,7 @@ import {
 } from '@/lib/smena'
 import type { SmenaXulosasi, YozuvMalumoti } from '@/lib/smena-server'
 
-// Xodimlar → kuryer oynasi → "Ish va ovozlar".
+// Xodimlar → xodim oynasi → "Ish va ovozlar".
 // Kunlar bo'yicha smenalar; har birida qancha yozilgani va uzilishlar,
 // bo'laklarni ketma-ket tinglash va yuklab olish.
 
@@ -26,7 +26,7 @@ interface Javob {
   omborTuri: 's3' | 'baza' | 'lokal' | null
   /** Ombor sozlanmagan bo'lsa — Vercel'da yetishmayotgan o'zgaruvchilar */
   omborYetishmaydi?: string[]
-  /** Bazadagi barcha kuryerlar ovozi: hajm va chegara */
+  /** Bazadagi barcha xodimlar ovozi: hajm va chegara */
   baza?: { chegaraMb: number; bayt: number; soni: number; engEski: string | null }
   bazaVariantlari?: readonly number[]
   adminmi: boolean
@@ -87,7 +87,7 @@ export default function XodimSmenaPanel({ xodimId }: { xodimId: string }) {
   async function smenaniYop(s: SmenaXulosasi) {
     const ok = await confirm({
       title: 'Smenani yakunlash',
-      message: `${soatMatni(s.boshlandi)} da boshlangan smena hozir yopiladi va kuryer ilovasida ovoz yozish to‘xtaydi (bir daqiqa ichida).`,
+      message: `${soatMatni(s.boshlandi)} da boshlangan smena hozir yopiladi va xodim ilovasida ovoz yozish to‘xtaydi (bir daqiqa ichida).`,
       confirmText: 'Yakunlash',
       danger: false,
     })
@@ -149,7 +149,8 @@ export default function XodimSmenaPanel({ xodimId }: { xodimId: string }) {
         <div className="rounded-2xl border border-dashed border-gray-300 dark:border-neutral-700 px-4 py-10 text-center">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Oxirgi {d.kunlar} kunda smena yo‘q</p>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Kuryer o‘z panelida «Ishni boshlash»ni bosganda shu yerda paydo bo‘ladi.
+            Xodim bosh sahifadagi «Ishni boshlash»ni bosganda shu yerda paydo bo‘ladi.
+            Ovoz yozish Ruxsatlar › Bosh sahifa › «Ish vaqtida ovoz yozish» bilan yoqiladi yoki o‘chiriladi.
           </p>
         </div>
       ) : (
@@ -322,7 +323,7 @@ function OmborSozlamasi({ javob, onOzgardi }: { javob: Javob; onOzgardi: () => P
       )}
       {!t && (
         <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
-          Kuryer ilovasi yozuvlarni telefonda saqlab turibdi. Ular serverga tushishi uchun Vercel’da
+          Xodim ilovasi yozuvlarni telefonda saqlab turibdi. Ular serverga tushishi uchun Vercel’da
           S3 ombori (tavsiya: Cloudflare R2) o‘zgaruvchilarini kiriting:{' '}
           {(javob.omborYetishmaydi?.length
             ? javob.omborYetishmaydi
@@ -382,11 +383,14 @@ function SmenaKartasi({ xodimId, smena: s, ochiq, onBos, adminmi, amalda, onYop,
       {ochiq && (
         <div className="border-t border-gray-100 dark:border-neutral-800 px-3.5 py-3 space-y-3">
           <VaqtChizigi smena={s} />
-          {faol && s.yozuvHolati && s.yozuvHolati !== 'yozilmoqda' && (
-            <p className="text-xs text-amber-800 dark:text-amber-400">Kuryer ilovasi: {YOZUV_HOLATI_MATNI[s.yozuvHolati]}</p>
+          {faol && s.yozuvHolati === 'ochirilgan' && (
+            <p className="text-xs text-gray-600 dark:text-gray-400">Ovoz yozish bu xodimga o‘chirilgan — smena ovozsiz davom etmoqda.</p>
           )}
-          {/* Smena ochiq — hozir gapirilayotgan ovozni eshitish */}
-          {faol && <JonliPleer xodimId={xodimId} smenaId={s.id} />}
+          {faol && s.yozuvHolati && s.yozuvHolati !== 'yozilmoqda' && s.yozuvHolati !== 'ochirilgan' && (
+            <p className="text-xs text-amber-800 dark:text-amber-400">Xodim ilovasi: {YOZUV_HOLATI_MATNI[s.yozuvHolati]}</p>
+          )}
+          {/* Smena ochiq — hozir gapirilayotgan ovozni eshitish (ovozsiz smenada — yo'q) */}
+          {faol && s.yozuvHolati !== 'ochirilgan' && <JonliPleer xodimId={xodimId} smenaId={s.id} />}
           {(s.yozuvlar?.length ?? 0) > 0
             ? <Pleer xodimId={xodimId} yozuvlar={s.yozuvlar!} />
             : <p className="text-xs text-gray-500 dark:text-gray-400">Bu smenada hali yozuv yo‘q{faol ? ' — birinchi bo‘lak 3 daqiqada keladi (jonli tinglansa ~15 soniyada)' : ''}.</p>}
@@ -503,7 +507,7 @@ function Pleer({ xodimId, yozuvlar }: { xodimId: string; yozuvlar: YozuvMalumoti
         {!xato && yOvozi === 'ovozsiz' && (
           <p className="flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300">
             <AlertTriangle size={13} className="shrink-0" aria-hidden />
-            Bu bo‘lakda ovoz yo‘q — yozilgan paytda kuryer mikrofoni signal bermagan (o‘chirilgan yoki boshqa qurilma tanlangan).
+            Bu bo‘lakda ovoz yo‘q — yozilgan paytda xodim mikrofoni signal bermagan (o‘chirilgan yoki boshqa qurilma tanlangan).
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-400">
@@ -572,9 +576,9 @@ function OvozsizOgohlantirish({ yozuvlar }: { yozuvlar: YozuvMalumoti[] }) {
     <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
       <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
       <span>
-        {hammasi ? 'Bu smenada kuryer mikrofoni umuman signal bermagan' : `Mikrofon signal bermagan: ${davomiylikMatni(ms)}`}
-        {' '}— yozuvlar jim. Sabab: kuryer qurilmasida mikrofon o‘chirilgan yoki noto‘g‘ri tanlangan.
-        Kuryer panelida bu endi darhol ogohlantiriladi.
+        {hammasi ? 'Bu smenada xodim mikrofoni umuman signal bermagan' : `Mikrofon signal bermagan: ${davomiylikMatni(ms)}`}
+        {' '}— yozuvlar jim. Sabab: xodim qurilmasida mikrofon o‘chirilgan yoki noto‘g‘ri tanlangan.
+        Xodim panelida bu endi darhol ogohlantiriladi.
       </span>
     </p>
   )

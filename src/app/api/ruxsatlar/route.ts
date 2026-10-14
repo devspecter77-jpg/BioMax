@@ -10,6 +10,7 @@ import {
 } from '@/lib/ruxsat-boshqaruv'
 import { mijozTenant } from '@/lib/mijoz-doirasi'
 import { KATEGORIYA_KALIT } from '@/lib/mijoz-kategoriya'
+import { huquqsizSmenaniYop } from '@/lib/smena-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -296,6 +297,12 @@ export async function PUT(req: NextRequest) {
     // Xodim sessiyasi keyingi tekshiruvda (≤30 s) yangi ruxsatlarni oladi,
     // nozik amallar esa darhol — kesh shu yerda tozalanadi
     ruxsatKeshiniTozala(foydalanuvchiId)
+    // «Ish vaqtida ovoz yozish» yopilgan bo'lsa — ochiq smena shu lahzada yakunlanadi
+    // (kuryerniki emas: unda faqat ovoz to'xtaydi). Ilova buni keyingi tekshiruvda ko'radi
+    if (natija.ozgardi > 0) {
+      await huquqsizSmenaniYop(foydalanuvchiId, { tugatuvchi: 'admin', tugatganId: a.id })
+        .catch(e => console.error('[ruxsatlar] smena yopilmadi', e))
+    }
 
     const x = await prisma.foydalanuvchi.findUnique({ where: { id: foydalanuvchiId }, select: XODIM_SELECT })
     return NextResponse.json({

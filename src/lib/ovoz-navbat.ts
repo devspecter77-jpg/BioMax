@@ -1,4 +1,4 @@
-// Kuryer telefonidagi ovoz navbati (IndexedDB, faqat brauzer).
+// Xodim qurilmasidagi ovoz navbati (IndexedDB, faqat brauzer).
 //
 // Yozuv avval telefonga yoziladi, keyin serverga yuboriladi:
 //   · har 10 soniyalik qism darhol saqlanadi — ilova yopilib qolsa yoki
@@ -17,6 +17,12 @@ const BOL = 'bolaklar'
 export interface NavbatSegment {
   segId: string
   smenaId: string
+  /**
+   * Bo'lak egasi. Bitta kompyuterga bir necha xodim kirsa (kassa), har biri
+   * faqat o'z bo'laklarini yuboradi — boshqasiniki egasi kirganda ketadi.
+   * Eski ilova versiyasi bo'laklarida yo'q.
+   */
+  xodimId?: string
   boshlandi: number
   tugadi: number
   mimeType: string
@@ -74,7 +80,7 @@ function tugashi(t: IDBTransaction): Promise<void> {
 
 const bolakOraligi = (segId: string) => IDBKeyRange.bound([segId, 0], [segId, Number.MAX_SAFE_INTEGER])
 
-export async function segmentOch(s: Pick<NavbatSegment, 'segId' | 'smenaId' | 'boshlandi' | 'mimeType'>): Promise<void> {
+export async function segmentOch(s: Pick<NavbatSegment, 'segId' | 'smenaId' | 'xodimId' | 'boshlandi' | 'mimeType'>): Promise<void> {
   const t = (await db()).transaction(SEG, 'readwrite')
   t.objectStore(SEG).put({
     ...s, tugadi: s.boshlandi, holat: 'yozilmoqda', hajm: 0, bolakSoni: 0,
@@ -188,8 +194,13 @@ export async function navbatniQisqart(maxBayt: number): Promise<number> {
   return ochirildi
 }
 
-/** Yuborilmagan bo'laklar soni va hajmi. */
-export async function navbatHolati(): Promise<{ soni: number; hajm: number }> {
-  const hammasi = await barchaSegmentlar()
+/** Bo'lak shu xodimnikimi (egasi yozilmagan eski bo'lak — kimniki bo'lsa ham urinib ko'riladi). */
+export function ozimnikimi(s: Pick<NavbatSegment, 'xodimId'>, xodimId: string | null | undefined): boolean {
+  return !s.xodimId || !xodimId || s.xodimId === xodimId
+}
+
+/** Yuborilmagan bo'laklar soni va hajmi (berilsa — faqat shu xodimniki). */
+export async function navbatHolati(xodimId?: string | null): Promise<{ soni: number; hajm: number }> {
+  const hammasi = (await barchaSegmentlar()).filter(s => ozimnikimi(s, xodimId))
   return { soni: hammasi.length, hajm: hammasi.reduce((a, s) => a + s.hajm, 0) }
 }

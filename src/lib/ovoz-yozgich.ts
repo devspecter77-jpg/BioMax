@@ -31,6 +31,8 @@ export interface YozgichSozlama {
   vaqt: () => number
   /** Tanlangan mikrofon (`deviceId`); `null` — tizim standarti */
   qurilma?: () => string | null
+  /** Bo'laklar egasi — umumiy kompyuterda boshqa xodim navbatidan ajratish uchun */
+  xodimId?: string
 }
 
 export interface YozgichTinglovchi {
@@ -252,7 +254,7 @@ export class OvozYozgich {
     let qismN = 0
     let bayt = 0
     this.zanjir = this.zanjir
-      .then(() => segmentOch({ segId, smenaId: this.smenaId, boshlandi, mimeType: turi }))
+      .then(() => segmentOch({ segId, smenaId: this.smenaId, xodimId: this.s.xodimId, boshlandi, mimeType: turi }))
       .catch(e => console.warn('[ovoz] bo‘lak ochilmadi', e))
 
     yozgich.ondataavailable = (e: BlobEvent) => {

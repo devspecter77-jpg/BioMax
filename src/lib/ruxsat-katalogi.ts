@@ -32,8 +32,10 @@ export interface RuxsatBolim {
 
 export const ruxsatKatalogi: RuxsatBolim[] = [
   {
-    kalit: 'bosh', label: 'Bosh sahifa', izoh: 'Bosh sahifa hammaga ochiq — faqat ko‘rsatkichlar boshqariladi', doimOchiq: true, children: [
+    kalit: 'bosh', label: 'Bosh sahifa', izoh: 'Bosh sahifa hammaga ochiq — ichidagi ko‘rsatkichlar va ish vaqtida ovoz yozish boshqariladi', doimOchiq: true, children: [
       { kalit: 'bosh.statistika', label: 'Savdo va foyda ko‘rsatkichlari', izoh: 'Haftalik tushum, sof foyda, grafiklar' },
+      // Kalit `lib/smena.ts` dagi OVOZ_RUXSATI bilan bir xil bo'lishi shart
+      { kalit: 'bosh.ovoz', label: 'Ish vaqtida ovoz yozish', izoh: 'Bosh sahifada «Ishni boshlash» tugmasi: ish vaqti hisoblanadi, mikrofon ovozni yozadi (xodim avval rozilik beradi). Yozuvlar — Xodimlar › Ish va ovozlar. Yopilsa ochiq smena yakunlanadi (kuryerda faqat ovoz to‘xtaydi)' },
     ],
   },
   {
@@ -150,7 +152,7 @@ export const ruxsatKatalogi: RuxsatBolim[] = [
       { kalit: 'xodimlar.oylik', label: 'Oylik va bonus to‘lash', xavfli: true },
       { kalit: 'xodimlar.mulk', label: 'Biriktirilgan mulkni boshqarish', izoh: 'Mashina, telefon, kalit berish, qaytarib olish, boshqa xodimga o‘tkazish' },
       { kalit: 'xodimlar.sotuvlar', label: 'Xodim sotuvlarini ko‘rish', izoh: 'Kimga nima sotgani: cheklar, mijozlar va mahsulotlar bo‘yicha' },
-      { kalit: 'xodimlar.smena', label: 'Kuryer smenalari va ovoz yozuvlari', xavfli: true, izoh: 'Kim qachon ish boshlab tugatgani, ish vaqtidagi ovoz yozuvlarini tinglash va yuklab olish' },
+      { kalit: 'xodimlar.smena', label: 'Xodimlar smenalari va ovoz yozuvlari', xavfli: true, izoh: 'Kim qachon ish boshlab tugatgani, ish vaqtidagi ovoz yozuvlarini tinglash va yuklab olish' },
     ],
   },
   {

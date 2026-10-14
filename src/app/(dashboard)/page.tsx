@@ -7,7 +7,7 @@ import { TrendingUp, TrendingDown, Receipt, ShoppingBag, Loader2 } from 'lucide-
 import { useSession } from 'next-auth/react'
 import { visibleNavItems } from '@/components/layout/nav-items'
 import SmenaPaneli from '@/components/smena/SmenaPaneli'
-import KuryerlarHolati from '@/components/smena/KuryerlarHolati'
+import XodimlarSmenasi from '@/components/smena/XodimlarSmenasi'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
@@ -133,7 +133,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <SmenaPaneli />
-        <KuryerlarHolati />
+        <XodimlarSmenasi />
         <TezkorBolimlar />
       </div>
     )
@@ -176,7 +176,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <KuryerlarHolati />
+      <XodimlarSmenasi />
 
       {/* Grafik */}
       <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl p-5">

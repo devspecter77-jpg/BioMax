@@ -1,11 +1,34 @@
 // Ish smenasi va ovoz yozuvi — brauzer ham, server ham ishlatadigan sof qism
 // (bazaga va brauzer API'lariga bog'liq emas).
 
-/** Smena (ish boshlash/tugallash) qaysi rollarga tegishli. */
+/**
+ * Smenani ovozdan qat'i nazar yuritadigan rollar: kuryerga buyurtmalar
+ * navbati smenaga qarab taqsimlanadi (`kuryer-navbat.ts`), shuning uchun
+ * ovoz yozish o'chirilgan kuryer ham ishni boshlab-tugatadi.
+ */
 export const SMENA_ROLLARI = ['DOSTAVCHIK'] as const
 
 export function smenaRolimi(rol: string | null | undefined): boolean {
   return !!rol && (SMENA_ROLLARI as readonly string[]).includes(rol)
+}
+
+/**
+ * Ish vaqtida ovoz yozish — Ruxsatlar › Bosh sahifa. Barcha xodimlarda
+ * standart bo'yicha ochiq, Ega har biriga alohida yopa oladi.
+ */
+export const OVOZ_RUXSATI = 'bosh.ovoz'
+
+/** Xodimning ovozi ish vaqtida yoziladimi. Administrator yozilmaydi. */
+export function ovozYozilsinmi(rol: string | null | undefined, ruxsatlar: readonly string[] | null | undefined): boolean {
+  return !!rol && rol !== 'ADMIN' && !!ruxsatlar?.includes(OVOZ_RUXSATI)
+}
+
+/**
+ * Xodim ish smenasini yuritadimi: kuryer — har doim, qolganlar — ovoz
+ * yozish ruxsati bo'lsa (ularda smena faqat ovoz yozuvi uchun).
+ */
+export function smenaKerakmi(rol: string | null | undefined, ruxsatlar: readonly string[] | null | undefined): boolean {
+  return smenaRolimi(rol) || ovozYozilsinmi(rol, ruxsatlar)
 }
 
 /**
@@ -93,9 +116,10 @@ export type YozuvHolati =
   | 'joy_yoq'      // qurilmada yuborilmagan yozuvlar juda ko'p
   | 'ombor_yoq'    // serverda ovoz ombori sozlanmagan
   | 'ovoz_yoq'     // yozuv ketyapti, lekin mikrofondan ovoz kelmayapti (o'chirilgan/noto'g'ri qurilma)
+  | 'ochirilgan'   // Ega bu xodimga ovoz yozishni yopgan — smena ovozsiz (muammo emas)
 
 export const YOZUV_HOLATLARI: readonly YozuvHolati[] = [
-  'yozilmoqda', 'uzilgan', 'ruxsat_yoq', 'qollanmaydi', 'joy_yoq', 'ombor_yoq', 'ovoz_yoq',
+  'yozilmoqda', 'uzilgan', 'ruxsat_yoq', 'qollanmaydi', 'joy_yoq', 'ombor_yoq', 'ovoz_yoq', 'ochirilgan',
 ]
 
 export function yozuvHolatimi(q: unknown): q is YozuvHolati {
@@ -110,6 +134,7 @@ export const YOZUV_HOLATI_MATNI: Record<YozuvHolati, string> = {
   joy_yoq: 'Telefonda joy tugadi',
   ombor_yoq: 'Ovoz ombori sozlanmagan',
   ovoz_yoq: 'Mikrofon ovoz bermayapti',
+  ochirilgan: 'Ovoz yozish o‘chirilgan',
 }
 
 /**

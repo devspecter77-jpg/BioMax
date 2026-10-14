@@ -128,7 +128,7 @@ export default function JonliPleer({ xodimId, smenaId }: { xodimId: string; smen
   // Hech narsa o'ynalmayapti — demak yangi bo'lak kutilmoqda
   const kutilmoqda = !joriy
   const muammo = holat && !holat.aloqa
-    ? 'Kuryer ilovasi bilan aloqa yo‘q — yangi ovoz kelmayapti'
+    ? 'Xodim ilovasi bilan aloqa yo‘q — yangi ovoz kelmayapti'
     : holat?.yozuvHolati && holat.yozuvHolati !== 'yozilmoqda'
       ? YOZUV_HOLATI_MATNI[holat.yozuvHolati]
       : null
@@ -165,7 +165,7 @@ export default function JonliPleer({ xodimId, smenaId }: { xodimId: string; smen
         {joriy
           ? `${soatMatni(joriy.boshlandi)}–${soatMatni(joriy.tugadi)} eshitilmoqda`
           : holat && !holat.tayyor
-            ? 'Kuryer ilovasiga xabar berilmoqda — birinchi ovoz ~20 soniyada keladi'
+            ? 'Xodim ilovasiga xabar berilmoqda — birinchi ovoz ~20 soniyada keladi'
             : kutilmoqda ? 'Yangi ovoz kutilmoqda…' : 'Tayyorlanmoqda…'}
         {kutilmoqda && <Loader2 size={11} className="animate-spin" aria-hidden />}
       </p>
@@ -178,7 +178,7 @@ export default function JonliPleer({ xodimId, smenaId }: { xodimId: string; smen
 
       <p className="text-[11px] text-gray-500 dark:text-gray-400">
         Ovoz ~15–20 soniya kechikish bilan eshitiladi va odatdagidek saqlanib boradi.
-        Kuryer panelida «rahbariyat jonli tinglamoqda» deb ko‘rinadi.
+        Xodim panelida «rahbariyat jonli tinglamoqda» deb ko‘rinadi.
       </p>
     </div>
   )

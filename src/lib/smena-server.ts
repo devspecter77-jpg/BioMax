@@ -3,11 +3,12 @@
 import type { Session } from 'next-auth'
 import { prisma } from './prisma'
 import { sessionEgaId, sessionFilialId } from './filial-scope'
+import { hisobHolati } from './ruxsat-server'
 import { omborTuri, ochir } from './ovoz-ombor'
 import { chegaradanOshsaQisqart } from './ovoz-baza'
 import {
   ALOQA_YOQ_MS, JONLI_KUZATUV_MS, SAQLASH_STANDART, SAQLASH_VARIANTLARI, UNUTILGAN_SMENA_MS,
-  kunBoshi, qamrovniHisobla, smenaRolimi, toshkentKuni, yozuvHolatimi, type YozuvHolati,
+  kunBoshi, ovozYozilsinmi, qamrovniHisobla, smenaKerakmi, smenaRolimi, toshkentKuni, yozuvHolatimi, type YozuvHolati,
 } from './smena'
 
 export const SAQLASH_KALITI = 'ovoz_saqlash_kun'
@@ -17,11 +18,40 @@ const TEXNIK_ORALIQ_MS = 6 * 3_600_000
 
 export type Tugatuvchi = 'xodim' | 'admin' | 'avtomatik'
 
-/** Sessiyadagi foydalanuvchi smena yurita oladimi (kuryer). */
-export function smenaXodimi(session: Session | null): { id: string; rol: string } | null {
-  const u = session?.user as { id?: string; rol?: string } | undefined
-  if (!u?.id || !smenaRolimi(u.rol)) return null
-  return { id: u.id, rol: u.rol! }
+export interface SmenaXodimi {
+  id: string
+  rol: string
+  /** Ish vaqtida ovoz yoziladimi (Ruxsatlar › «Ish vaqtida ovoz yozish») */
+  ovoz: boolean
+  /** Kuryer: buyurtmalar navbati va yangi buyurtma xabari shunga tegishli */
+  kuryer: boolean
+}
+
+/**
+ * Foydalanuvchi smena yurita oladimi. Rol va ruxsat bazadan JONLI (kesh 15 s)
+ * o'qiladi: Ega ovoz yozishni yopsa sessiya yangilanishini kutmay kuchga kiradi.
+ */
+export async function smenaXodimi(session: Session | null): Promise<SmenaXodimi | null> {
+  const id = (session?.user as { id?: string } | undefined)?.id
+  if (!id) return null
+  const h = await hisobHolati(id)
+  if (!h || !h.faol || !smenaKerakmi(h.rol, h.ruxsatlar)) return null
+  return { id, rol: h.rol, ovoz: ovozYozilsinmi(h.rol, h.ruxsatlar), kuryer: smenaRolimi(h.rol) }
+}
+
+/**
+ * Smena yuritish huquqi yo'qolgan xodimning (Ega ovoz yozishni yopdi, rol
+ * o'zgardi, hisob nofaol) ochiq smenasini yopadi. Kuryer smenasi yopilmaydi —
+ * u buyurtmalar uchun ham kerak, unda faqat ovoz to'xtaydi.
+ */
+export async function huquqsizSmenaniYop(
+  xodimId: string,
+  q: { tugatuvchi: Tugatuvchi; tugatganId?: string | null },
+): Promise<boolean> {
+  const h = await hisobHolati(xodimId, true)
+  if (h && h.faol && smenaKerakmi(h.rol, h.ruxsatlar)) return false
+  const s = await faolSmena(xodimId)
+  return s ? smenaniTugat(s.id, q) : false
 }
 
 export async function saqlashKuni(): Promise<number> {
@@ -57,7 +87,7 @@ function koordinata(lat: unknown, lng: unknown): { lat: number; lng: number } | 
 export async function smenaniBoshla(
   session: Session,
   xodimId: string,
-  q: { lat?: unknown; lng?: unknown; qurilma?: string | null },
+  q: { lat?: unknown; lng?: unknown; qurilma?: string | null; ovoz: boolean },
 ) {
   const joy = koordinata(q.lat, q.lng)
   return prisma.$transaction(async tx => {
@@ -71,6 +101,8 @@ export async function smenaniBoshla(
         boshLat: joy?.lat ?? null,
         boshLng: joy?.lng ?? null,
         qurilma: q.qurilma?.slice(0, 160) ?? null,
+        // Ovozsiz smena (kuryerga ovoz yozish yopilgan) — muammo emas, shunday belgilanadi
+        yozuvHolati: q.ovoz ? null : 'ochirilgan',
         filialId: sessionFilialId(session),
         egaId: sessionEgaId(session),
       },
@@ -228,8 +260,8 @@ export async function smenalarXulosasi(
   })
 }
 
-/** Kuryer paneli uchun to'liq holat (GET va har bir amaldan keyin bir xil shakl). */
-export async function kuryerHolati(xodimId: string) {
+/** Xodimning smena paneli uchun to'liq holat (GET va har bir amaldan keyin bir xil shakl). */
+export async function xodimSmenaHolati(xodimId: string, ovoz: boolean) {
   const bugun = kunBoshi(toshkentKuni(new Date()))
   const [u, smenalar, kun, ochiq] = await Promise.all([
     prisma.foydalanuvchi.findUnique({ where: { id: xodimId }, select: { ovozRozilik: true } }),
@@ -240,6 +272,8 @@ export async function kuryerHolati(xodimId: string) {
   const faol = smenalar.find(s => !s.tugadi) ?? null
   return {
     mavjud: true as const,
+    /** Ish vaqtida ovoz yoziladimi — yo'q bo'lsa smena mikrofonsiz (faqat kuryer) */
+    ovoz,
     rozilik: !!u?.ovozRozilik,
     omborTayyor: omborTuri() !== null,
     saqlashKun: kun,
@@ -319,13 +353,18 @@ export async function texnikXizmat(majburiy = false): Promise<void> {
     select: { id: true, boshlandi: true, oxirgiPuls: true },
   })
   for (const s of eskilar) {
-    const oxirgiYozuv = await prisma.ovozYozuv.findFirst({
-      where: { smenaId: s.id }, orderBy: { tugadi: 'desc' }, select: { tugadi: true },
-    })
-    const vaqt = new Date(Math.max(
-      s.boshlandi.getTime(), s.oxirgiPuls?.getTime() ?? 0, oxirgiYozuv?.tugadi.getTime() ?? 0,
-    ))
-    await smenaniTugat(s.id, { tugatuvchi: 'avtomatik', vaqt })
+    await smenaniTugat(s.id, { tugatuvchi: 'avtomatik', vaqt: await oxirgiFaollik(s) })
+  }
+
+  // 1b) Smena yuritish huquqi yo'qolgan xodim (ovoz yozish yopilgan, rol
+  //     o'zgargan, hisob nofaol) — ilovasi yopiq bo'lsa smenasi shu yerda yopiladi
+  const ochiqlar = await prisma.smena.findMany({
+    where: { tugadi: null }, select: { id: true, xodimId: true, boshlandi: true, oxirgiPuls: true },
+  })
+  for (const s of ochiqlar) {
+    const h = await hisobHolati(s.xodimId, true)
+    if (h && h.faol && smenaKerakmi(h.rol, h.ruxsatlar)) continue
+    await smenaniTugat(s.id, { tugatuvchi: 'avtomatik', vaqt: await oxirgiFaollik(s) })
   }
 
   // 2) Saqlash muddati o'tgan yozuvlar — avval ombordan, keyin bazadan
@@ -353,6 +392,16 @@ export async function texnikXizmat(majburiy = false): Promise<void> {
   //    tekshiriladi; bu — chegara pasaytirilgan yoki bo'lak tekshiruvi
   //    o'tkazib yuborilgan holat uchun)
   await chegaradanOshsaQisqart().catch(e => console.error('[ovoz texnik] chegara', e))
+}
+
+/** Smenadagi oxirgi ma'lum faollik: puls yoki oxirgi ovoz bo'lagi (bo'lmasa — boshlanishi). */
+async function oxirgiFaollik(s: { id: string; boshlandi: Date; oxirgiPuls: Date | null }): Promise<Date> {
+  const oxirgiYozuv = await prisma.ovozYozuv.findFirst({
+    where: { smenaId: s.id }, orderBy: { tugadi: 'desc' }, select: { tugadi: true },
+  })
+  return new Date(Math.max(
+    s.boshlandi.getTime(), s.oxirgiPuls?.getTime() ?? 0, oxirgiYozuv?.tugadi.getTime() ?? 0,
+  ))
 }
 
 /** Smenaning barcha yozuvlarini ombordan va bazadan o'chiradi (smena ham o'chadi). */

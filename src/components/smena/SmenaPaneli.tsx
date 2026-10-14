@@ -63,7 +63,7 @@ export default function SmenaPaneli() {
 
   async function boshlashniBos() {
     if (!s) return
-    if (!s.server?.rozilik) { setRozilikOchiq(true); return }
+    if (s.server?.ovoz && !s.server.rozilik) { setRozilikOchiq(true); return }
     await s.boshla()
   }
 
@@ -72,7 +72,7 @@ export default function SmenaPaneli() {
     const ishlagan = s.vaqt() - new Date(smena.boshlandi).getTime()
     const ok = await confirm({
       title: 'Ishni tugallaysizmi?',
-      message: `Bugungi smena ${soatMatni(smena.boshlandi)} da boshlangan, ${davomiylikMatni(ishlagan)} ishladingiz. Tugallasangiz ovoz yozish to‘xtaydi.`,
+      message: `Bugungi smena ${soatMatni(smena.boshlandi)} da boshlangan, ${davomiylikMatni(ishlagan)} ishladingiz.${s.server?.ovoz ? ' Tugallasangiz ovoz yozish to‘xtaydi.' : ''}`,
       confirmText: 'Ishni tugallash',
       danger: false,
     })
@@ -111,7 +111,24 @@ export default function SmenaPaneli() {
             </p>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{soatMatni(smena.boshlandi)} dan beri ishlayapsiz</p>
 
-            <YozuvHolatiQatori />
+            {!server.ovoz ? (
+              <p className="mt-4 flex items-center gap-2 rounded-xl bg-gray-50 dark:bg-neutral-800/60 px-3.5 py-3 text-sm text-gray-600 dark:text-gray-400">
+                <MicOff size={16} className="shrink-0" aria-hidden /> Ovoz yozilmaydi — faqat ish vaqti hisoblanadi
+              </p>
+            ) : !server.rozilik ? (
+              // Smena davomida rahbariyat ovoz yozishni yoqdi — rozilisiz yozilmaydi
+              <div role="alert" className="mt-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3.5 py-3 text-amber-900 dark:text-amber-300">
+                <p className="flex items-center gap-2 text-sm font-semibold"><Mic size={16} aria-hidden /> Ish vaqtida ovoz yozish yoqildi</p>
+                <p className="mt-1 text-xs leading-relaxed">Rahbariyat ovoz yozishni yoqdi. Shartlar bilan tanishib rozilik bering — shundan keyin yozuv boshlanadi.</p>
+                <button
+                  type="button"
+                  onClick={() => setRozilikOchiq(true)}
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-white/80 dark:bg-neutral-900/60 border border-current/20 px-3 py-2 text-xs font-semibold"
+                >
+                  <ShieldCheck size={13} aria-hidden /> Shartlarni ko‘rish
+                </button>
+              </div>
+            ) : <YozuvHolatiQatori />}
             <JonliBelgisi />
 
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
@@ -122,8 +139,8 @@ export default function SmenaPaneli() {
                 <span className="inline-flex items-center gap-1"><CloudUpload size={13} aria-hidden /> {s.yuborildi} ta bo‘lak yuborildi</span>
               )}
               {/* Navbat faqat haqiqatan yuborilayotganda ko'rinadi. Server ombori
-                  sozlanmagan bo'lsa bu administratorning ishi — kuryerga texnik
-                  ogohlantirish ko'rsatilmaydi, yozuv telefonda xavfsiz turadi. */}
+                  sozlanmagan bo'lsa bu administratorning ishi — xodimga texnik
+                  ogohlantirish ko'rsatilmaydi, yozuv qurilmada xavfsiz turadi. */}
               {navbat.soni > 0 && server.omborTayyor && s.onlayn && (
                 <span className="inline-flex items-center gap-1">
                   <Loader2 size={13} className="animate-spin" aria-hidden /> {navbat.soni} ta navbatda ({hajmMatni(navbat.hajm)})
@@ -131,7 +148,7 @@ export default function SmenaPaneli() {
               )}
               {!s.onlayn && (
                 <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                  <WifiOff size={13} aria-hidden /> Internet yo‘q — yozuv telefonda saqlanmoqda
+                  <WifiOff size={13} aria-hidden /> {server.ovoz ? 'Internet yo‘q — yozuv qurilmada saqlanmoqda' : 'Internet yo‘q'}
                 </span>
               )}
             </div>
@@ -139,7 +156,9 @@ export default function SmenaPaneli() {
         ) : (
           <>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Ishga chiqqanda bosing — ish vaqti hisoblanadi va ovoz yozila boshlaydi.
+              {server.ovoz
+                ? 'Ishga chiqqanda bosing — ish vaqti hisoblanadi va ovoz yozila boshlaydi.'
+                : 'Ishga chiqqanda bosing — ish vaqti hisoblanadi.'}
             </p>
             {bugungiTugagan.length > 0 && (
               <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
@@ -178,10 +197,12 @@ export default function SmenaPaneli() {
               className="w-full min-h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-base flex items-center justify-center gap-2 disabled:opacity-60 transition shadow-sm"
             >
               {s.band ? <Loader2 size={20} className="animate-spin" aria-hidden /> : <Play size={20} aria-hidden />}
-              {s.band ? 'Mikrofon ulanmoqda…' : 'Ishni boshlash'}
+              {s.band ? (server.ovoz ? 'Mikrofon ulanmoqda…' : 'Ish boshlanmoqda…') : 'Ishni boshlash'}
             </button>
             <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-              <Mic size={13} aria-hidden /> Ish vaqtida mikrofon yoqiq bo‘ladi
+              {server.ovoz
+                ? <><Mic size={13} aria-hidden /> Ish vaqtida mikrofon yoqiq bo‘ladi</>
+                : <><MicOff size={13} aria-hidden /> Ovoz yozilmaydi</>}
             </p>
           </>
         )}
@@ -206,13 +227,13 @@ export default function SmenaPaneli() {
                 await s.boshla()
               }}
             >
-              Roziman — ishni boshlash
+              {smena ? 'Roziman — ovoz yozishni boshlash' : 'Roziman — ishni boshlash'}
             </ModalAsosiy>
           </>}
         >
           <ul className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
             <li className="flex gap-2.5"><Mic size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden />
-              Ish boshlanganidan tugaguncha telefon mikrofoni yoqiq bo‘ladi: atrofdagi barcha ovozlar, jumladan mijozlar bilan suhbatlar yozib olinadi.</li>
+              Ish boshlanganidan tugaguncha qurilma (telefon yoki kompyuter) mikrofoni yoqiq bo‘ladi: atrofdagi barcha ovozlar, jumladan mijozlar bilan suhbatlar yozib olinadi.</li>
             <li className="flex gap-2.5"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden />
               Yozuvlarni faqat rahbariyat tinglaydi. Ular {server.saqlashKun} kun saqlanadi, keyin avtomatik o‘chiriladi.</li>
             <li className="flex gap-2.5"><Smartphone size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden />
@@ -227,7 +248,7 @@ export default function SmenaPaneli() {
 }
 
 /**
- * Rahbariyat hozir jonli tinglayotganini kuryerga OCHIQ ko'rsatadi.
+ * Rahbariyat hozir jonli tinglayotganini xodimga OCHIQ ko'rsatadi.
  * Yashirin tinglash bo'lmasin: xodim ishga kirishda ovoz yozilishiga rozilik
  * bergan, lekin aynan hozir eshitilayotganini ham bilib turishi to'g'ri.
  */
@@ -365,8 +386,10 @@ export function SmenaIndikator() {
   const yol = usePathname()
   const smena = s?.server?.smena ?? null
   useSoniya(!!smena)
-  if (!s?.mavjud || !smena || yol === '/') return null
+  // Ovoz yozilmaydigan smena (kuryerga o'chirilgan) — ogohlantiradigan narsa yo'q
+  if (!s?.mavjud || !smena || yol === '/' || !s.server?.ovoz) return null
   const muammo = s.yozuv.holat !== 'yozilmoqda' && s.yozuv.holat !== 'boshlanmoqda'
+  const rozilikKerak = !s.server.rozilik
   return (
     <Link
       href="/"
@@ -386,6 +409,7 @@ export function SmenaIndikator() {
         )}
         <span className="truncate">
           {!muammo ? 'Ovoz yozilmoqda'
+            : rozilikKerak ? 'Ovoz yozish yoqildi — rozilik berish uchun bosing'
             : s.yozuv.holat === 'ovoz_yoq' ? 'Mikrofon ovoz bermayapti — tuzatish uchun bosing'
             : 'Ovoz yozuvi to‘xtagan — tuzatish uchun bosing'}
         </span>

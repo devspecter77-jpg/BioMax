@@ -4,10 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { omborTuri, ochir, saqla } from '@/lib/ovoz-ombor'
 import { chegaradanOshsaQisqart } from '@/lib/ovoz-baza'
-import { smenaXodimi } from '@/lib/smena-server'
 import { YUKLASH_MAX_BAYT, kengaytma, toshkentKuni } from '@/lib/smena'
 
-// Kuryer ilovasidan bitta ovoz bo'lagi (≈3 daqiqa) keladi.
+// Xodim ilovasidan bitta ovoz bo'lagi (≈3 daqiqa) keladi.
 //
 // Ilova bo'laklarni avval telefonda saqlaydi va internet bo'lganda yuboradi —
 // shuning uchun bo'lak smena tugagandan keyin, hatto ertasi kuni ham kelishi
@@ -29,8 +28,17 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ xato: "Ruxsat yo'q" }, { status: 401 })
-    const xodim = smenaXodimi(session)
-    if (!xodim) return NextResponse.json({ xato: 'Ovoz yozuvi faqat kuryerlar uchun' }, { status: 403 })
+    // Ruxsat yopilgunga qadar yozilib, telefonda navbatda qolgan bo'laklar ham
+    // qabul qilinadi — ular ruxsat ochiq paytda yozilgan. Ruxsat yopilgach yangisi
+    // paydo bo'lmaydi: ilova mikrofonni to'xtatadi, smena yopiladi. Bo'lak faqat
+    // rozilik bergan xodimdan va uning o'z smenasiga (pastda) qabul qilinadi.
+    const u = session.user as { id?: string; rol?: string } | undefined
+    const xodim = u?.id && u.rol !== 'ADMIN'
+      ? await prisma.foydalanuvchi.findUnique({ where: { id: u.id }, select: { id: true, ovozRozilik: true } })
+      : null
+    if (!xodim?.ovozRozilik) {
+      return NextResponse.json({ xato: 'Ovoz yozilishiga rozilik berilmagan', kod: 'rozilik_yoq' }, { status: 403 })
+    }
     const turi = omborTuri()
     if (!turi) {
       // Ilova bo'lakni o'chirmaydi — ombor sozlangach o'zi yuboradi
@@ -94,8 +102,13 @@ export async function POST(req: NextRequest) {
     const smena = await prisma.smena.findUnique({
       where: { id: smenaId }, select: { id: true, xodimId: true, boshlandi: true, tugadi: true },
     })
-    if (!smena || smena.xodimId !== xodim.id) {
+    if (!smena) {
       return NextResponse.json({ xato: 'Smena topilmadi', kod: 'smena_yoq' }, { status: 404 })
+    }
+    // Umumiy kompyuterda boshqa xodimning (egasi yozilmagan eski) bo'lagi —
+    // o'chirilmasin: egasi kirganda o'zi yuboradi
+    if (smena.xodimId !== xodim.id) {
+      return NextResponse.json({ xato: 'Bo‘lak boshqa xodimniki', kod: 'boshqa_xodim' }, { status: 409 })
     }
     const oxiri = smena.tugadi?.getTime() ?? hozir
     if (hozir - oxiri > KECH_QOLISH_MS) {
