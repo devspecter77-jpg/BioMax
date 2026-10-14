@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { egaFilialWhere } from '@/lib/filial-scope'
 import { xaritaRuxsati } from '@/lib/xarita-server'
 
+/** Har xodimning shu oraliqdagi izi xaritada ingichka chiziq — qayoqqa ketayotgani. */
+const DUM_MS = 30 * 60_000
+
 // Xarita bo'limi ma'lumotlari: filiallar, xodimlar, mijozlar va
 // TA'MINOTCHILARNING joylashuvi. Sahifa ularni alohida ko'rinishlarga
 // ajratadi, shuning uchun hammasi bitta so'rovda qaytariladi.
@@ -15,7 +18,7 @@ export async function GET() {
     if (!r.ok) return r.javob
     const session = r.session
 
-    const [filiallar, xodimlar, mijozlar, taminotchilar] = await Promise.all([
+    const [filiallar, xodimlar, mijozlar, taminotchilar, dumlar] = await Promise.all([
       prisma.filial.findMany({
         select: {
           id: true, nomi: true, manzil: true, telefon: true, faol: true,
@@ -64,13 +67,24 @@ export async function GET() {
         },
         orderBy: { nomi: 'asc' },
       }),
+      // So'nggi 30 daqiqalik izlar — xodim tanlanmasa ham yo'nalishi ko'rinsin
+      prisma.lokatsiyaIzi.findMany({
+        where: { vaqt: { gte: new Date(Date.now() - DUM_MS) } },
+        orderBy: [{ xodimId: 'asc' }, { vaqt: 'asc' }],
+        select: { xodimId: true, lat: true, lng: true },
+        take: 5_000,
+      }),
     ])
+    const izlar: Record<string, [number, number][]> = {}
+    for (const n of dumlar) (izlar[n.xodimId] ??= []).push([n.lat, n.lng])
+    for (const id of Object.keys(izlar)) if (izlar[id].length < 2) delete izlar[id]
 
     return NextResponse.json({
       filiallar,
       xodimlar,
       mijozlar,
       taminotchilar,
+      izlar,
       // Server vaqti — "necha daqiqa oldin" hisobini brauzer soatiga
       // emas, serverga nisbatan qilamiz (soatlar farq qilishi mumkin).
       hozir: new Date().toISOString(),

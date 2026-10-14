@@ -27,7 +27,7 @@ const TIRIK_ORALIQ_MS = 60_000
 
 export default function LokatsiyaKuzatuv() {
   const { status } = useSession()
-  const oxirgi = useRef<{ lat: number; lng: number; vaqt: number } | null>(null)
+  const oxirgi = useRef<{ lat: number; lng: number; aniqlik: number | null; vaqt: number } | null>(null)
   const yuborilmoqda = useRef(false)
 
   useEffect(() => {
@@ -36,16 +36,17 @@ export default function LokatsiyaKuzatuv() {
     // Geolocation faqat xavfsiz kontekstda (https:// yoki localhost) ishlaydi
     if (typeof window === 'undefined' || !window.isSecureContext) return
 
-    async function yubor(lat: number, lng: number) {
+    // `aniqlik` (metr) — server yomon aniqlikdagi nuqtani yurgan yo'lga yozmaydi
+    async function yubor(lat: number, lng: number, aniqlik: number | null) {
       if (yuborilmoqda.current) return
       yuborilmoqda.current = true
       try {
         await fetch('/api/profil/lokatsiya', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat, lng }),
+          body: JSON.stringify({ lat, lng, aniqlik }),
         })
-        oxirgi.current = { lat, lng, vaqt: Date.now() }
+        oxirgi.current = { lat, lng, aniqlik, vaqt: Date.now() }
       } catch {
         // Tarmoq uzilgan bo'lsa jim o'tkazib yuboramiz — keyingi
         // o'zgarishda yana urinib ko'riladi.
@@ -69,7 +70,7 @@ export default function LokatsiyaKuzatuv() {
           if (vaqtOtdi < 3_000) return
         }
 
-        void yubor(lat, lng)
+        void yubor(lat, lng, Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null)
       },
       () => {},
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 10_000 },
@@ -79,7 +80,7 @@ export default function LokatsiyaKuzatuv() {
     const tirik = setInterval(() => {
       const o = oxirgi.current
       if (!o || document.visibilityState !== 'visible') return
-      if (Date.now() - o.vaqt >= TIRIK_ORALIQ_MS - 1_000) void yubor(o.lat, o.lng)
+      if (Date.now() - o.vaqt >= TIRIK_ORALIQ_MS - 1_000) void yubor(o.lat, o.lng, o.aniqlik)
     }, TIRIK_ORALIQ_MS)
 
     return () => {

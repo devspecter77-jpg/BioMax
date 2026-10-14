@@ -125,6 +125,7 @@ model Foydalanuvchi {
   masulMijozlar         Mijoz[]            @relation("MijozMasul")
   ozMijozKategoriyalari MijozKategoriya[]  @relation("MijozKategoriyaEgasi")
   mijozKategoriyaRuxsatlari MijozKategoriyaXodim[] @relation("MijozKategoriyaXodimlari")
+  lokatsiyaIzlari       LokatsiyaIzi[]     @relation("LokatsiyaIzlari")
 
   @@index([filialId])
   @@index([ulashilganEgaId])
@@ -1884,4 +1885,40 @@ model OnlaynHisobBloki {
 enum OnlaynBlokAmali {
   CHIQARILDI
   QAYTARILDI
+}
+
+// ========================
+// YURGAN YO'L (joylashuv tarixi)
+// ========================
+//
+// Xodim (administrator ham) ilovani ochiq tutganda telefon/kompyuter
+// joylashuvini yuboradi (`LokatsiyaKuzatuv`). Har so'rov emas, saralanganlari
+// yoziladi (`lib/lokatsiya-izi.ts`): yetarlicha siljiganda yoki joyida turganda
+// har 5 daqiqada bir. Xarita › xodim › «Yurgan yo'li» shundan chiziladi.
+// Muddati o'tganlari o'chiriladi (IZ_SAQLASH_KUN).
+model LokatsiyaIzi {
+  id      BigInt   @id @default(autoincrement())
+  xodimId String
+  lat     Float
+  lng     Float
+  /// GPS aniqligi (metr), brauzer bergan bo'lsa
+  aniqlik Float?
+  vaqt    DateTime @default(now())
+
+  xodim   Foydalanuvchi @relation("LokatsiyaIzlari", fields: [xodimId], references: [id], onDelete: Cascade)
+
+  @@index([xodimId, vaqt])
+  @@map("lokatsiya_izlari")
+}
+
+// Koordinata → manzil (OpenStreetMap Nominatim) keshi. Ochiq xizmat sekundiga
+// bitta so'rovga ruxsat beradi — bir joy bir marta so'raladi. Kalit ~11 m
+// aniqlikda yaxlitlangan koordinata: "41.3112,69.2797".
+model ManzilKeshi {
+  kalit      String   @id
+  /// null — xizmat bu joy uchun manzil topmadi
+  manzil     String?
+  yaratilgan DateTime @default(now())
+
+  @@map("manzil_keshi")
 }

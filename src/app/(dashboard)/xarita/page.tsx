@@ -5,18 +5,21 @@ import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
 import {
   MapPin, Loader2, Building, Users, RefreshCw, Crosshair, Check, X,
-  Truck, ExternalLink, Search,
+  Truck, ExternalLink, Search, Route,
 } from 'lucide-react'
 import { formatPhone } from '@/lib/utils'
 import type { XaritaChiziq, XaritaNuqta, Yangilik } from '@/components/Xarita'
 import { googleSputnik, koordinataTogrimi } from '@/lib/xarita-havola'
 import { vaqtMatni, yangilikAniqla } from '@/lib/lokatsiya-vaqt'
-import { YETKAZISH_NOMI, masofaMatni, type KuryerYetkazish } from '@/lib/dostavchik'
+import { YETKAZISH_NOMI, masofaM, masofaMatni, type KuryerYetkazish } from '@/lib/dostavchik'
+import { bugungiKun, manzilKaliti } from '@/lib/lokatsiya-izi'
+import { soatMatni } from '@/lib/smena'
 import {
   YETKAZISH_XARITA_RANGI, masofa, qolganVaqtS, qolganYol, transportProfili, vaqtYorligi, type Nuqta,
 } from '@/lib/yonalish'
 import { useYonalishlar, type YonalishSorovi } from '@/hooks/useYonalishlar'
 import KuryerKartasi, { type YolHolati } from '@/components/xarita/KuryerKartasi'
+import IzPaneli, { IZ_RANG, type IzJavob } from '@/components/xarita/IzPaneli'
 
 // Leaflet `window` ga tayanadi — serverda render qilib bo'lmaydi.
 const Xarita = dynamic(() => import('@/components/Xarita'), {
@@ -57,6 +60,11 @@ interface XaritaTaminotchi {
 const YANGILANISH_MS = 15_000
 /** Yo'ldagi kuryerlar tezroq: kuryer ilovasi siljiganda har ~3 s da joy yuboradi. */
 const YETKAZISH_MS = 4_000
+
+/** To'xtash joyi shu masofada bo'lsa ma'lum joy (mijoz, ta'minotchi, filial) deb ko'rsatiladi. */
+const JOY_RADIUS_M = 150
+/** Xodim tanlanmaganda — so'nggi 30 daqiqalik izi (qayoqqa ketayotgani). */
+const DUM_RANG = '#16a34a'
 
 /** Kuryer va u boradigan joy — xaritada chiziladigan yo'l. */
 interface KuryerYoli extends YolHolati {
@@ -113,6 +121,8 @@ export default function XaritaPage() {
   const [mijozlar, setMijozlar] = useState<XaritaMijoz[]>([])
   const [xodimlar, setXodimlar] = useState<Xodim[]>([])
   const [taminotchilar, setTaminotchilar] = useState<XaritaTaminotchi[]>([])
+  // Xodimlarning so'nggi 30 daqiqalik izi (xodim id → nuqtalar)
+  const [izlar, setIzlar] = useState<Record<string, [number, number][]>>({})
   const [hozir, setHozir] = useState(() => Date.now())
   const [yuklanmoqda, setYuklanmoqda] = useState(true)
   const [fokus, setFokus] = useState<string | null>(null)
@@ -146,6 +156,7 @@ export default function XaritaPage() {
       setXodimlar(d.xodimlar || [])
       setMijozlar(d.mijozlar || [])
       setTaminotchilar(d.taminotchilar || [])
+      setIzlar(d.izlar || {})
       setHozir(d.hozir ? new Date(d.hozir).getTime() : Date.now())
     } catch {
       if (birinchiRef.current) toast.error('Tarmoq xatosi')
@@ -160,6 +171,100 @@ export default function XaritaPage() {
     const t = setInterval(() => { void yukla() }, YANGILANISH_MS)
     return () => clearInterval(t)
   }, [yukla])
+
+  // ── Yurgan yo'l: tanlangan xodimning bir kunlik izi ──
+  const [izXodim, setIzXodim] = useState<string | null>(null)
+  const [izKun, setIzKun] = useState(() => bugungiKun())
+  const [iz, setIz] = useState<IzJavob | null>(null)
+  const [izXato, setIzXato] = useState<string | null>(null)
+  const [izToxtash, setIzToxtash] = useState<number | null>(null)
+  const [toxtashKorsatish, setToxtashKorsatish] = useState<{ kalit: string; nuqtalar: [number, number][] } | null>(null)
+  // Koordinata kaliti → ko'cha manzili (null — topilmadi yoki xizmat javob bermadi)
+  const [manzillar, setManzillar] = useState<Record<string, string | null>>({})
+  const manzilSoralganRef = useRef(new Set<string>())
+
+  // Bugungi iz har daqiqada yangilanadi (xodim hali yurmoqda); eski so'rov
+  // natijasi yangi tanlovni bosib ketmasin — har tanlovda o'z boshqaruvi
+  useEffect(() => {
+    if (!izXodim) return
+    const boshqaruv = new AbortController()
+    let yuklandi = false
+    const ol = async () => {
+      try {
+        const r = await fetch(`/api/xarita/iz?xodimId=${encodeURIComponent(izXodim)}&kun=${izKun}`, { cache: 'no-store', signal: boshqaruv.signal })
+        const d = await r.json().catch(() => null) as (IzJavob & { xato?: string }) | null
+        if (boshqaruv.signal.aborted) return
+        if (!r.ok || !d?.xodim) {
+          if (!yuklandi) setIzXato(d?.xato ?? 'Yurgan yo‘li yuklanmadi')
+          return
+        }
+        yuklandi = true
+        setIzXato(null)
+        setIz(d)
+      } catch {
+        if (!boshqaruv.signal.aborted && !yuklandi) setIzXato('Tarmoq xatosi — qayta urinib ko‘ring')
+      }
+    }
+    void ol()
+    const t = izKun === bugungiKun() ? setInterval(() => { void ol() }, 60_000) : undefined
+    return () => { boshqaruv.abort(); if (t) clearInterval(t) }
+  }, [izXodim, izKun])
+
+  /** Shu xodim va kun uchun kelgan iz (boshqa tanlovniki ko'rsatilmaydi). */
+  const izJoriy = iz && iz.xodim.id === izXodim && iz.kun === izKun ? iz : null
+
+  // To'xtash joyi yaqinidagi ma'lum joy — xaritadagi mijoz, ta'minotchi, filial
+  const izJoylari = useMemo<(string | null)[]>(() => {
+    const toxtashlar = izJoriy?.toxtashlar ?? []
+    if (toxtashlar.length === 0) return []
+    const joylar: { lat: number; lng: number; nomi: string }[] = []
+    for (const m of mijozlar) if (koordinataTogrimi(m.lokatsiyaLat, m.lokatsiyaLng)) joylar.push({ lat: m.lokatsiyaLat!, lng: m.lokatsiyaLng!, nomi: `Mijoz: ${m.ism}` })
+    for (const t of taminotchilar) if (koordinataTogrimi(t.lokatsiyaLat, t.lokatsiyaLng)) joylar.push({ lat: t.lokatsiyaLat!, lng: t.lokatsiyaLng!, nomi: `Ta’minotchi: ${t.nomi}` })
+    for (const f of filiallar) if (koordinataTogrimi(f.lokatsiyaLat, f.lokatsiyaLng)) joylar.push({ lat: f.lokatsiyaLat!, lng: f.lokatsiyaLng!, nomi: `Filial: ${f.nomi}` })
+    return toxtashlar.map(t => {
+      let eng: { nomi: string; m: number } | null = null
+      for (const j of joylar) {
+        const m = masofaM(t, j)
+        if (m <= JOY_RADIUS_M && (!eng || m < eng.m)) eng = { nomi: j.nomi, m }
+      }
+      return eng?.nomi ?? null
+    })
+  }, [izJoriy, mijozlar, taminotchilar, filiallar])
+
+  // Ma'lum joy bo'lmagan to'xtashlarning ko'cha manzili — ketma-ket (xizmat sekundiga bitta so'rov)
+  useEffect(() => {
+    const kerak = (izJoriy?.toxtashlar ?? [])
+      .map((t, i) => ({ t, kalit: manzilKaliti(t.lat, t.lng), joy: izJoylari[i] }))
+      .filter(x => !x.joy && !manzilSoralganRef.current.has(x.kalit))
+    if (kerak.length === 0) return
+    for (const x of kerak) manzilSoralganRef.current.add(x.kalit)
+    void (async () => {
+      for (const { t, kalit } of kerak) {
+        const r = await fetch(`/api/xarita/manzil?lat=${t.lat}&lng=${t.lng}`).catch(() => null)
+        const d = r ? await r.json().catch(() => null) as { manzil?: string | null } | null : null
+        // Xizmat javob bermasa keyingi yangilanishda yana so'raladi
+        if (!r?.ok) manzilSoralganRef.current.delete(kalit)
+        setManzillar(m => ({ ...m, [kalit]: d?.manzil ?? null }))
+      }
+    })()
+  }, [izJoriy, izJoylari])
+
+  const izManzillari = useMemo<(string | null | undefined)[]>(
+    () => (izJoriy?.toxtashlar ?? []).map(t => manzillar[manzilKaliti(t.lat, t.lng)]),
+    [izJoriy, manzillar])
+
+  // Iz kelganda butun yo'l kadrga sig'adi — faqat tanlov (xodim/kun) o'zgarganda
+  const izKorsatish = useMemo(() => {
+    if (!izJoriy) return null
+    const nuqtalar: [number, number][] = [
+      ...izJoriy.bolaklar.flat(),
+      ...izJoriy.uzilishlar.flat(),
+      ...izJoriy.toxtashlar.map(t => [t.lat, t.lng] as [number, number]),
+    ]
+    if (nuqtalar.length === 0) return null
+    const telefon = typeof window !== 'undefined' && window.innerWidth < 640
+    return { kalit: `iz:${izJoriy.xodim.id}:${izJoriy.kun}`, nuqtalar, pastdan: telefon ? 300 : 0, chapdan: telefon ? 0 : 380 }
+  }, [izJoriy])
 
   // ── Yo'ldagi kuryerlar — alohida va tez yangilanadi ──
   const [kuryerlar, setKuryerlar] = useState<KuryerYetkazish[]>([])
@@ -281,14 +386,44 @@ export default function XaritaPage() {
     }
   }, [kuryerXaritasi])
 
+  // Xodimning yurgan yo'lini ochish (xarita belgisi yoki ro'yxatdan)
+  const izniOch = useCallback((id: string) => {
+    setTanlangan(null)
+    setIzXodim(id)
+    setIzKun(bugungiKun())
+    setIzToxtash(null)
+    setToxtashKorsatish(null)
+    setIzXato(null)
+    const el = xaritaIdishRef.current
+    if (el) {
+      const r = el.getBoundingClientRect()
+      if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
+
+  const izniYop = useCallback(() => {
+    setIzXodim(null)
+    setIzToxtash(null)
+    setToxtashKorsatish(null)
+  }, [])
+
+  const toxtashniTanla = useCallback((i: number) => {
+    const t = izJoriy?.toxtashlar[i]
+    if (!t) return
+    setIzToxtash(i)
+    setToxtashKorsatish({ kalit: `toxtash:${i}:${Date.now()}`, nuqtalar: [[t.lat, t.lng]] })
+  }, [izJoriy])
+
   const onTanlash = useCallback((id: string) => {
-    if (id.startsWith('k:')) kuryerniTanla(id.slice(2))
+    if (id.startsWith('x:')) izniOch(id.slice(2))
+    else if (id.startsWith('iz:t')) toxtashniTanla(Number(id.slice(4)))
+    else if (id.startsWith('k:')) { setIzXodim(null); kuryerniTanla(id.slice(2)) }
     else if (id.startsWith('y:')) {
       const raqam = id.slice(2)
       const k = kuryerlar.find(x => x.yetkazishlar.some(y => y.raqam === raqam))
       if (k) kuryerniTanla(k.id)
     }
-  }, [kuryerlar, kuryerniTanla])
+  }, [kuryerlar, kuryerniTanla, izniOch, toxtashniTanla])
 
   const tanlanganKuryer = tanlangan ? kuryerXaritasi.get(tanlangan) ?? null : null
 
@@ -344,6 +479,24 @@ export default function XaritaPage() {
     (t: Korinish) => korinish === 'hammasi' || korinish === t,
     [korinish])
 
+  // Yurgan yo'l chiziqlari: tanlangan xodimning kunlik izi, aks holda
+  // har xodimning so'nggi 30 daqiqasi (qayoqqa ketayotgani)
+  const izChiziqlari = useMemo<XaritaChiziq[]>(() => {
+    const c: XaritaChiziq[] = []
+    if (izJoriy) {
+      // Ilova yopiq bo'lgan oraliq — uzuq (aniq yo'l noma'lum)
+      izJoriy.uzilishlar.forEach((u, i) => c.push({ id: `iz:u${i}`, nuqtalar: u, rang: IZ_RANG, uzuq: true, qalinlik: 4, shaffoflik: 0.7 }))
+      izJoriy.bolaklar.forEach((b, i) => c.push({ id: `iz:b${i}`, nuqtalar: b, rang: IZ_RANG, qalinlik: 5, tanlangan: true }))
+    } else if (korsatilsin('xodim')) {
+      for (const x of korXodimlar) {
+        const n = izlar[x.id]
+        if (n && n.length >= 2) c.push({ id: `dum:${x.id}`, nuqtalar: n, rang: DUM_RANG, qalinlik: 3, shaffoflik: 0.55, hoshiyasiz: true })
+      }
+    }
+    return c
+  }, [izJoriy, korsatilsin, korXodimlar, izlar])
+  const hammaChiziqlar = useMemo(() => [...izChiziqlari, ...chiziqlar], [izChiziqlari, chiziqlar])
+
   const nuqtalar = useMemo<XaritaNuqta[]>(() => {
     const natija: XaritaNuqta[] = []
 
@@ -373,6 +526,8 @@ export default function XaritaPage() {
           turi: 'xodim',
           yangilik: yangilikAniqla(x.lokatsiyaYangilangan, hozir),
           vaqtMatni: vaqtMatni(x.lokatsiyaYangilangan, hozir),
+          // Bosilsa yurgan yo'li ochiladi
+          tanlanadi: true,
         })
       }
     }
@@ -438,9 +593,37 @@ export default function XaritaPage() {
       }
     }
 
+    if (izJoriy) {
+      const birinchi = izJoriy.bolaklar[0]?.[0] ?? (izJoriy.toxtashlar[0] ? [izJoriy.toxtashlar[0].lat, izJoriy.toxtashlar[0].lng] : null)
+      if (birinchi && izJoriy.boshi) {
+        natija.push({
+          id: 'iz:boshi', lat: birinchi[0], lng: birinchi[1], turi: 'raqam', ichki: '▶', rang: '#16a34a',
+          nomi: `Kun boshlandi — ${soatMatni(izJoriy.boshi)}`, yorliq: soatMatni(izJoriy.boshi),
+        })
+      }
+      // Oxirgi joy — xodim hali harakatda bo'lsa uning o'z belgisi shu yerda turadi
+      const oxirgi = izJoriy.oxirgiNuqta
+      const jonli = oxirgi && izKun === bugungiKun() && izJoriy.hozir - oxirgi.vaqt < 3 * 60_000
+      if (oxirgi && !jonli && izJoriy.nuqtalarSoni > 1) {
+        natija.push({
+          id: 'iz:oxiri', lat: oxirgi.lat, lng: oxirgi.lng, turi: 'raqam', ichki: '■', rang: '#dc2626',
+          nomi: `Oxirgi joy — ${soatMatni(oxirgi.vaqt)}`, yorliq: soatMatni(oxirgi.vaqt),
+        })
+      }
+      izJoriy.toxtashlar.forEach((t, i) => {
+        natija.push({
+          id: `iz:t${i}`, lat: t.lat, lng: t.lng, turi: 'raqam', ichki: String(i + 1), rang: IZ_RANG,
+          nomi: `${i + 1}-to‘xtash`,
+          yorliq: izToxtash === i ? `${soatMatni(t.dan)}–${soatMatni(t.gacha)}` : null,
+          tanlanadi: true,
+          tanlangan: izToxtash === i,
+        })
+      })
+    }
+
     return natija
   }, [korFiliallar, korXodimlar, korMijozlar, korTaminotchilar, hozir, korsatilsin,
-    kuryerKorinadi, korKuryerlar, kuryerXaritasi, kuryerHozir, tanlangan])
+    kuryerKorinadi, korKuryerlar, kuryerXaritasi, kuryerHozir, tanlangan, izJoriy, izKun, izToxtash])
 
   const joylashuvsizFilial = filiallar.filter(f => !koordinataTogrimi(f.lokatsiyaLat, f.lokatsiyaLng))
 
@@ -558,16 +741,34 @@ export default function XaritaPage() {
           ) : (
             <Xarita
               nuqtalar={nuqtalar}
-              chiziqlar={chiziqlar}
+              chiziqlar={hammaChiziqlar}
               fokus={fokus}
               onTanlash={onTanlash}
-              korsatish={korsatish}
+              korsatish={toxtashKorsatish ?? izKorsatish ?? korsatish}
               className="h-full w-full"
               onBosildi={belgilash
                 ? (lat, lng) => { void filialJoylashuviniSaqla(belgilash, lat, lng) }
                 // Bo'sh joyga bosilsa kuryer kartasi yopiladi
                 : tanlangan ? () => setTanlangan(null) : undefined}
             />
+          )}
+          {!yuklanmoqda && izXodim && (
+            <div className="absolute z-[1000] inset-x-2 bottom-2 sm:inset-x-auto sm:left-3 sm:bottom-3 sm:w-[360px]">
+              <IzPaneli
+                ism={izJoriy?.xodim.ism ?? xodimlar.find(x => x.id === izXodim)?.ism ?? 'Xodim'}
+                rol={izJoriy?.xodim.rol ?? xodimlar.find(x => x.id === izXodim)?.rol ?? ''}
+                kun={izKun}
+                bugun={bugungiKun()}
+                javob={izJoriy}
+                xato={izJoriy ? null : izXato}
+                joylar={izJoylari}
+                manzillar={izManzillari}
+                tanlanganToxtash={izToxtash}
+                onKun={k => { setIzKun(k); setIzToxtash(null); setToxtashKorsatish(null); setIzXato(null) }}
+                onToxtash={toxtashniTanla}
+                onYopish={izniYop}
+              />
+            </div>
           )}
           {!yuklanmoqda && kuryerKorinadi && tanlanganKuryer && (
             <div className="absolute z-[1000] inset-x-2 bottom-2 sm:inset-x-auto sm:left-3 sm:bottom-3 sm:w-[360px]">
@@ -709,10 +910,11 @@ export default function XaritaPage() {
                         <button
                           onClick={() => {
                             // Yetkazayotgan kuryer — xaritada yuk mashinasi belgisi, kartasi ochiladi
-                            if (kuryerXaritasi.get(x.id)?.lokatsiya) kuryerniTanla(x.id)
-                            else if (bor) nuqtagaBor('x:' + x.id)
+                            if (kuryerXaritasi.get(x.id)?.lokatsiya) { setIzXodim(null); kuryerniTanla(x.id) }
+                            else izniOch(x.id)
                           }}
-                          className="flex-1 min-w-0 px-4 py-2.5 flex items-center gap-2.5 text-left"
+                          aria-pressed={izXodim === x.id}
+                          className={`flex-1 min-w-0 px-4 py-2.5 flex items-center gap-2.5 text-left ${izXodim === x.id ? 'bg-violet-50 dark:bg-violet-950/30' : ''}`}
                         >
                           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${YANGILIK_RANG[y]}`} />
                           <div className="min-w-0 flex-1">
@@ -725,6 +927,15 @@ export default function XaritaPage() {
                               {x.telefon && ` · ${formatPhone(x.telefon)}`}
                             </p>
                           </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => izniOch(x.id)}
+                          title={`${x.ism} — yurgan yo‘li`}
+                          aria-label={`${x.ism} — yurgan yo‘li`}
+                          className="shrink-0 p-2 text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30 rounded-lg transition"
+                        >
+                          <Route size={14} />
                         </button>
                         {bor && <GoogleTugma lat={x.lokatsiyaLat!} lng={x.lokatsiyaLng!} nomi={x.ism} />}
                       </div>
@@ -870,7 +1081,9 @@ export default function XaritaPage() {
 
           <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed px-1">
             Xodim nuqtasi u ilovani ochiq tutgandagina yangilanadi; ilova yopilsa
-            oxirgi ma&apos;lum joyda kulrang bo&apos;lib qoladi.
+            oxirgi ma&apos;lum joyda kulrang bo&apos;lib qoladi. Yashil ingichka chiziq —
+            so&apos;nggi 30 daqiqada yurgani; xodimni bossangiz kun bo&apos;yicha yurgan yo&apos;li
+            va to&apos;xtagan joylari chiqadi.
             Sputnik tasviri O&apos;zbekistonda cheklangan masshtabgacha aniq —
             binoni yaqindan ko&apos;rish uchun qator yonidagi{' '}
             <ExternalLink size={11} className="inline -mt-0.5" /> tugmasi orqali

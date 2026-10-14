@@ -36,8 +36,12 @@ export interface XaritaNuqta {
   /**
    * `kuryer` — buyurtma yetkazayotgan dostavchik (yuk mashinasi belgisi),
    * `manzil` — u boradigan joy (bayroqcha). Ikkalasining rangi `rang`.
+   * `raqam` — ichida qisqa yozuv (`ichki`) bo'lgan doira: yurgan yo'ldagi
+   * to'xtash joylari (1, 2, 3…), boshlanish va oxiri.
    */
-  turi: 'filial' | 'xodim' | 'mijoz' | 'taminotchi' | 'kuryer' | 'manzil'
+  turi: 'filial' | 'xodim' | 'mijoz' | 'taminotchi' | 'kuryer' | 'manzil' | 'raqam'
+  /** `raqam` doirasi ichidagi yozuv (1-2 belgi) */
+  ichki?: string | null
   /** Nuqta tepasida ko'rinadigan yozuv. Berilmasa `nomi` ishlatiladi. */
   yorliq?: string | null
   yangilik?: Yangilik
@@ -61,6 +65,12 @@ export interface XaritaChiziq {
   tanlangan?: boolean
   /** Chiziq bosilganda shu id bilan `onTanlash` chaqiriladi */
   tanlashId?: string
+  /** Qalinlik (px) — berilmasa 4, tanlanganda 6 */
+  qalinlik?: number
+  /** 0..1 — berilmasa 0,85, tanlanganda 1 */
+  shaffoflik?: number
+  /** Oq hoshiyasiz — ingichka, fon chiziqlari uchun */
+  hoshiyasiz?: boolean
 }
 
 interface Props {
@@ -187,6 +197,15 @@ function manzilIkonHtml(rang: string, yorliq: string | null | undefined, tanlang
       <circle cx="13" cy="13" r="4.6" fill="#fff"/>
     </svg>
     ${yorliqHtml(yorliq, tanlangan ? 42 : 38)}
+  </span>`
+}
+
+/** Yurgan yo'l belgisi: rangli doira, ichida raqam yoki harf (to'xtash joyi, boshi, oxiri). */
+function raqamIkonHtml(rang: string, ichki: string | null | undefined, yorliq: string | null | undefined, tanlangan: boolean): string {
+  const halqa = tanlangan ? `,0 0 0 4px ${rang}55` : ''
+  return `<span style="position:relative;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:9999px;background:${rang};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)${halqa};color:#fff;font-size:11px;font-weight:700;line-height:1">
+    ${xavfsiz(ichki ?? '')}
+    ${yorliqHtml(yorliq, 28)}
   </span>`
 }
 
@@ -330,12 +349,14 @@ export default function Xarita({ nuqtalar, chiziqlar, fokus, onTanlash, korsatis
           : n.turi === 'taminotchi' ? taminotchiIkonHtml(yorliq)
           : n.turi === 'kuryer' ? kuryerIkonHtml(rang, n.yangilik ?? 'eski', yorliq, tanlangan)
           : n.turi === 'manzil' ? manzilIkonHtml(rang, yorliq, tanlangan)
+          : n.turi === 'raqam' ? raqamIkonHtml(rang, n.ichki, n.yorliq, tanlangan)
           : xodimIkonHtml(n.yangilik ?? 'eski', yorliq)
         const olcham: [number, number] =
           n.turi === 'filial' ? [26, 26]
           : n.turi === 'taminotchi' ? [16, 16]
           : n.turi === 'kuryer' ? [30, 30]
           : n.turi === 'manzil' ? [26, 34]
+          : n.turi === 'raqam' ? [22, 22]
           : [14, 14]
         // Bayroqcha uchi bilan nuqtaga tegadi, qolganlari markazi bilan
         const langar: [number, number] = n.turi === 'manzil' ? [13, 33] : [olcham[0] / 2, olcham[1] / 2]
@@ -346,7 +367,7 @@ export default function Xarita({ nuqtalar, chiziqlar, fokus, onTanlash, korsatis
             ${n.vaqtMatni ? `<div style="color:#9ca3af;font-size:11px;margin-top:3px">${xavfsiz(n.vaqtMatni)}</div>` : ''}
           </div>`
         // Tanlangan kuryer/manzil boshqa belgilar ustida turadi
-        const ustunlik = tanlangan ? 1000 : n.turi === 'kuryer' ? 500 : n.turi === 'manzil' ? 400 : 0
+        const ustunlik = tanlangan ? 1000 : n.turi === 'raqam' ? 700 : n.turi === 'kuryer' ? 500 : n.turi === 'manzil' ? 400 : 0
 
         let marker = markerlarRef.current.get(n.id)
         if (marker) {
@@ -417,11 +438,12 @@ export default function Xarita({ nuqtalar, chiziqlar, fokus, onTanlash, korsatis
     for (const c of chiziqlar ?? []) {
       if (c.nuqtalar.length < 2) continue
       koringan.add(c.id)
-      const qalin = c.tanlangan ? 6 : 4
+      const qalin = c.qalinlik ?? (c.tanlangan ? 6 : 4)
+      const hoshiyaKerak = !c.uzuq && !c.hoshiyasiz
       const uslub = {
         color: c.rang,
-        weight: c.uzuq ? qalin - 1 : qalin,
-        opacity: c.tanlangan ? 1 : 0.85,
+        weight: c.uzuq ? Math.max(2, qalin - 1) : qalin,
+        opacity: c.shaffoflik ?? (c.tanlangan ? 1 : 0.85),
         dashArray: c.uzuq ? '1 9' : undefined,
         lineCap: 'round' as const,
         lineJoin: 'round' as const,
@@ -429,7 +451,7 @@ export default function Xarita({ nuqtalar, chiziqlar, fokus, onTanlash, korsatis
         bubblingMouseEvents: false,
       }
       let ch = chiziqlarRef.current.get(c.id)
-      if (ch && !!ch.hoshiya !== !c.uzuq) {
+      if (ch && !!ch.hoshiya !== hoshiyaKerak) {
         // Taxminiy ↔ haqiqiy marshrut almashdi — hoshiya bor/yo'qligi o'zgaradi
         if (ch.hoshiya) qatlam.removeLayer(ch.hoshiya)
         qatlam.removeLayer(ch.asos)
@@ -438,7 +460,7 @@ export default function Xarita({ nuqtalar, chiziqlar, fokus, onTanlash, korsatis
       }
       if (!ch) {
         // Oq hoshiya chiziqni sputnik va to'q xaritada ham ajratib turadi
-        const hoshiya = c.uzuq ? null : L.polyline(c.nuqtalar, {
+        const hoshiya = !hoshiyaKerak ? null : L.polyline(c.nuqtalar, {
           color: '#ffffff', weight: qalin + 4, opacity: 0.9, lineCap: 'round', lineJoin: 'round', interactive: false,
         }).addTo(qatlam)
         const asos = L.polyline(c.nuqtalar, uslub).addTo(qatlam)
