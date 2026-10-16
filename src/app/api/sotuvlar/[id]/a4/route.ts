@@ -7,6 +7,7 @@ import { mijozKorinishi, mijozliYozuvSharti } from '@/lib/mijoz-doirasi'
 import type { ChekA4Malumot } from '@/lib/chek-a4'
 import { chekQatori } from '@/lib/birlik'
 import { chekRasmlari } from '@/lib/chek-rasm'
+import { chekQarzi, mijozQarzlari } from '@/lib/mijoz-qarz'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const sotuv = await prisma.sotuv.findFirst({
       where: { id, ...egaFilialWhere(session), ...mijozliYozuvSharti(await mijozKorinishi(session)) },
       select: {
-        chekRaqami: true, sana: true, holati: true,
+        chekRaqami: true, sana: true, holati: true, mijozId: true,
         jamiSumma: true, chegirma: true, ballIshlatilgan: true, keshbekIshlatilgan: true,
         yakuniySumma: true, yetkazishNarx: true, tolovUsuli: true,
         naqdTolangan: true, kartaTolangan: true, clickTolangan: true, bankTolangan: true,
@@ -41,7 +42,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!sotuv) return NextResponse.json({ xato: 'Chek topilmadi' }, { status: 404 })
 
     // Sotuv doirasi tekshirilgan — tovarlar shu sotuvniki
-    const rasmlar = await chekRasmlari(sotuv.tarkiblar.map(t => t.tovarId))
+    const [rasmlar, qarzlar] = await Promise.all([
+      chekRasmlari(sotuv.tarkiblar.map(t => t.tovarId)),
+      mijozQarzlari([sotuv.mijozId]),
+    ])
 
     // Onlayn chek havolasi: manzil mijozdan keladi (localhost / domen bir xil
     // bo'lishi uchun), lekin faqat sxema va host olinadi
@@ -85,6 +89,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       bankTolangan: Number(sotuv.bankTolangan),
       mijoz: sotuv.mijoz,
       kassir: sotuv.kassir,
+      // Chek chiqarilgan paytdagi umumiy qarz
+      mijozQarzi: chekQarzi(qarzlar, sotuv.mijozId),
       havola,
       qr,
     }

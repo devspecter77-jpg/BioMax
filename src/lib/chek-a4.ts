@@ -9,7 +9,7 @@
 // mijoz kartasi — qayerdan chiqarilsa ham chek bir xil bo'ladi.
 
 import { formatSanaVaVaqt } from './utils'
-import { chekHolati, toKirill, type ChekDokonInfo } from './chek-print'
+import { chekHolati, toKirill, type ChekDokonInfo, type MijozQarzi } from './chek-print'
 import { tolovKanallari, tolovLabel, tolovQisqa } from './tolov-usullari'
 import { bosmaOynasiniOch } from './bosma-oyna'
 
@@ -46,7 +46,10 @@ export interface ChekA4Malumot {
   clickTolangan: number
   bankTolangan: number
   mijoz: { ism: string; telefon: string | null } | null
+  /** Savdoni qilgan kassir — chekda har doim ko'rinadi */
   kassir: { ism: string; telefon: string | null } | null
+  /** Mijozning umumiy qarzi — bo'lsa yakun qismida ko'rinadi */
+  mijozQarzi?: MijozQarzi | null
   /** Onlayn chek manzili */
   havola: string
   /** Havolaning QR kodi (`data:` URL) */
@@ -130,12 +133,14 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
       ? tolovKanallari(m).map(k => qator(esc(tolovQisqa(k.usul, til)), uzs(k.summa), 'tolov')).join('')
       : qator(tt("To'lov"), esc(tolovLabel(m.tolovUsuli, til)), 'tolov')
 
-  const tomon = (yorliq: string, ism: string | null | undefined, tel: string | null | undefined) =>
-    ism || tel
+  const tomon = (yorliq: string, ism: string | null | undefined, tel: string | null | undefined, doim = false) =>
+    ism || tel || doim
       ? `<div><div class="yorliq">${tt(yorliq)}</div><div>${tt(ism || '—')}${tel ? ` · ${esc(tel)}` : ''}</div></div>`
       : ''
-  const tomonlar = [tomon('Xaridor', m.mijoz?.ism, m.mijoz?.telefon), tomon('Kassir', m.kassir?.ism, m.kassir?.telefon)]
+  // Kassir har doim — kim sotgani (noma'lum bo'lsa "—")
+  const tomonlar = [tomon('Xaridor', m.mijoz?.ism, m.mijoz?.telefon), tomon('Kassir', m.kassir?.ism, m.kassir?.telefon, true)]
     .filter(Boolean).join('')
+  const qarz = m.mijozQarzi && m.mijozQarzi.summa > 0 ? m.mijozQarzi : null
 
   const chekMatn = dokon.chek_matn ? tt(dokon.chek_matn) : ''
 
@@ -210,6 +215,11 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
   .yigma .umumiy { font-size: 11pt; }
   .yigma .umumiy b { font-weight: 800; }
   .yigma .tolovlar { margin-top: 1.5mm; padding-top: 1.2mm; border-top: 1px dashed #cfd2d6; }
+  /* Mijoz qarzi — to'q sariq ramkada: qarz ekani bir qarashda ko'rinsin */
+  .yigma .qarz { margin-top: 2mm; padding: 1.2mm 2.5mm; border: 1.5px solid #b45309; border-radius: 1.5mm; color: #92400e; }
+  .yigma .qarz .qator { padding: .4mm 0; font-size: 10.5pt; }
+  .yigma .qarz .qator b { font-weight: 800; }
+  .yigma .qarz-vaqt { font-size: 7.5pt; color: #a16207; }
   .yigma .tolov { color: #444; font-size: 9.5pt; }
 
   .past { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm;
@@ -251,7 +261,9 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
 
   <section class="yakun">
     <div class="soni">${tt('Jami')}: ${m.qatorlar.length} ${tt('xil mahsulot')}</div>
-    <div class="yigma">${yigma.join('')}<div class="tolovlar">${tolov}</div></div>
+    <div class="yigma">${yigma.join('')}<div class="tolovlar">${tolov}</div>${qarz
+      ? `<div class="qarz"><div class="qator"><span>${tt('Mijoz qarzi')}</span><b>${uzs(qarz.summa)}</b></div><div class="qarz-vaqt">${esc(formatSanaVaVaqt(qarz.vaqt))} ${tt('holatiga')}</div></div>`
+      : ''}</div>
   </section>
 
   <footer class="past">

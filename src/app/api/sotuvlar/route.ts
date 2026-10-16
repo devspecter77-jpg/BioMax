@@ -14,6 +14,7 @@ import { minNarxSomda, ruxsatYoqXabari, sotuvUchunKerak } from '@/lib/ruxsat-ama
 import { joriyUsdKursi } from '@/lib/kurs'
 import { oramlarniOqi, type Oram } from '@/lib/birlik'
 import { nomKaliti } from '@/lib/utils'
+import { chekQarzi, mijozQarzlari } from '@/lib/mijoz-qarz'
 
 export async function GET(req: NextRequest) {
   try {
@@ -104,7 +105,13 @@ export async function GET(req: NextRequest) {
       prisma.sotuv.count({ where }),
     ])
 
-    return NextResponse.json({ sotuvlar, jami, page, limit })
+    // Chekni qayta chiqarish uchun — mijozning hozirgi qarzi (bitta so'rov)
+    const qarzlar = await mijozQarzlari(sotuvlar.map(s => s.mijozId))
+    const hozir = new Date()
+    return NextResponse.json({
+      sotuvlar: sotuvlar.map(s => ({ ...s, mijozQarzi: chekQarzi(qarzlar, s.mijozId, hozir) })),
+      jami, page, limit,
+    })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ xato: 'Server xatosi' }, { status: 500 })
@@ -428,7 +435,12 @@ export async function POST(req: NextRequest) {
     // Sabab: har sotuvda avtomatik yuborish mijozni ham bezovta qilardi,
     // ham Telegram akkauntini spam filtriga yaqinlashtirardi.
 
-    return NextResponse.json(toliSotuv, { status: 201 })
+    // Chekda: mijozning shu sotuvdan keyingi umumiy qarzi (nasiyaga sotilgan bo'lsa — u ham)
+    const qarzlar = toliSotuv?.mijozId ? await mijozQarzlari([toliSotuv.mijozId]) : new Map<string, number>()
+    return NextResponse.json(
+      toliSotuv ? { ...toliSotuv, mijozQarzi: chekQarzi(qarzlar, toliSotuv.mijozId) } : toliSotuv,
+      { status: 201 },
+    )
   } catch (e) {
     console.error(e)
     return NextResponse.json({ xato: 'Sotuv amalga oshmadi' }, { status: 500 })

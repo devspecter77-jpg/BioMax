@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { formatSum, formatPhone, formatSanaVaVaqt } from '@/lib/utils'
 import { toast } from 'sonner'
 import { UserPlus, Phone, MapPin, X, Hash, Trash2, Loader2, ShoppingBag, ShoppingCart, Calendar, Trophy, Users, Download, Upload, Pencil, LocateFixed, RotateCcw, Printer, Languages, Send, Receipt, TrendingUp, Tag, Globe, FileImage, Tags, ListChecks, UserCheck, EyeOff } from 'lucide-react'
-import { buildChekHtml, buildMijozTarixHtml, chekChopEtish } from '@/lib/chek-print'
+import { buildChekHtml, buildMijozTarixHtml, chekChopEtish, type MijozQarzi } from '@/lib/chek-print'
 import { chekniA4ChopEt } from '@/lib/chek-a4'
 import { tolovQisqa } from '@/lib/tolov-usullari'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
@@ -80,6 +80,8 @@ interface FoydaNatijasi {
 interface MijozDetail extends Mijoz {
   sotuvlar: MijozSotuv[]
   dokon?: DokonInfo
+  /** Chekda ko'rsatiladigan umumiy qarz (kartani ochgan paytdagi); qarzi yo'q — null */
+  chekQarzi?: MijozQarzi | null
   /** Butun tarix bo'yicha yig'ma foyda. Kelish narxi yashirilgan bo'lsa null. */
   foydaXulosa?: FoydaNatijasi | null
   foydaKorinadi?: boolean
@@ -239,7 +241,8 @@ export default function MijozlarPage() {
         clickTolangan: sotuv.clickTolangan,
         bankTolangan: sotuv.bankTolangan,
         mijoz: { ism: tanlanganMijoz.ism },
-        kassir: { telefon: sotuv.kassir?.telefon ?? null },
+        kassir: { ism: sotuv.kassir?.ism ?? null, telefon: sotuv.kassir?.telefon ?? null },
+        mijozQarzi: tanlanganMijoz.chekQarzi ?? null,
       },
       dokonInfo: tanlanganMijoz.dokon,
       til: chekTili,

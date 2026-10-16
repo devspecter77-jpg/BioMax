@@ -51,9 +51,24 @@ export interface ChekData {
   clickTolangan?: number | string
   bankTolangan?: number | string
   mijoz?: { ism: string } | null
-  kassir?: { telefon?: string | null } | null
+  /** Savdoni qilgan kassir — chekda har doim ko'rinadi */
+  kassir?: { ism?: string | null; telefon?: string | null } | null
+  /** Mijozning umumiy qarzi (nasiyalar qoldig'i) — bo'lsa chekda ko'rinadi */
+  mijozQarzi?: MijozQarzi | null
   /** To'lovdan oldingi hisob (savatdan, bazaga yozilmagan) — "TO'LANMAGAN" */
   tolanmagan?: boolean
+}
+
+/** Mijoz qarzi va u hisoblangan vaqt (chek qayta chiqarilsa — o'sha paytdagi qoldiq). */
+export interface MijozQarzi {
+  summa: number
+  /** ISO vaqt */
+  vaqt: string
+}
+
+/** Chekdagi kassir yozuvi: "Aziz · +998 90 123 45 67"; noma'lum bo'lsa "—". */
+export function kassirMatni(k: { ism?: string | null; telefon?: string | null } | null | undefined): string {
+  return [k?.ism?.trim(), k?.telefon?.trim()].filter(Boolean).join(' · ') || '—'
 }
 
 /**
@@ -130,7 +145,6 @@ export function buildChekHtml(opts: ChekPrintOptions): string {
   const manzil = t(dokonInfo.manzil || '')
   const tel = dokonInfo.telefon || ''
   const chekMatn = t(dokonInfo.chek_matn || '')
-  const kassirTel = s.kassir?.telefon || ''
 
   const formatNum = (n: number | string) =>
     new Intl.NumberFormat('uz-UZ').format(Math.round(Number(n)))
@@ -164,10 +178,16 @@ export function buildChekHtml(opts: ChekPrintOptions): string {
         .map(k => `<tr><td>${tolovQisqa(k.usul, til)}:</td><td style="text-align:right">${formatSum(k.summa)}</td></tr>`)
         .join('')
     : s.tolovUsuli === 'NASIYA'
-    ? `<tr><td>${t("To'lov")}:</td><td style="text-align:right">${t('Nasiya')}</td></tr><tr><td>${t('Mijoz')}:</td><td style="text-align:right">${t(s.mijoz?.ism || '—')}</td></tr>`
+    ? `<tr><td>${t("To'lov")}:</td><td style="text-align:right">${t('Nasiya')}</td></tr>`
     : `<tr><td>${t("To'lov")}:</td><td style="text-align:right">${tolovLabel(s.tolovUsuli, til)}</td></tr>`
 
-  const kassirHtml = kassirTel ? `<div>${t('Kassir tel')}: ${kassirTel}</div>` : ''
+  // Kassir — har doim (kim sotgani); mijoz — tanlangan bo'lsa
+  const kassirHtml = `<div>${t('Kassir')}: ${t(kassirMatni(s.kassir))}</div>`
+  const mijozHtml = s.mijoz?.ism ? `<div>${t('Mijoz')}: ${t(s.mijoz.ism)}</div>` : ''
+  const qarzHtml = s.mijozQarzi && s.mijozQarzi.summa > 0
+    ? `<div class="sep"></div><table><tr class="total"><td>${t('Mijoz qarzi')}:</td><td style="text-align:right">${formatSum(s.mijozQarzi.summa)}</td></tr></table>`
+      + `<div class="center" style="font-size:${sz - 2}px">${formatSanaVaVaqt(s.mijozQarzi.vaqt)} ${t('holatiga')}</div>`
+    : ''
   // To'lovdan oldingi hisob: raqamsiz, to'lov usulisiz — faqat ro'yxat va jami
   const holat = chekHolati(s)
   const tolanmagan = holat.tur === 'tolanmagan'
@@ -178,6 +198,7 @@ export function buildChekHtml(opts: ChekPrintOptions): string {
 ${tolanmagan ? `<div>${t("To'lovdan oldingi hisob")}</div>` : `<div>${t('Chek')}: ${s.chekRaqami}</div>`}
 <div>${t('Sana')}: ${formatSanaVaVaqt(s.sana)}</div>
 ${kassirHtml}
+${mijozHtml}
 <div class="sep"></div>
 <table>${tovarlarHtml}</table>
 <div class="sep"></div>
@@ -185,6 +206,7 @@ ${kassirHtml}
 ${tolanmagan
     ? `<div class="sep"></div><div class="center" style="font-size:${sz - 1}px">${t("Bu chek to'lovni tasdiqlamaydi")}</div>`
     : `<div class="sep"></div><table>${tolov}</table>`}
+${qarzHtml}
 ${chekMatn ? `<div class="sep"></div><div class="center" style="font-size:${sz - 1}px">${chekMatn}</div>` : ''}
 <div class="sep"></div>
 <div class="center bold">${t('Murojaat uchun')}: ${MUROJAAT_TEL}</div>

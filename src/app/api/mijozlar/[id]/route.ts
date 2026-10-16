@@ -6,6 +6,7 @@ import { KIRITGAN_SELECT, kategoriyaniTekshir, kiritganMalumoti, masulniTekshir,
 import { foydalanuvchiYashirilganMaydonlari } from '@/lib/maydon-yashirish'
 import { joriyUsdKursi } from '@/lib/kurs'
 import { sotuvFoydasi, foydalarniYig, type FoydaQatori } from '@/lib/foyda'
+import { chekQarzi, mijozQarzlari } from '@/lib/mijoz-qarz'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -95,9 +96,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ? foydalarniYig([...sotuvFoydalari.values()])
       : null
 
+    const qarzlar = await mijozQarzlari([mijoz.id])
     return NextResponse.json({
       ...mijoz,
       yaratgan: kiritganMalumoti(mijoz.yaratgan),
+      // Chekda ko'rsatish uchun umumiy qarz (yo'q bo'lsa null)
+      chekQarzi: chekQarzi(qarzlar, mijoz.id),
       // Har bir chek yonida o'z foydasi ko'rsatiladi
       sotuvlar: mijoz.sotuvlar.map(s => ({
         ...s,

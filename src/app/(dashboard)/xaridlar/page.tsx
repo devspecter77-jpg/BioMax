@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { formatSum, formatSanaVaVaqt, formatPhone } from '@/lib/utils'
 import { tolovQisqa, tolovBadge, tolovKanallari } from '@/lib/tolov-usullari'
-import { buildChekHtml, chekChopEtish, type ChekDokonInfo } from '@/lib/chek-print'
+import { buildChekHtml, chekChopEtish, type ChekDokonInfo, type MijozQarzi } from '@/lib/chek-print'
 import { chekniA4ChopEt } from '@/lib/chek-a4'
 import { Receipt, Phone, User, Calendar, Search, Download, Wallet, CreditCard, RotateCcw, Printer, FileImage, Languages, Loader2 } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar'
@@ -12,7 +12,11 @@ import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import Modal from '@/components/ui/modal'
 import { useRuxsat } from '@/hooks/useRuxsat'
 
-interface SotuvTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
+interface SotuvTarkibiItem {
+  id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string }
+  /** O'ramda sotilgan bo'lsa — chekda "2 blok × 75 000" */
+  oramNomi?: string | null; oramMiqdori?: number | string | null
+}
 interface QaytarishTarkibiItem { id: string; miqdor: number; birlikNarxi: number; jami: number; tovar: { nomi: string; birlik: string } }
 interface Qaytarish {
   id: string; jamiSumma: number; sabab: string | null; yaratilgan: string
@@ -35,6 +39,8 @@ interface Sotuv {
   kassir: { ism: string; telefon?: string | null }
   tarkiblar: SotuvTarkibiItem[]
   qaytarishlar: Qaytarish[]
+  /** Mijozning hozirgi umumiy qarzi (ro'yxat yuklangan paytdagi) */
+  mijozQarzi?: MijozQarzi | null
 }
 // Ro'yxatda sotuv va qaytarishlar bitta xronologik oqimda, sana bo'yicha
 // aralashtirib ko'rsatiladi — qaytarish "Vozvrat sotuv" sifatida alohida
@@ -75,7 +81,10 @@ export default function XaridlarPage() {
       data: {
         chekRaqami: s.chekRaqami,
         sana: s.sana,
-        tarkiblar: s.tarkiblar.map(t => ({ tovar: { nomi: t.tovar.nomi }, miqdor: t.miqdor, birlikNarxi: t.birlikNarxi, jami: t.jami })),
+        tarkiblar: s.tarkiblar.map(t => ({
+          tovar: { nomi: t.tovar.nomi }, miqdor: t.miqdor, birlikNarxi: t.birlikNarxi, jami: t.jami,
+          oramNomi: t.oramNomi ?? null, oramMiqdori: t.oramMiqdori ?? null,
+        })),
         chegirma: s.chegirma,
         yakuniySumma: s.yakuniySumma,
         tolovUsuli: s.tolovUsuli,
@@ -84,7 +93,8 @@ export default function XaridlarPage() {
         clickTolangan: s.clickTolangan,
         bankTolangan: s.bankTolangan,
         mijoz: s.mijoz ? { ism: s.mijoz.ism } : null,
-        kassir: { telefon: s.kassir.telefon ?? null },
+        kassir: { ism: s.kassir?.ism ?? null, telefon: s.kassir?.telefon ?? null },
+        mijozQarzi: s.mijozQarzi ?? null,
       },
       dokonInfo,
       til: chekTili,

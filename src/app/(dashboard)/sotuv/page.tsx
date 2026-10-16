@@ -2,7 +2,10 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone, playBeep, uzSearch } from '@/lib/utils'
-import { MUROJAAT_TEL, buildChekHtml, chekChopEtish as printChek, chekHolati, type ChekData, type ChekDokonInfo, type ChekTarkib } from '@/lib/chek-print'
+import {
+  MUROJAAT_TEL, buildChekHtml, chekChopEtish as printChek, chekHolati, kassirMatni,
+  type ChekData, type ChekDokonInfo, type ChekTarkib, type MijozQarzi,
+} from '@/lib/chek-print'
 import { chekA4niKorsat, chekniA4ChopEt, type ChekA4Malumot } from '@/lib/chek-a4'
 import { kodniAjrat } from '@/lib/qr-kod'
 import { toast } from 'sonner'
@@ -498,10 +501,10 @@ function ChekKorinishi({ s, dokonInfo, til }: { s: SotuvYozuvi; dokonInfo: ChekD
   const manzil = t(dokonInfo.manzil || '')
   const tel = dokonInfo.telefon || ''
   const chekMatn = t(dokonInfo.chek_matn || '')
-  const kassirTel = s.kassir?.telefon || ''
   const holat = chekHolati(s)
   const tolanmagan = holat.tur === 'tolanmagan'
   const rang = holat.tur === 'tolangan' ? '#15803d' : holat.tur === 'qarz' ? '#b45309' : '#b91c1c'
+  const qarz = s.mijozQarzi && s.mijozQarzi.summa > 0 ? s.mijozQarzi : null
   return (
     <div className="chek-print bg-white flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ fontFamily: "'Courier New', Consolas, monospace", fontSize: 12, color: '#000', width: '100%', padding: '12px 16px' }}>
       <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>{dokonNomi}</div>
@@ -513,7 +516,8 @@ function ChekKorinishi({ s, dokonInfo, til }: { s: SotuvYozuvi; dokonInfo: ChekD
       </div>
       {tolanmagan ? <div>{t("To'lovdan oldingi hisob")}</div> : <div>{t('Chek')}: {s.chekRaqami}</div>}
       <div>{t('Sana')}: {formatSanaVaVaqt(s.sana)}</div>
-      {kassirTel && <div>{t('Kassir tel')}: {kassirTel}</div>}
+      <div data-chek-kassir>{t('Kassir')}: {t(kassirMatni(s.kassir))}</div>
+      {s.mijoz?.ism && <div>{t('Mijoz')}: {t(s.mijoz.ism)}</div>}
       <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
       {s.tarkiblar?.map(item => {
         const bonusmi = Number(item.birlikNarxi) === 0
@@ -564,11 +568,19 @@ function ChekKorinishi({ s, dokonInfo, til }: { s: SotuvYozuvi; dokonInfo: ChekD
       ) : s.tolovUsuli === 'NASIYA' ? (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t("To'lov")}:</span><span>{t('Nasiya')}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Mijoz')}:</span><span>{t(s.mijoz?.ism || '—')}</span></div>
         </>
       ) : (
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>{t("To'lov")}:</span><span>{tolovLabel(s.tolovUsuli, til)}</span>
+        </div>
+      )}
+      {qarz && (
+        <div data-chek-qarz>
+          <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 13 }}>
+            <span>{t('Mijoz qarzi')}:</span><span>{formatSum(qarz.summa)}</span>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: 10 }}>{formatSanaVaVaqt(qarz.vaqt)} {t('holatiga')}</div>
         </div>
       )}
       {chekMatn && (
@@ -668,6 +680,12 @@ export default function SotuvPage() {
   const [a4Band, setA4Band] = useState(false)
   // To'lovdan oldingi (to'lanmagan) chek oynasi — savatdan, hech qayerga yozilmaydi
   const [hisobOyna, setHisobOyna] = useState(false)
+  /** To'lanmagan chek uchun: kassir (bazadan) va tanlangan mijozning hozirgi qarzi */
+  const [hisobMalumot, setHisobMalumot] = useState<{
+    mijozId: string | null
+    kassir: { ism: string; telefon: string | null } | null
+    mijozQarzi: MijozQarzi | null
+  } | null>(null)
   const [dokonInfo, setDokonInfo] = useState<Record<string, string>>({})
   const [editNarx, setEditNarx] = useState<{ kalit: string; val: string } | null>(null)
   const [mobileTab, setMobileTab] = useState<'tovarlar' | 'savat'>('tovarlar')
@@ -1888,6 +1906,20 @@ export default function SotuvPage() {
    * To'lovdan oldingi hisob — savatdan. Bazaga ham, "oxirgi sotuv"ga ham
    * YOZILMAYDI (sotuvlar ro'yxati va mijoz xaridlariga tushmaydi).
    */
+  /** Kassir va mijoz qarzini serverdan oladi (chek ochilganda — qarz eskirmasin). */
+  async function hisobMalumotiniOl(mijoz: string | null) {
+    try {
+      const r = await fetch(`/api/sotuvlar/hisob-malumot${mijoz ? `?mijozId=${encodeURIComponent(mijoz)}` : ''}`, { cache: 'no-store' })
+      const j = r.ok ? await r.json().catch(() => null) : null
+      if (!j) return null
+      const m = { mijozId: mijoz, kassir: j.kassir ?? null, mijozQarzi: j.mijozQarzi ?? null }
+      setHisobMalumot(m)
+      return m
+    } catch {
+      return null
+    }
+  }
+
   function hisobCheki(): SotuvYozuvi {
     return {
       id: 'hisob',
@@ -1909,7 +1941,9 @@ export default function SotuvPage() {
       yakuniySumma,
       tolovUsuli,
       mijoz: tanlanganMijoz ? { ism: tanlanganMijoz.ism } : null,
-      kassir: null,
+      kassir: hisobMalumot?.kassir ?? null,
+      // Boshqa mijozniki ko'rinib qolmasin — faqat shu mijoz uchun olingan bo'lsa
+      mijozQarzi: hisobMalumot && hisobMalumot.mijozId === (tanlanganMijoz?.id ?? null) ? hisobMalumot.mijozQarzi : null,
     }
   }
 
@@ -1921,6 +1955,7 @@ export default function SotuvPage() {
     try {
       await chekA4niKorsat(async () => {
       const idlar = [...new Set(s.tarkiblar.map(q => q.tovarId).filter(Boolean))]
+      const malumot = await hisobMalumotiniOl(tanlanganMijoz?.id ?? null)
       const rasmlar: Record<string, string> = {}
       if (idlar.length > 0) {
         const r = await fetch(`/api/sotuvlar/hisob-rasmlar?idlar=${idlar.map(encodeURIComponent).join(',')}`, { cache: 'no-store' }).catch(() => null)
@@ -1950,7 +1985,8 @@ export default function SotuvPage() {
         tolovUsuli: s.tolovUsuli,
         naqdTolangan: 0, kartaTolangan: 0, clickTolangan: 0, bankTolangan: 0,
         mijoz: tanlanganMijoz ? { ism: tanlanganMijoz.ism, telefon: tanlanganMijoz.telefon } : null,
-        kassir: null,
+        kassir: malumot?.kassir ?? (s.kassir?.ism ? { ism: s.kassir.ism, telefon: s.kassir.telefon ?? null } : null),
+        mijozQarzi: malumot ? malumot.mijozQarzi : s.mijozQarzi ?? null,
         havola: '',
         qr: null,
       }
@@ -1968,7 +2004,7 @@ export default function SotuvPage() {
     const manzil = t(dokonInfo.manzil || '')
     const tel = dokonInfo.telefon || ''
     const chekMatn = t(dokonInfo.chek_matn || '')
-    const kassirTel = s.kassir?.telefon || ''
+    const qarz = s.mijozQarzi && s.mijozQarzi.summa > 0 ? s.mijozQarzi : null
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 200] })
     const w = 80
@@ -2020,9 +2056,13 @@ export default function SotuvPage() {
     doc.text(t('Sana') + ':', mx, y)
     doc.text(formatSanaVaVaqt(s.sana), w - mx, y, { align: 'right' })
     y += 4
-    if (kassirTel) {
-      doc.text(t('Kassir') + ':', mx, y)
-      doc.text(kassirTel, w - mx, y, { align: 'right' })
+    // Kassir — har doim; mijoz — tanlangan bo'lsa
+    doc.text(t('Kassir') + ':', mx, y)
+    doc.text(t(kassirMatni(s.kassir)), w - mx, y, { align: 'right' })
+    y += 4
+    if (s.mijoz?.ism) {
+      doc.text(t('Mijoz') + ':', mx, y)
+      doc.text(t(s.mijoz.ism), w - mx, y, { align: 'right' })
       y += 4
     }
 
@@ -2132,13 +2172,24 @@ export default function SotuvPage() {
       doc.text(t("To'lov") + ':', mx, y)
       doc.text(t('Nasiya'), w - mx, y, { align: 'right' })
       y += 4
-      doc.text(t('Mijoz') + ':', mx, y)
-      doc.text(t(s.mijoz?.ism || '—'), w - mx, y, { align: 'right' })
-      y += 4
     } else {
       doc.text(t("To'lov") + ':', mx, y)
       doc.text(tolovLabel(s.tolovUsuli, til), w - mx, y, { align: 'right' })
       y += 4
+    }
+    if (qarz) {
+      y += 2
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(180, 83, 9)
+      doc.text(t('Mijoz qarzi') + ':', mx, y)
+      doc.text(formatSum(qarz.summa), w - mx, y, { align: 'right' })
+      y += 3.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.text(`${formatSanaVaVaqt(qarz.vaqt)} ${t('holatiga')}`, w / 2, y, { align: 'center' })
+      y += 2
+      doc.setTextColor(0, 0, 0)
     }
 
     // === FOOTER ===
@@ -2656,7 +2707,7 @@ export default function SotuvPage() {
               {/* To'lovdan oldin — mahsulotlar ro'yxati "TO'LANMAGAN" belgisi bilan; sotuv yozilmaydi */}
               <button
                 type="button"
-                onClick={() => setHisobOyna(true)}
+                onClick={() => { setHisobOyna(true); void hisobMalumotiniOl(tanlanganMijoz?.id ?? null) }}
                 title="To‘lanmagan chek — to‘lovdan oldin mahsulotlar ro‘yxati. Sotuv yozilmaydi"
                 className="px-3 py-3 border border-amber-300 dark:border-amber-800/70 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl text-sm font-medium transition flex items-center justify-center gap-1.5 shrink-0"
               >
