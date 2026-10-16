@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { formatSum, formatSanaVaVaqt, formatPhone, playBeep, uzSearch } from '@/lib/utils'
-import { buildChekHtml, chekChopEtish as printChek, chekHolati, type ChekData, type ChekDokonInfo, type ChekTarkib } from '@/lib/chek-print'
+import { MUROJAAT_TEL, buildChekHtml, chekChopEtish as printChek, chekHolati, type ChekData, type ChekDokonInfo, type ChekTarkib } from '@/lib/chek-print'
 import { chekA4niKorsat, chekniA4ChopEt, type ChekA4Malumot } from '@/lib/chek-a4'
 import { kodniAjrat } from '@/lib/qr-kod'
 import { toast } from 'sonner'
@@ -578,6 +578,7 @@ function ChekKorinishi({ s, dokonInfo, til }: { s: SotuvYozuvi; dokonInfo: ChekD
         </>
       )}
       <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+      <div style={{ textAlign: 'center', fontWeight: 700 }}>{t('Murojaat uchun')}: {MUROJAAT_TEL}</div>
       <div style={{ textAlign: 'center', fontSize: 11 }}>{t('Rahmat')}!</div>
     </div>
   )
@@ -1912,11 +1913,21 @@ export default function SotuvPage() {
     }
   }
 
-  // To'lanmagan chek — A4 (serverga so'rovsiz, savatdan)
+  // To'lanmagan chek — A4, savatdan. Bazaga hech narsa yozilmaydi; faqat
+  // mahsulot rasmlari serverdan (kichraytirilgan) olinadi
   async function hisobA4(s: SotuvYozuvi) {
     if (a4Band) return
     setA4Band(true)
     try {
+      await chekA4niKorsat(async () => {
+      const idlar = [...new Set(s.tarkiblar.map(q => q.tovarId).filter(Boolean))]
+      const rasmlar: Record<string, string> = {}
+      if (idlar.length > 0) {
+        const r = await fetch(`/api/sotuvlar/hisob-rasmlar?idlar=${idlar.map(encodeURIComponent).join(',')}`, { cache: 'no-store' }).catch(() => null)
+        // Rasm kelmasa ham chek chiqadi — rasm o'rnida "rasm yo'q"
+        const j = r?.ok ? await r.json().catch(() => null) as { rasmlar?: Record<string, string> } | null : null
+        Object.assign(rasmlar, j?.rasmlar ?? {})
+      }
       const m: ChekA4Malumot = {
         chekRaqami: '',
         sana: String(s.sana),
@@ -1927,7 +1938,7 @@ export default function SotuvPage() {
           const tv = tovarlar.find(x => x.id === q.tovarId)
           return {
             nomi: q.tovar?.nomi ?? '—', birlik: c.oram ?? tv?.birlik ?? 'DONA', shtrixKod: tv?.shtrixKod ?? null,
-            miqdor: c.soni, birlikNarxi: c.narx, jami: Number(q.jami), rasm: null,
+            miqdor: c.soni, birlikNarxi: c.narx, jami: Number(q.jami), rasm: rasmlar[q.tovarId] ?? null,
           }
         }),
         jamiSumma,
@@ -1943,7 +1954,8 @@ export default function SotuvPage() {
         havola: '',
         qr: null,
       }
-      await chekA4niKorsat(m, dokonInfo, til)
+      return m
+      }, dokonInfo, til)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'A4 chek chiqmadi')
     } finally {
@@ -2141,8 +2153,12 @@ export default function SotuvPage() {
       doc.text(chekMatn, w / 2, y, { align: 'center' })
       y += 4
     }
-    doc.setFontSize(10)
+    doc.setFontSize(8)
     doc.setFont('helvetica', 'bold')
+    doc.setTextColor(30, 30, 30)
+    doc.text(`${t('Murojaat uchun')}: ${MUROJAAT_TEL}`, w / 2, y, { align: 'center' })
+    y += 5
+    doc.setFontSize(10)
     doc.setTextColor(220, 38, 38)
     doc.text(t('Rahmat') + '!', w / 2, y, { align: 'center' })
     y += 4

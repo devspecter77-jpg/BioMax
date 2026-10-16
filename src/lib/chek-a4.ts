@@ -269,10 +269,22 @@ export function chekA4Html(m: ChekA4Malumot, dokon: ChekDokonInfo = {}, til: Til
  * Tayyor ma'lumotdan A4 chek (masalan to'lovdan oldingi hisob — savatdan,
  * serverga so'rovsiz). Bosish ichida chaqirilishi shart (qalqib chiquvchi oyna).
  */
-export async function chekA4niKorsat(m: ChekA4Malumot, dokon: ChekDokonInfo | undefined, til: Til = 'lotin'): Promise<void> {
+export async function chekA4niKorsat(
+  m: ChekA4Malumot | (() => Promise<ChekA4Malumot>),
+  dokon: ChekDokonInfo | undefined,
+  til: Til = 'lotin',
+): Promise<void> {
   const oyna = bosmaOynasiniOch(til === 'kirill' ? toKirill('Chek tayyorlanmoqda…') : 'Chek tayyorlanmoqda…')
   if (!oyna) throw new Error('Brauzer yangi oynani to‘sdi — bu sayt uchun qalqib chiquvchi oynalarga ruxsat bering')
-  await oyna.chopEt(chekA4Html(m, dokon, til))
+  // Ma'lumot (masalan rasmlar) oyna ochilgandan KEYIN tayyorlanadi — aks holda brauzer oynani to'sadi
+  let malumot: ChekA4Malumot
+  try {
+    malumot = typeof m === 'function' ? await m() : m
+  } catch (e) {
+    oyna.yop()
+    throw e
+  }
+  await oyna.chopEt(chekA4Html(malumot, dokon, til))
 }
 
 /**

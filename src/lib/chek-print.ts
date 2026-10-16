@@ -107,6 +107,9 @@ function chekStyle(sz: number): string {
 }
 
 // Chek oynasining boshi (DOCTYPE + head + ochiluvchi .chek div'i)
+/** Mijoz murojaati uchun raqam — har bir savdo chekining oxirida (Telegram hisobi bilan bir xil). */
+export const MUROJAAT_TEL = '91 277 90 01'
+
 function chekBoshi(sarlavha: string, sz: number, dokonNomi: string, manzil: string, tel: string): string {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${sarlavha}</title>
 ${chekStyle(sz)}</head><body>
@@ -184,6 +187,7 @@ ${tolanmagan
     : `<div class="sep"></div><table>${tolov}</table>`}
 ${chekMatn ? `<div class="sep"></div><div class="center" style="font-size:${sz - 1}px">${chekMatn}</div>` : ''}
 <div class="sep"></div>
+<div class="center bold">${t('Murojaat uchun')}: ${MUROJAAT_TEL}</div>
 <div class="center" style="font-size:10px">${t('Rahmat')}!</div>
 </div>
 </body></html>`
